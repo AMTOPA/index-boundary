@@ -25,6 +25,7 @@ ENV NEXT_PUBLIC_BASE_PATH=$BASE_PATH
 
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
 RUN mkdir -p /app/data
 
 EXPOSE 3000
