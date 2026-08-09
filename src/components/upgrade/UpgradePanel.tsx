@@ -1,0 +1,91 @@
+"use client";
+import { useGame } from "@/components/game/GameProvider";
+import { useGameSelector } from "@/components/common/hooks";
+import { NumberDisplay } from "@/components/common/NumberDisplay";
+import { toBig } from "@/game/bignum";
+import { formatBig, formatPct } from "@/game/format";
+import {
+  upgradeCost, attackMult, panelApsFromLevel, effectiveAps,
+  critChanceFromLevel, critDamageFromLevel, goldMultFromLevel,
+} from "@/game/formulas";
+import type { UpgradeId } from "@/game/types";
+
+interface UpgradeDef {
+  id: UpgradeId;
+  name: string;
+  icon: string;
+  gate: string | null;
+  effect: (level: number) => string;
+  nextEffect: (level: number) => string;
+}
+
+const DEFS: UpgradeDef[] = [
+  {
+    id: "attack", name: "攻击", icon: "⚔️", gate: null,
+    effect: (lv) => `×${formatBig(attackMult(lv))}`,
+    nextEffect: (lv) => `×${formatBig(attackMult(lv + 1))}`,
+  },
+  {
+    id: "aspd", name: "攻速", icon: "⚡", gate: "aspd_upgrade",
+    effect: (lv) => `${effectiveAps(panelApsFromLevel(lv)).toFixed(2)}/s`,
+    nextEffect: (lv) => `${effectiveAps(panelApsFromLevel(lv + 1)).toFixed(2)}/s`,
+  },
+  {
+    id: "critChance", name: "暴击率", icon: "🎯", gate: "crit",
+    effect: (lv) => formatPct(critChanceFromLevel(lv)),
+    nextEffect: (lv) => formatPct(critChanceFromLevel(lv + 1)),
+  },
+  {
+    id: "critDamage", name: "暴击伤害", icon: "💥", gate: "crit",
+    effect: (lv) => `×${critDamageFromLevel(lv).toFixed(2)}`,
+    nextEffect: (lv) => `×${critDamageFromLevel(lv + 1).toFixed(2)}`,
+  },
+  {
+    id: "gold", name: "金币", icon: "💰", gate: null,
+    effect: (lv) => `×${goldMultFromLevel(lv).toFixed(2)}`,
+    nextEffect: (lv) => `×${goldMultFromLevel(lv + 1).toFixed(2)}`,
+  },
+];
+
+export function UpgradePanel() {
+  const { engine } = useGame();
+  const upgrades = useGameSelector((s) => s.player.upgrades);
+  const gold = useGameSelector((s) => s.player.gold);
+  const unlocks = useGameSelector((s) => s.meta.unlocks);
+
+  const goldBig = toBig(gold);
+  return (
+    <div className="panel">
+      <div className="panel-title">
+        <h3>升级</h3>
+        <span className="hint">金币 <span className="mono" style={{ color: "var(--gold)" }}>{formatBig(goldBig)}</span></span>
+      </div>
+      {DEFS.map((def) => {
+        const level = upgrades[def.id] ?? 0;
+        const cost = upgradeCost(def.id, level);
+        const afford = goldBig.gte(cost);
+        const gated = def.gate !== null && !unlocks.includes(def.gate);
+        return (
+          <div className="upgrade-row" key={def.id} style={gated ? { opacity: 0.4 } : undefined}>
+            <div className="upgrade-info">
+              <div className="upgrade-name">{def.icon} {def.name} <span className="mono" style={{ color: "var(--text-dim)" }}>Lv{level}</span></div>
+              <div className="upgrade-effect">{def.effect(level)}{def.gate === null || unlocks.includes(def.gate!) ? ` → ${def.nextEffect(level)}` : "（未解锁）"}</div>
+              <div className="upgrade-cost">费用 <NumberDisplay value={cost} /></div>
+            </div>
+            {!gated && (
+              <div className="upgrade-buy">
+                <button className={`buy-btn ${afford ? "afford" : ""}`} disabled={!afford} onClick={() => engine?.buyUpgrade(def.id)}>购买</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+        {[10, 25, 100].map((n) => (
+          <button key={n} className="mini-btn" onClick={() => engine?.buyUpgradeTimes("attack", n)}>攻击×{n}</button>
+        ))}
+        <button className="mini-btn" onClick={() => engine?.buyUpgradeTimes("attack", 500)}>攻击 MAX</button>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,30 @@
+{
+  "name": "index-boundary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "指数边界 - 数值膨胀/放置/构筑 Web 游戏",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "npm run test:unit && npm run test:smoke && npm run test:balance && npm run test:save && npm run test:ssr",
+    "test:unit": "vitest run",
+    "test:smoke": "tsx scripts/smoke.ts",
+    "test:balance": "tsx scripts/balance.ts",
+    "test:save": "tsx scripts/save-test.ts",
+    "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts"
+  },
+  "dependencies": {
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tsx": "^4.23.11",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10"
+  }
+}

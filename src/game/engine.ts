@@ -1,0 +1,722 @@
+// 游戏引擎：纯逻辑，不依赖 React/DOM，可 headless 运行（测试与模拟器共用）
+import { Big, toBig } from "./bignum";
+import { CONFIG } from "./config";
+import type {
+  BossAffix, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId,
+} from "./types";
+import { Rng } from "./rng";
+import {
+  computeDerived, emptyBuffs, type RuntimeBuffs,
+  enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
+  overflowGold, crushGold, upgradeCost, prestigeEnergy,
+} from "./formulas";
+import {
+  rollEquipment, addDrop, dropChance, equipItem as sysEquip, unequip as sysUnequip,
+  enhance as sysEnhance, breakdown as sysBreakdown, canEnhance, enhanceCost,
+} from "./systems/equipment";
+import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill } from "./systems/skills";
+import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
+import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
+import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
+import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
+import { worldForStage, BOSS_AFFIX_LABEL } from "./data/worlds";
+import { ITEM_DEFS } from "./data/items";
+
+export interface OfflineResult {
+  goldGained: Big;
+  kills: number;
+  stagesAdvanced: number;
+  drops: number;
+  secondsSimulated: number;
+  capped: boolean;
+}
+
+export function createNewState(seed = (Date.now() >>> 0)): GameState {
+  return {
+    meta: {
+      createdAt: Date.now(),
+      lastSeenAt: Date.now(),
+      rngState: seed,
+      version: CONFIG.SAVE_VERSION,
+      unlocks: [],
+      achievements: [],
+      milestonesSeen: [],
+      settings: { sound: true, reduceMotion: false },
+      lastScoreSubmit: { stage: undefined, mag: undefined, prestige: undefined },
+      cloudSyncedAt: 0,
+    },
+    player: {
+      upgrades: { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 },
+      gold: [0, 0],
+      clickCount: 0,
+    },
+    combat: {
+      stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
+      bossTimer: -1, combo: 0, comboTimer: 0, crushStreak: 0, skipMode: false,
+      lastHitWasCrit: false, lastHitWasSuper: false, lastHitWasCrush: false,
+    },
+    equipment: { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null },
+    skills: { actives: [], passiveLevel: 0, cores: [0, 0] },
+    talents: { points: 0, allocations: {}, keystones: {} },
+    prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
+    items: { consumables: {}, tools: {} },
+    statistics: {
+      totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
+      highestHit: [0, 0], totalClicks: 0, totalCrits: 0, totalSuperCrits: 0,
+      totalPrestiges: 0, totalPlayTimeMs: 0, totalOfflineMs: 0, allTimeMaxStage: 1,
+    },
+  };
+}
+
+export class GameEngine {
+  state: GameState;
+  derived: ReturnType<typeof computeDerived>;
+  buffs: RuntimeBuffs;
+  timeSec = 0;
+  private rng: Rng;
+  private listeners = new Set<GameEventListener>();
+  private attackCounter = 0;
+  private attackBudget = 0;
+  private recomputeTimer = 0;
+  private achievementTimer = 0;
+  private autoUpgradeTimer = 0;
+  private chipUntil = 0;
+  private protocolUntil = 0;
+
+  constructor(initial?: GameState) {
+    this.state = initial ? initial : createNewState();
+    this.rng = Rng.fromState(this.state.meta.rngState);
+    this.buffs = emptyBuffs();
+    if (toBig(this.state.combat.enemyHp).isZero()) this.spawnEnemy();
+    this.derived = computeDerived(this.state, this.buffs, this.timeSec);
+  }
+
+  // ---------------- 事件 ----------------
+  onEvent(l: GameEventListener): () => void {
+    this.listeners.add(l);
+    return () => this.listeners.delete(l);
+  }
+  private emit(e: GameEvent): void {
+    for (const l of this.listeners) l(e);
+  }
+
+  isUnlocked(key: string): boolean {
+    return this.state.meta.unlocks.includes(key);
+  }
+
+  // ---------------- 主循环 ----------------
+  tick(dt: number): void {
+    this.timeSec += dt;
+    tickSkills(this.state, dt);
+    this.tickCombo(dt);
+    this.tickBoss(dt);
+    this.tickConsumables(dt);
+    if (this.isUnlocked("auto_attack") && !this.state.combat.isBoss) {
+      this.autoAttack(dt);
+    }
+    if (this.state.items.tools.auto_upgrade) {
+      this.autoUpgradeTimer -= dt;
+      if (this.autoUpgradeTimer <= 0) {
+        this.autoUpgradeTimer = 0.5;
+        this.smartBuy();
+      }
+    }
+    // 周期检查
+    this.achievementTimer -= dt;
+    if (this.achievementTimer <= 0) {
+      this.achievementTimer = 1;
+      this.checkAchievements();
+      this.checkMilestones();
+    }
+    this.recomputeTimer -= dt;
+    if (this.recomputeTimer <= 0) {
+      this.recomputeTimer = 0.5;
+      this.recomputeDerived();
+    }
+    this.state.statistics.totalPlayTimeMs += dt * 1000;
+  }
+
+  recomputeDerived(): void {
+    this.derived = computeDerived(this.state, this.buffs, this.timeSec);
+  }
+
+  // ---------------- 战斗 ----------------
+  click(): void {
+    const d = this.derived;
+    this.state.player.clickCount += 1;
+    this.state.statistics.totalClicks += 1;
+    this.addCombo(1, false);
+    this.attackCounter += 1;
+    let damage = d.damagePerHit.mul(d.clickMult);
+    let crit = false;
+    let superCrit = false;
+    if (this.buffs.criticalStrike.pending) {
+      damage = damage.mul(Big.fromNumber(this.buffs.criticalStrike.mult));
+      crit = true;
+      superCrit = true;
+      this.buffs.criticalStrike.pending = false;
+    } else {
+      const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
+      crit = r.crit;
+      superCrit = r.superCrit;
+      damage = damage.mul(Big.fromNumber(r.mult));
+    }
+    this.applyHit(damage, crit, superCrit, true);
+  }
+
+  private autoAttack(dt: number): void {
+    const d = this.derived;
+    const total = d.effectiveAps * dt + this.attackBudget;
+    const whole = Math.floor(total);
+    this.attackBudget = total - whole;
+    if (whole <= 0) return;
+    this.addCombo(whole, true);
+    this.attackCounter += whole;
+    // 每 N 次攻击触发（everyNAttack）
+    if (d.everyNAttack > 0) {
+      const before = Math.floor((this.attackCounter - whole) / 10);
+      const after = Math.floor(this.attackCounter / 10);
+      if (after > before) {
+        const bonus = d.damagePerHit.mul(Big.fromNumber(d.everyNAttack));
+        this.applyHit(bonus, false, false, false, true);
+      }
+    }
+    // 临界打击待发
+    if (this.buffs.criticalStrike.pending) {
+      const hit = d.damagePerHit.mul(Big.fromNumber(this.buffs.criticalStrike.mult));
+      this.buffs.criticalStrike.pending = false;
+      this.applyHit(hit, true, true, false);
+      if (whole > 1) {
+        const rest = whole - 1;
+        this.batchAttack(rest);
+      }
+      return;
+    }
+    if (whole <= 8) {
+      for (let i = 0; i < whole; i++) {
+        const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
+        const hit = d.damagePerHit.mul(Big.fromNumber(r.mult));
+        this.applyHit(hit, r.crit, r.superCrit, false, true);
+      }
+    } else {
+      this.batchAttack(whole);
+    }
+  }
+
+  private batchAttack(n: number): void {
+    const d = this.derived;
+    const expected = expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra);
+    const total = d.damagePerHit.mul(Big.fromNumber(expected)).mul(Big.fromNumber(n));
+    const crit = this.rng.chance(Math.min(1, d.critChance));
+    this.applyHit(total, crit, false, false, true);
+  }
+
+  private applyHit(rawDamage: Big, crit: boolean, superCrit: boolean, isClick: boolean, batch = false): void {
+    const c = this.state.combat;
+    let damage = rawDamage;
+    // Boss 词缀与 Boss 伤害乘区
+    if (c.isBoss) {
+      damage = damage.mul(this.derived.bossDmgMult);
+      for (const affix of c.bossAffixes) {
+        if (affix === "armor") damage = damage.mul(Big.fromNumber(0.5));
+        else if (affix === "antiCrit" && crit) damage = damage.mul(Big.fromNumber(0.5));
+        else if (affix === "rage") {
+          const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
+          const def = 1 + Math.min(0.6, Math.max(0, elapsed) * 0.02);
+          damage = damage.mul(Big.fromNumber(1 / def));
+        }
+      }
+    }
+    const hpBefore = toBig(c.enemyHp);
+    this.state.statistics.totalDamage = toBig(this.state.statistics.totalDamage).add(damage).toTuple();
+    this.state.statistics.runDamage = toBig(this.state.statistics.runDamage).add(damage).toTuple();
+    if (damage.gt(toBig(this.state.statistics.highestHit))) this.state.statistics.highestHit = damage.toTuple();
+    if (crit) this.state.statistics.totalCrits += 1;
+    if (superCrit) this.state.statistics.totalSuperCrits += 1;
+
+    const overkill = damage.sub(hpBefore);
+    const remaining = hpBefore.sub(damage);
+    c.enemyHp = remaining.toTuple();
+    c.lastHitWasCrit = crit;
+    c.lastHitWasSuper = superCrit;
+
+    const crush = !c.isBoss && damage.gte(toBig(c.enemyMaxHp).mul(Big.fromNumber(CONFIG.CRUSH_THRESHOLD)));
+    c.lastHitWasCrush = crush;
+    this.emit({ type: "hit", damage: damage.toTuple(), crit, superCrit, crush, isClick });
+
+    if (remaining.isZero() && !hpBefore.isZero()) {
+      this.onKill(crush, overkill);
+    }
+  }
+
+  private onKill(crush: boolean, overkill: Big): void {
+    const c = this.state.combat;
+    const stage = c.stage;
+    const isBoss = c.isBoss;
+    this.state.statistics.totalKills += 1;
+
+    let gold = enemyGold(stage).mul(this.derived.goldMult);
+    if (isBoss) gold = gold.mul(Big.fromNumber(10));
+    if (crush) {
+      c.crushStreak += 1;
+      gold = crushGold(gold, this.derived.overflowEffMult);
+      this.emit({ type: "crush", stage });
+    } else {
+      c.crushStreak = 0;
+    }
+    // 溢出金币（仅首次通关，即超越历史最大关卡）
+    if (overkill.gt(Big.ZERO) && stage > this.state.statistics.allTimeMaxStage) {
+      const baseGold = enemyGold(stage).mul(this.derived.goldMult);
+      const hpBefore = enemyHp(stage);
+      gold = gold.add(overflowGold(overkill.add(hpBefore), hpBefore, baseGold, this.derived.overflowEffMult));
+    }
+    this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
+    this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
+
+    this.emit({ type: "kill", stage, boss: isBoss });
+    if (isBoss) {
+      this.state.statistics.totalBossKills += 1;
+      this.emit({ type: "bossKill" });
+      this.grantBossRewards(stage);
+      // 首次 Boss 击杀 → 天赋点
+      if (!this.state.meta.unlocks.includes("first_boss_reward")) {
+        this.state.meta.unlocks.push("first_boss_reward");
+        this.state.talents.points += CONFIG.TALENT_POINTS_FROM_BOSS_FIRST_KILL;
+      }
+    } else {
+      if (this.rng.chance(dropChance(stage, 0))) {
+        const item = rollEquipment(this.rng, stage, 0);
+        addDrop(this.state, item);
+        this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
+      }
+    }
+    this.advanceStage(crush);
+  }
+
+  private grantBossRewards(stage: number): void {
+    // 必掉装备
+    const item = rollEquipment(this.rng, stage, 0);
+    addDrop(this.state, item);
+    this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
+    // 技能核心
+    const cores = this.rng.int(1, 3);
+    this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(cores)).toTuple();
+  }
+
+  private advanceStage(crush: boolean): void {
+    const c = this.state.combat;
+    let next = c.stage + 1;
+    if (crush && c.crushStreak >= CONFIG.SKIP_AFTER_CRUSH_STREAK) {
+      c.skipMode = true;
+      const skipBase =
+        CONFIG.SKIP_BASE + this.derived.skipBaseTalent +
+        (this.state.prestige.purchases.fastSkip ?? 0) * CONFIG.PRESTIGE.SHOP.fastSkip.perLevel;
+      next += skipBase;
+    } else if (!crush) {
+      c.skipMode = false;
+    }
+    c.stage = next;
+    if (next > this.state.statistics.allTimeMaxStage) this.state.statistics.allTimeMaxStage = next;
+    this.spawnEnemy();
+    this.checkUnlocks();
+  }
+
+  private spawnEnemy(): void {
+    const c = this.state.combat;
+    if (isBossStage(c.stage)) {
+      c.isBoss = true;
+      c.enemyMaxHp = bossHp(c.stage).toTuple();
+      c.enemyHp = c.enemyMaxHp;
+      c.bossTimer = CONFIG.BOSS_TIMER_SEC;
+      c.bossAffixes = this.rollBossAffixes();
+      this.emit({ type: "bossSpawn", affixes: c.bossAffixes });
+    } else {
+      c.isBoss = false;
+      c.enemyMaxHp = enemyHp(c.stage).toTuple();
+      c.enemyHp = c.enemyMaxHp;
+      c.bossTimer = -1;
+      c.bossAffixes = [];
+    }
+  }
+
+  private rollBossAffixes(): BossAffix[] {
+    const pool = worldForStage(this.state.combat.stage).bossPool;
+    const count = this.state.combat.stage >= 200 && this.rng.chance(0.5) ? 2 : 1;
+    return this.rng.shuffle(pool).slice(0, count);
+  }
+
+  private bossTimeout(): void {
+    const c = this.state.combat;
+    const stage = c.stage;
+    this.emit({ type: "bossFail", stage });
+    // 退回前一关刷资源
+    c.stage = stage - 1;
+    this.spawnEnemy();
+  }
+
+  private tickBoss(dt: number): void {
+    const c = this.state.combat;
+    if (!c.isBoss) return;
+    c.bossTimer -= dt;
+    if (c.bossAffixes.includes("regen")) {
+      const maxHp = toBig(c.enemyMaxHp);
+      const heal = maxHp.mul(Big.fromNumber(0.03 * dt));
+      c.enemyHp = Big.min(maxHp, toBig(c.enemyHp).add(heal)).toTuple();
+    }
+    if (c.bossTimer <= 0) this.bossTimeout();
+  }
+
+  private tickCombo(dt: number): void {
+    const c = this.state.combat;
+    if (c.combo <= 0) return;
+    c.comboTimer -= dt;
+    if (c.comboTimer <= 0) c.combo = 0;
+  }
+
+  private addCombo(n: number, isAuto: boolean): void {
+    const c = this.state.combat;
+    c.comboTimer = CONFIG.COMBO_WINDOW_SEC + this.derived.comboWindowAdd;
+    const increment = isAuto ? n * CONFIG.COMBO_AUTO_FACTOR : n;
+    c.combo = Math.min(CONFIG.COMBO_CAP + this.derived.comboCapAdd, c.combo + increment);
+  }
+
+  // ---------------- 升级 ----------------
+  upgradeUnlocked(id: UpgradeId): boolean {
+    if (id === "aspd") return this.isUnlocked("aspd_upgrade");
+    if (id === "critChance" || id === "critDamage") return this.isUnlocked("crit");
+    return true;
+  }
+
+  buyUpgrade(id: UpgradeId): boolean {
+    if (!this.upgradeUnlocked(id)) return false;
+    const lv = this.state.player.upgrades[id];
+    const cost = upgradeCost(id, lv);
+    if (toBig(this.state.player.gold).lt(cost)) return false;
+    this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
+    this.state.player.upgrades[id] = lv + 1;
+    this.emit({ type: "levelUp", upgrade: id, level: lv + 1 });
+    this.recomputeDerived();
+    return true;
+  }
+
+  buyUpgradeTimes(id: UpgradeId, times: number): number {
+    let bought = 0;
+    for (let i = 0; i < times; i++) {
+      if (!this.buyUpgrade(id)) break;
+      bought++;
+    }
+    return bought;
+  }
+
+  // Smart Buy：按 DPS 提升 / 成本 选择
+  smartBuy(): boolean {
+    const candidates: UpgradeId[] = ["attack", "aspd", "critChance", "critDamage", "gold"];
+    let best: { id: UpgradeId; score: number } | null = null;
+    for (const id of candidates) {
+      if (!this.upgradeUnlocked(id)) continue;
+      const cost = upgradeCost(id, this.state.player.upgrades[id]);
+      if (toBig(this.state.player.gold).lt(cost)) continue;
+      const score = this.estimateGainLog(id);
+      if (!best || score > best.score) best = { id, score };
+    }
+    if (!best) return false;
+    return this.buyUpgrade(best.id);
+  }
+
+  private estimateGainLog(id: UpgradeId): number {
+    const s = this.state;
+    const cost = upgradeCost(id, s.player.upgrades[id]).log10();
+    if (cost <= 0) return 0;
+    let gain = 0;
+    if (id === "attack") {
+      const lv = s.player.upgrades.attack;
+      gain = Math.log10(1.12); // 不含里程碑的保守估计
+    } else if (id === "aspd") {
+      const panel = (panelApsFor(lv(s, "aspd")));
+      const next = panelApsFor(lv(s, "aspd") + 1);
+      gain = Math.log10(effApsRatio(panel, next));
+    } else if (id === "critChance") {
+      const c = critChanceFor(s);
+      gain = Math.log10(expectedCritMult(c + 0.008, critDmgFor(s)) / Math.max(1, expectedCritMult(c, critDmgFor(s))));
+    } else if (id === "critDamage") {
+      const d = critDmgFor(s);
+      gain = Math.log10(expectedCritMult(critChanceFor(s), d + 0.15) / Math.max(1, expectedCritMult(critChanceFor(s), d)));
+    } else if (id === "gold") {
+      gain = 0.5 * Math.log10(1 + 0.1 / (1 + s.player.upgrades.gold * 0.1));
+    }
+    return gain / cost;
+  }
+
+  // ---------------- 装备 ----------------
+  equipItem(uid: string): boolean {
+    const ok = sysEquip(this.state, uid);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  unequip(slot: Parameters<typeof sysUnequip>[1]): boolean {
+    const ok = sysUnequip(this.state, slot);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  canEnhance(slot: Parameters<typeof sysEnhance>[1]): boolean {
+    return canEnhance(this.state, slot);
+  }
+  enhance(slot: Parameters<typeof sysEnhance>[1]): boolean {
+    const ok = sysEnhance(this.state, slot);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  breakdown(uid: string): boolean {
+    return sysBreakdown(this.state, uid);
+  }
+  setAutoBreakdown(rarity: Rarity | null): void {
+    this.state.equipment.autoBreakdown = rarity;
+  }
+  enhanceCostOf(slot: Parameters<typeof sysEnhance>[1]): number {
+    const item = this.state.equipment.slots[slot];
+    return item ? enhanceCost(item) : 0;
+  }
+
+  // ---------------- 技能 ----------------
+  cast(id: SkillId): boolean {
+    const result = castSkill(this.state, id, this.timeSec);
+    if (!result.ok) return false;
+    this.emit({ type: "skillCast", skill: id });
+    if (result.action.kind === "critical_strike") {
+      this.buffs.criticalStrike.pending = true;
+      this.buffs.criticalStrike.mult = result.action.mult;
+    } else if (result.action.kind === "singularity_cannon") {
+      const dps = this.derived.dps;
+      const damage = dps.mul(Big.fromNumber(result.action.mult));
+      this.applyHit(damage, false, false, false);
+    }
+    this.recomputeDerived();
+    return true;
+  }
+  upgradeSkill(id: SkillId): boolean {
+    return sysUpgradeSkill(this.state, id);
+  }
+  // 解锁技能：skills 解锁后可用（技能核心用于升级，解锁免费）
+  unlockSkill(id: SkillId): boolean {
+    if (!this.isUnlocked("skills")) return false;
+    if (this.state.skills.actives.some((s) => s.id === id)) return false;
+    this.state.skills.actives.push({ id, level: 1, cdRemaining: 0, activeUntil: 0, active: false });
+    this.recomputeDerived();
+    return true;
+  }
+
+  // ---------------- 天赋 ----------------
+  canAllocate(nodeId: string): boolean {
+    return canAllocate(this.state, nodeId).ok;
+  }
+  allocate(nodeId: string): boolean {
+    const ok = sysAllocate(this.state, nodeId);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  resetTree(tree: Parameters<typeof sysResetTree>[1]): void {
+    sysResetTree(this.state, tree);
+    this.recomputeDerived();
+  }
+
+  // ---------------- 重构 ----------------
+  canPrestige(): boolean {
+    if (!this.isUnlocked("prestige")) return false;
+    return prestigeEnergy(toBig(this.state.statistics.runDamage)) > 0;
+  }
+  prestige(): { energyGained: number } | null {
+    if (!this.canPrestige()) return null;
+    const result = computePrestige(this.state);
+    if (result.energyGained <= 0) return null;
+    applyPrestige(this.state, result.energyGained, result.goldKept);
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.spawnEnemy();
+    this.recomputeDerived();
+    this.emit({ type: "prestige", energyGained: result.energyGained });
+    return { energyGained: result.energyGained };
+  }
+  buyPrestigeUpgrade(id: Parameters<typeof buyPrestigeUpgrade>[1]): boolean {
+    const ok = buyPrestigeUpgrade(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  prestigeShopCost(id: Parameters<typeof buyPrestigeUpgrade>[1]): number {
+    return canBuy(this.state, id) ? 0 : 0; // 实际价格由 UI 用 shopCost 计算
+  }
+
+  // ---------------- 道具 ----------------
+  castConsumable(id: ItemId): boolean {
+    const count = this.state.items.consumables[id] ?? 0;
+    if (count <= 0) return false;
+    this.state.items.consumables[id] = count - 1;
+    const def = ITEM_DEFS[id];
+    if (id === "overclock_chip") {
+      this.buffs.chipActive = true;
+      this.chipUntil = this.timeSec + CONFIG.CONSUMABLE_DURATION_SEC;
+    } else if (id === "gold_protocol") {
+      this.buffs.goldProtocolActive = true;
+      this.protocolUntil = this.timeSec + CONFIG.CONSUMABLE_DURATION_SEC;
+    } else if (id === "singularity_battery") {
+      for (const inst of this.state.skills.actives) inst.cdRemaining = 0;
+    }
+    this.recomputeDerived();
+    return true;
+  }
+  private tickConsumables(dt: number): void {
+    if (this.buffs.chipActive && this.timeSec >= this.chipUntil) {
+      this.buffs.chipActive = false;
+      this.recomputeDerived();
+    }
+    if (this.buffs.goldProtocolActive && this.timeSec >= this.protocolUntil) {
+      this.buffs.goldProtocolActive = false;
+      this.recomputeDerived();
+    }
+  }
+
+  // ---------------- 解锁 / 成就 / 里程碑 ----------------
+  private checkUnlocks(): void {
+    const stage = this.state.combat.stage;
+    for (const u of CONFIG.UNLOCKS) {
+      if (stage >= u.stage && !this.state.meta.unlocks.includes(u.key)) {
+        this.state.meta.unlocks.push(u.key);
+        this.emit({ type: "unlock", key: u.key, label: u.label });
+      }
+    }
+    if (this.state.meta.unlocks.includes("skills") && this.state.skills.actives.length === 0) {
+      this.state.skills.actives = SKILL_IDS.map((id) => ({
+        id, level: 1, cdRemaining: 0, activeUntil: 0, active: false,
+      }));
+    }
+  }
+
+  private checkAchievements(): void {
+    let gained = 0;
+    for (const def of ACHIEVEMENTS) {
+      if (this.state.meta.achievements.includes(def.id)) continue;
+      if (checkAchievement(def, this.state)) {
+        this.state.meta.achievements.push(def.id);
+        gained += CONFIG.TALENT_POINTS_FROM_ACHIEVEMENT;
+        this.emit({ type: "achievement", id: def.id });
+      }
+    }
+    if (gained > 0) this.state.talents.points += gained;
+  }
+
+  private checkMilestones(): void {
+    const mag = toBig(this.state.statistics.totalDamage).log10();
+    for (const m of CONFIG.MILESTONES) {
+      if (mag >= m && !this.state.meta.milestonesSeen.includes(m)) {
+        this.state.meta.milestonesSeen.push(m);
+        this.emit({ type: "milestone", magnitude: m });
+        this.recomputeDerived();
+      }
+    }
+  }
+
+  // ---------------- 离线 ----------------
+  static offlineEfficiency(state: GameState, derived: ReturnType<typeof computeDerived>): number {
+    const base = CONFIG.OFFLINE.EFFICIENCY + derived.offlineEffTalent;
+    if (derived.hasKeystone.includes("offlineLord")) return 1;
+    return Math.min(1, base);
+  }
+
+  static simulateOffline(state: GameState, durationSec: number): OfflineResult {
+    const maxSec = Math.min(durationSec, CONFIG.OFFLINE.MAX_HOURS * 3600);
+    const buffs = emptyBuffs();
+    const derived = computeDerived(state, buffs, 0);
+    const eff = GameEngine.offlineEfficiency(state, derived);
+    const dps = derived.dps;
+    let t = 0;
+    let kills = 0;
+    let stage = state.combat.stage;
+    let gold = Big.ZERO;
+    while (t < maxSec) {
+      if (isBossStage(stage)) break;
+      const hp = enemyHp(stage);
+      const killTime = hp.div(dps).toNumber();
+      if (!Number.isFinite(killTime) || killTime > CONFIG.OFFLINE.WALL_KILL_TIME_SEC) break;
+      const crush = derived.damagePerHit.gte(hp.mul(Big.fromNumber(CONFIG.CRUSH_THRESHOLD)));
+      const per = killTime + (crush ? 0 : 0.3);
+      if (t + per > maxSec) {
+        const frac = (maxSec - t) / per;
+        gold = gold.add(enemyGold(stage).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
+        t = maxSec;
+        break;
+      }
+      t += per;
+      gold = gold.add(enemyGold(stage).mul(derived.goldMult));
+      kills++;
+      stage++;
+    }
+    gold = gold.mul(Big.fromNumber(eff));
+    const expectedDrops = kills * dropChance(Math.max(1, stage), 0);
+    const drops = Math.min(CONFIG.OFFLINE.MAX_DROPS, Math.floor(expectedDrops));
+    return {
+      goldGained: gold,
+      kills,
+      stagesAdvanced: stage - state.combat.stage,
+      drops,
+      secondsSimulated: t,
+      capped: durationSec > maxSec,
+    };
+  }
+
+  // 加载后结算离线（由应用层在构造引擎后调用）
+  handleOffline(nowMs: number): OfflineResult | null {
+    const elapsedSec = (nowMs - this.state.meta.lastSeenAt) / 1000;
+    if (elapsedSec <= 5) {
+      this.state.meta.lastSeenAt = nowMs;
+      return null;
+    }
+    const result = GameEngine.simulateOffline(this.state, elapsedSec);
+    if (result.secondsSimulated <= 0) {
+      this.state.meta.lastSeenAt = nowMs;
+      return null;
+    }
+    this.applyOfflineResult(result);
+    this.state.meta.lastSeenAt = nowMs;
+    return result;
+  }
+
+  private applyOfflineResult(result: OfflineResult): void {
+    this.state.player.gold = toBig(this.state.player.gold).add(result.goldGained).toTuple();
+    this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(result.goldGained).toTuple();
+    this.state.statistics.totalKills += result.kills;
+    this.state.statistics.totalOfflineMs += result.secondsSimulated * 1000;
+    let finalStage = this.state.combat.stage + result.stagesAdvanced;
+    if (isBossStage(finalStage)) finalStage -= 1;
+    if (finalStage < 1) finalStage = 1;
+    this.state.combat.stage = finalStage;
+    if (finalStage > this.state.statistics.allTimeMaxStage) this.state.statistics.allTimeMaxStage = finalStage;
+    this.state.meta.lastSeenAt = Date.now();
+    for (let i = 0; i < result.drops; i++) {
+      const item = rollEquipment(this.rng, Math.max(1, finalStage), 0);
+      addDrop(this.state, item);
+    }
+    this.spawnEnemy();
+    this.checkUnlocks();
+    this.recomputeDerived();
+    this.emit({ type: "offline", seconds: result.secondsSimulated, gold: result.goldGained.toTuple() });
+  }
+}
+
+// ---------------- 工具函数（Smart Buy 用） ----------------
+function lv(s: GameState, id: UpgradeId): number {
+  return s.player.upgrades[id];
+}
+function panelApsFor(level: number): number {
+  return Math.min(1e6, CONFIG.BASE_APS * Math.pow(CONFIG.UPGRADES.aspd.effectPerLevel, level));
+}
+function effApsRatio(a: number, b: number): number {
+  const fa = a <= CONFIG.APS_SOFT_CAP ? a : CONFIG.APS_SOFT_CAP + Math.sqrt(a - CONFIG.APS_SOFT_CAP);
+  const fb = b <= CONFIG.APS_SOFT_CAP ? b : CONFIG.APS_SOFT_CAP + Math.sqrt(b - CONFIG.APS_SOFT_CAP);
+  return fb / Math.max(0.0001, fa);
+}
+function critChanceFor(s: GameState): number {
+  return CONFIG.BASE_CRIT_CHANCE + lv(s, "critChance") * CONFIG.UPGRADES.critChance.perLevel;
+}
+function critDmgFor(s: GameState): number {
+  return CONFIG.BASE_CRIT_DAMAGE + lv(s, "critDamage") * CONFIG.UPGRADES.critDamage.perLevel;
+}

@@ -1,0 +1,23 @@
+# 生产部署编排：指数边界（Index Boundary）
+# 用法（在服务器上）：docker compose up -d --build
+# 端口 8373 仅绑定本机回环地址（127.0.0.1），对外由站点反向代理：
+#   反向代理目标 http://127.0.0.1:8373 ，路径前缀 /index-boundary
+# 数据卷 index-boundary-data 持久化数据库（data/game.db）
+services:
+  index-boundary:
+    build:
+      context: .
+      args:
+        BASE_PATH: /index-boundary
+    image: index-boundary:latest
+    container_name: index-boundary
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8373:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_BASE_PATH=/index-boundary
+    volumes:
+      - index-boundary-data:/app/data
+volumes:
+  index-boundary-data:
