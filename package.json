@@ -12,7 +12,8 @@
     "test:smoke": "tsx scripts/smoke.ts",
     "test:balance": "tsx scripts/balance.ts",
     "test:save": "tsx scripts/save-test.ts",
-    "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts"
+    "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts",
+    "test:api": "tsx scripts/api-smoke.ts"
   },
   "dependencies": {
     "next": "^15.3.3",

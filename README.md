@@ -20,6 +20,7 @@ npm run dev
 
 ```bash
 npm test            # 单元 + 引擎冒烟 + 平衡 + 存档 + SSR 冒烟
+npm run test:api     # 登录/云存档/排行榜 API 端到端（需先 build）
 npx tsc --noEmit
 npm run build
 ```
