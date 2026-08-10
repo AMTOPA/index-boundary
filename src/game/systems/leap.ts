@@ -1,0 +1,109 @@
+// 世界跃迁（第二层重置）：跨世界线洗牌，获得世界核心，购买世界核心升级
+import { Big, toBig } from "../bignum";
+import { CONFIG } from "../config";
+import type { GameState, LeapUpgradeId } from "../types";
+import { SKILL_DEFS } from "../data/skills";
+
+export interface LeapResult {
+  coresGained: number;
+}
+
+// 跃迁获得核心：1 + （本次最大关卡 ≥ 上次 ×2 → 额外 +1）
+export function leapCores(state: GameState): number {
+  const maxStage = state.statistics.allTimeMaxStage;
+  const last = state.leap.lastLeapMaxStage || 1;
+  const extra = maxStage >= last * CONFIG.LEAP.CORE_DOUBLE_MULT ? 1 : 0;
+  return CONFIG.LEAP.CORE_PER_LEAP + extra;
+}
+
+export function canLeap(state: GameState): boolean {
+  return state.meta.unlocks.includes("leap") && state.combat.stage >= CONFIG.LEAP.STAGE;
+}
+
+// Fibonacci 价格：level n（0 起）→ fib(n+2)：1,2,3,5,8,13…
+export function fib(n: number): number {
+  let a = 1, b = 1;
+  for (let i = 0; i < n; i++) { const t = a + b; a = b; b = t; }
+  return a;
+}
+
+export function leapShopCostFrom(level: number, id: LeapUpgradeId): number {
+  const def = CONFIG.LEAP.SHOP[id];
+  void def;
+  return fib(level + 1); // level0→fib2=1, level1→fib3=2 …
+}
+
+export function leapShopCost(state: GameState, id: LeapUpgradeId): number {
+  return leapShopCostFrom(state.leap.purchases[id] ?? 0, id);
+}
+
+export function canBuyLeap(state: GameState, id: LeapUpgradeId): boolean {
+  const def = CONFIG.LEAP.SHOP[id];
+  const cur = state.leap.purchases[id] ?? 0;
+  if (cur >= def.max) return false;
+  return state.leap.cores >= leapShopCost(state, id);
+}
+
+export function buyLeapUpgrade(state: GameState, id: LeapUpgradeId): boolean {
+  if (!canBuyLeap(state, id)) return false;
+  const cost = leapShopCost(state, id);
+  state.leap.cores -= cost;
+  state.leap.purchases[id] = (state.leap.purchases[id] ?? 0) + 1;
+  return true;
+}
+
+// 跃迁后起始关卡（起始世界升级 ×100）
+export function leapStartStage(state: GameState): number {
+  const lv = state.leap.purchases.startStage ?? 0;
+  return Math.min(CONFIG.LEAP.STAGE - 1, 1 + lv * CONFIG.LEAP.SHOP.startStage.perLevel);
+}
+
+// 全属性：全局伤害/金币 ×2 每 3 级（防平滑膨胀）
+export function leapAllStatsMult(level: number): Big {
+  return Big.fromNumber(Math.pow(2, Math.floor(level / 3)));
+}
+
+// 生效的怪物 HP 成长指数（法则指数 -0.005/级，上限 -0.12）
+export function effectiveHpGrowth(state: GameState): number {
+  const lawLv = state.leap.purchases.lawExponent ?? 0;
+  const lawReduction = Math.min(0.12, lawLv * CONFIG.LEAP.SHOP.lawExponent.perLevel);
+  // 奇点天赋「法则扭曲」再降（systems 里由 computeDerived 汇总，这里只算世界核心部分）
+  return CONFIG.HP_GROWTH - lawReduction;
+}
+
+// 执行跃迁（engine 调用前已校验 canLeap）
+export function applyLeap(state: GameState, coresGained: number): void {
+  const l = state.leap;
+  l.cores += coresGained;
+  l.totalCoresEarned += coresGained;
+  l.totalLeaps += 1;
+  l.lastLeapMaxStage = state.statistics.allTimeMaxStage;
+
+  // ---- 彻底洗牌：重置升级/金币/关卡/装备/技能/天赋/重构 ----
+  state.combat = {
+    stage: leapStartStage(state),
+    enemyHp: [0, 0],
+    enemyMaxHp: [0, 0],
+    isBoss: false,
+    bossAffixes: [],
+    bossTimer: -1,
+    combo: 0,
+    comboTimer: 0,
+    crushStreak: 0,
+    skipMode: false,
+    lastHitWasCrit: false,
+    lastHitWasSuper: false,
+    lastHitWasCrush: false,
+    enemyKind: "normal",
+    bossShieldHits: 0,
+    bossVoidTarget: null,
+  };
+  state.player.gold = [0, 0];
+  state.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+  state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
+  state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
+  state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
+  state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+  state.statistics.runDamage = [0, 0];
+  // 保留：成就/统计/世界核心/元数据解锁/工具（永久基础设施）
+}

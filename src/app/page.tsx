@@ -45,7 +45,7 @@ function Shell() {
   const [tab, setTab] = useState<PanelTab>("equip");
   const [mobileView, setMobileView] = useState<MobileView>("combat");
   const selectTab = (t: PanelTab) => { setTab(t); setMobileView("panel"); };
-  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage).color);
+  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0).color);
   return (
     <>
       <Starfield tint={worldTint} />
@@ -164,6 +164,10 @@ function TopBar() {
         <div className="resource">
           <span className="label">🌌 奇点能量</span>
           <span className="value energy mono">{formatNumber(state.prestige.energy)}</span>
+        </div>
+        <div className="resource">
+          <span className="label">🔮 世界核心</span>
+          <span className="value mono" style={{ color: "var(--super)" }}>{formatNumber(state.leap?.cores ?? 0)}</span>
         </div>
         <div className="resource">
           <span className="label">🏰 关卡</span>

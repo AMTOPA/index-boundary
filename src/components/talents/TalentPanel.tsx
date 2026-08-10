@@ -14,7 +14,8 @@ export function TalentPanel() {
   const presets = useGameSelector((s) => s.talents.presets);
   const [confirmTree, setConfirmTree] = useState<TreeId | null>(null);
 
-  const trees = useMemo(() => Object.keys(TALENT_TREES) as TreeId[], []);
+  const leapUnlocked = useGameSelector((s) => s.meta.unlocks.includes("leap"));
+  const trees = useMemo(() => (Object.keys(TALENT_TREES) as TreeId[]).filter((t) => t !== "singularity" || leapUnlocked), [leapUnlocked]);
 
   if (!unlocked) {
     return (

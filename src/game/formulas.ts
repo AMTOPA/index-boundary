@@ -3,6 +3,7 @@ import { Big, toBig } from "./bignum";
 import { CONFIG, milestoneMultFor } from "./config";
 import type { DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
+import { leapAllStatsMult } from "./systems/leap";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
 // ---------------- 升级 ----------------
@@ -61,20 +62,20 @@ export function goldMultFromLevel(level: number): number {
 
 // ---------------- 怪物 ----------------
 
-export function enemyHp(stage: number): Big {
-  return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(CONFIG.HP_GROWTH).pow(stage));
+export function enemyHp(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
+  return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(hpGrowth).pow(stage));
 }
 
-export function enemyGold(stage: number): Big {
-  return enemyHp(stage).pow(CONFIG.GOLD_HP_EXPONENT);
+export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
+  return enemyHp(stage, hpGrowth).pow(CONFIG.GOLD_HP_EXPONENT);
 }
 
 export function isBossStage(stage: number): boolean {
   return stage % CONFIG.BOSS_EVERY === 0;
 }
 
-export function bossHp(stage: number): Big {
-  return enemyHp(stage).mul(Big.fromNumber(CONFIG.BOSS_HP_MULT));
+export function bossHp(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
+  return enemyHp(stage, hpGrowth).mul(Big.fromNumber(CONFIG.BOSS_HP_MULT));
 }
 
 // 特殊敌人判定（纯函数，引擎注入 roll）：roll ∈ [0,1)；优先宝箱怪，其次精英；Boss 关与极速推进只出普通怪
@@ -272,6 +273,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let reforgeCostTalent = 0;
   let craftCostTalent = 0;
   let goldKeystoneMult = Big.ONE;
+  let hpGrowthReductionTalent = 0;
+  let apsCapTalent = 0;
   const hasKeystone = new Set<KeystoneKey>();
 
   for (const [nodeId, pts] of Object.entries(talents.allocations)) {
@@ -298,6 +301,9 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
       case "shardGain": shardGainTalent += eff.perPoint * pts; break;
       case "reforgeCostMult": reforgeCostTalent += eff.perPoint * pts; break;
       case "craftCostMult": craftCostTalent += eff.perPoint * pts; break;
+      case "hpGrowthReduction": hpGrowthReductionTalent += eff.perPoint * pts; break;
+      case "apsCap": apsCapTalent += eff.perPoint * pts; break;
+      case "skillCdPct": acc.skillCdPool += eff.perPoint * pts; break;
       case "keystone": hasKeystone.add(eff.key); break;
     }
   }
@@ -314,6 +320,14 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (hasKeystone.has("preciseCraft")) {
     reforgeCostTalent -= 0.5;
     craftCostTalent -= 0.3;
+  }
+  // 奇点树 Keystone：深渊豪赌（Boss 生命 ×2，Boss 金币 ×6）
+  const bossHpMult = hasKeystone.has("bossGamble") ? Big.fromNumber(2) : Big.ONE;
+  const bossGoldMult = hasKeystone.has("bossGamble") ? Big.fromNumber(6) : Big.ONE;
+  // 奇点树 Keystone：财富引力（当前金币每高 10 倍 → 全伤害 ×1.15）
+  if (hasKeystone.has("goldGravity")) {
+    const goldSteps = Math.max(0, Math.floor(toBig(state.player.gold).log10()));
+    goldKeystoneMult = goldKeystoneMult.mul(Big.fromNumber(1.15).pow(goldSteps));
   }
 
   // ---- 攻速 ----
@@ -333,7 +347,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
   // 挑战：慢速宇宙——攻速减半
   if (state.meta.activeChallenge === "slow_universe") panelAps *= 0.5;
-  const effAps = effectiveAps(panelAps);
+  const effAps = effectiveAps(panelAps + apsCapTalent);
 
   // 攻速溢转（Keystone）：溢出攻速 → 独立伤害
   let aspdOverflowMult = Big.ONE;
@@ -352,6 +366,10 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (state.meta.activeChallenge === "no_crit") critChance = 0;
   const critDamage = (critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult;
 
+  // ---- 世界核心（第二层）----
+  const leapGlobalMult = leapAllStatsMult(state.leap?.purchases?.allStats ?? 0);
+  const hpGrowth = Math.max(1.05, CONFIG.HP_GROWTH - (state.leap?.purchases?.lawExponent ?? 0) * CONFIG.LEAP.SHOP.lawExponent.perLevel - hpGrowthReductionTalent);
+
   // ---- 全局倍率（重构/里程碑）----
   const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
   const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
@@ -359,7 +377,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // ---- 金币 ----
   // 重构倍率同时放大金币收入：重推旧进度时不会被“金币清零+重买升级”卡住（验收：重推耗时 ≤ 原 20%）
   acc.goldPool += (state.skills.passives?.greed ?? 0) * CONFIG.SKILL_PASSIVES.greed.effectPerLevel;
-  let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult);
+  let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult).mul(leapGlobalMult);
   let goldMult = goldMultBase;
   if (goldCollapseActive) {
     const def = SKILL_DEFS.gold_collapse;
@@ -372,7 +390,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (state.meta.activeChallenge === "poverty") goldMult = goldMult.mul(Big.fromNumber(0.5));
 
   // ---- 全局倍率 ----
-  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult);
+  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult);
 
   // ---- 单次伤害（非暴击） ----
   const base = baseAttack(player.upgrades.attack).mul(weaponAtkMult);
@@ -425,6 +443,10 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     prestigeMult,
     globalMult,
     critLayersExtra,
+    leapGlobalMult,
+    hpGrowth,
+    bossHpMult,
+    bossGoldMult,
     offlineEffTalent,
     skipBaseTalent,
     shardGainMult: Math.max(1, 1 + shardGainTalent),

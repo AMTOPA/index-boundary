@@ -98,6 +98,8 @@ export function normalizeState(raw: unknown): GameState {
   }
   state.prestige = { ...base.prestige, ...(r.prestige ?? {}) };
   state.prestige.purchases = { ...(r.prestige?.purchases ?? {}) };
+  state.leap = { ...base.leap, ...(r.leap ?? {}) };
+  state.leap.purchases = { ...(r.leap?.purchases ?? {}) };
   state.items = { ...base.items, ...(r.items ?? {}) };
   state.items.consumables = { ...(r.items?.consumables ?? {}) };
   state.items.tools = { ...(r.items?.tools ?? {}) };

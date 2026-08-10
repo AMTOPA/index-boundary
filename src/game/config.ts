@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, DailyQuestType, Rarity, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, DailyQuestType, LeapUpgradeId, Rarity, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -272,6 +272,21 @@ export const CONFIG = {
     AUTO_WALL_SEC: 5, // 自动重构：击杀时间超过该秒数视为卡墙才触发
   },
 
+  // 世界跃迁（第二层重置）：10000 关解锁，跨世界线洗牌，获得世界核心
+  LEAP: {
+    STAGE: 10000, // 解锁跃迁的关卡
+    CORE_PER_LEAP: 1,
+    CORE_DOUBLE_MULT: 2, // 本次最大关卡 ≥ 上次×2 → 额外 +1 核心
+    SHOP: {
+      lawExponent: { baseCost: 1, costGrowth: 1, perLevel: 0.005, max: 24, label: "法则指数", desc: "怪物 HP 指数基数 -0.005/级（上限 -0.12）" },
+      startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后起始关卡 +100/级" },
+      allStats: { baseCost: 1, costGrowth: 1, perLevel: 1 / 3, max: 30, label: "全属性", desc: "全局伤害/金币 ×2 每 3 级（防平滑膨胀）" },
+      newWorld: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 2, label: "新世界", desc: "解锁新世界主题与机制（奇点熔炉/法则终境）" },
+      autoLeap: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 1, label: "自动跃迁", desc: "到达跃迁阈值且卡墙时自动跃迁" },
+    } as Record<LeapUpgradeId, { baseCost: number; costGrowth: number; perLevel: number; max: number; label: string; desc: string }>,
+    AUTO_WALL_SEC: 8, // 自动跃迁：卡墙判定秒数
+  },
+
   // 解锁节奏（关卡）
   UNLOCKS: [
     { key: "auto_attack", stage: 5, label: "自动攻击" },
@@ -282,6 +297,7 @@ export const CONFIG = {
     { key: "skills", stage: 100, label: "技能系统" },
     { key: "talents", stage: 150, label: "天赋系统" },
     { key: "prestige", stage: 350, label: "重构" },
+    { key: "leap", stage: 10000, label: "世界跃迁" },
     { key: "achievements", stage: 30, label: "成就" },
   ] as { key: string; stage: number; label: string }[],
 

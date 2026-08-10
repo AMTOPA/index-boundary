@@ -8,7 +8,9 @@ export type KeystoneKey =
   | "offlineLord"
   | "smartBuy"
   | "compoundInterest"
-  | "preciseCraft";
+  | "preciseCraft"
+  | "bossGamble"
+  | "goldGravity";
 
 export type TalentEffect =
   | { kind: "addPool"; stat: "atkPct" | "goldPct"; perPoint: number }
@@ -22,6 +24,9 @@ export type TalentEffect =
   | { kind: "shardGain"; perPoint: number }
   | { kind: "reforgeCostMult"; perPoint: number }
   | { kind: "craftCostMult"; perPoint: number }
+  | { kind: "hpGrowthReduction"; perPoint: number }
+  | { kind: "apsCap"; perPoint: number }
+  | { kind: "skillCdPct"; perPoint: number }
   | { kind: "unlock"; key: string }
   | { kind: "keystone"; key: KeystoneKey };
 
@@ -43,6 +48,7 @@ export const TALENT_TREES: Record<TreeId, { name: string; desc: string }> = {
   destruction: { name: "毁灭", desc: "极限伤害" },
   automation: { name: "自动化", desc: "放置与效率" },
   greed: { name: "贪婪", desc: "财富与资源" },
+  singularity: { name: "奇点", desc: "改写法则" },
 };
 
 export const TALENT_NODES: TalentNodeDef[] = [
@@ -71,6 +77,13 @@ export const TALENT_NODES: TalentNodeDef[] = [
   { id: "greed_refine", tree: "greed", name: "精炼", desc: "分解碎片 +25%/点", max: 3, cost: 2, type: "additive", tier: 2, requires: ["greed_luck"], effect: { kind: "shardGain", perPoint: 0.25 } },
   { id: "greed_keystone_compound", tree: "greed", name: "指数复利", desc: "累计金币每高 10 倍 → 伤害 +5%", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["greed_pan", "greed_refine"], exclusiveGroup: "greed_keystone", effect: { kind: "keystone", key: "compoundInterest" } },
   { id: "greed_keystone_craft", tree: "greed", name: "精密制造", desc: "重铸 -50% 与制作 -30% 费用", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["greed_pan", "greed_refine"], exclusiveGroup: "greed_keystone", effect: { kind: "keystone", key: "preciseCraft" } },
+
+{ id: "sing_law", tree: "singularity", name: "法则扭曲", desc: "怪物 HP 指数基数 -0.003/点", max: 3, cost: 2, type: "additive", tier: 1, effect: { kind: "hpGrowthReduction", perPoint: 0.003 } },
+  { id: "sing_cap", tree: "singularity", name: "攻速破限", desc: "攻速软上限 +1/点", max: 3, cost: 2, type: "additive", tier: 1, effect: { kind: "apsCap", perPoint: 1 } },
+  { id: "sing_skill_cd", tree: "singularity", name: "时空折叠", desc: "技能冷却 -4%/点", max: 3, cost: 2, type: "additive", tier: 2, requires: ["sing_law"], effect: { kind: "skillCdPct", perPoint: 0.04 } },
+  { id: "sing_overflow", tree: "singularity", name: "溢流共振", desc: "溢出效率 +30%/点", max: 3, cost: 2, type: "mult", tier: 2, requires: ["sing_cap"], effect: { kind: "overflowEff", perPoint: 0.3 } },
+  { id: "sing_keystone_boss", tree: "singularity", name: "深渊豪赌", desc: "Boss 生命 ×2，Boss 金币 ×6（猎杀流）", max: 1, cost: 4, type: "keystone", tier: 3, requires: ["sing_skill_cd", "sing_overflow"], exclusiveGroup: "singularity_keystone", effect: { kind: "keystone", key: "bossGamble" } },
+  { id: "sing_keystone_gold", tree: "singularity", name: "财富引力", desc: "当前金币每高 10 倍 → 全伤害 ×1.15", max: 1, cost: 4, type: "keystone", tier: 3, requires: ["sing_skill_cd", "sing_overflow"], exclusiveGroup: "singularity_keystone", effect: { kind: "keystone", key: "goldGravity" } },
 ];
 
 export function talentNodeById(id: string): TalentNodeDef | undefined {

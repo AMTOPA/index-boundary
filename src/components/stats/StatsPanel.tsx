@@ -24,17 +24,17 @@ export function StatsPanel() {
 
   // ---- 实时战斗指标（估算） ----
   const killTimeSec = (() => {
-    const hp = enemyHp(stage);
+    const hp = enemyHp(stage, d.hpGrowth);
     const t = hp.div(d.dps).toNumber();
     return Number.isFinite(t) ? Math.max(0.001, t) : Infinity;
   })();
   const goldPerSec = (() => {
     if (!Number.isFinite(killTimeSec)) return Infinity;
-    return enemyGold(stage).mul(d.goldMult).div(d.dps).toNumber();
+    return enemyGold(stage, d.hpGrowth).mul(d.goldMult).div(d.dps).toNumber();
   })();
   const bossKillSec = (() => {
     const eff = d.dps.mul(d.bossDmgMult);
-    const t = bossHp(stage).div(eff).toNumber();
+    const t = bossHp(stage, d.hpGrowth).mul(d.bossHpMult).div(eff).toNumber();
     return Number.isFinite(t) ? t : Infinity;
   })();
 

@@ -8,6 +8,7 @@ import { prestigeEnergy, prestigeGlobalMult as pm } from "@/game/formulas";
 import { CONFIG } from "@/game/config";
 import type { ChallengeId, PrestigeUpgradeId } from "@/game/types";
 import { shopCostFrom, canBuyFrom } from "@/game/systems/prestige";
+import { LeapPanel } from "@/components/leap/LeapPanel";
 
 const SHOP_ORDER: PrestigeUpgradeId[] = ["startPower", "goldKeep", "fastSkip", "startSkill", "singularityAmp"];
 const CHALLENGE_ORDER: ChallengeId[] = ["no_crit", "slow_universe", "poverty"];
@@ -107,6 +108,8 @@ export function PrestigePanel() {
           </div>
         );
       })}
+      <div style={{ marginTop: 18 }}><LeapPanel /></div>
+
       {confirm && (
         <div className="modal-backdrop" onClick={() => setConfirm(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

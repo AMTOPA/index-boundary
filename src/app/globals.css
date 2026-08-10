@@ -455,7 +455,7 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
 .mini-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(53,198,240,0.12); }
 
 
-/* ---------- ????????? ---------- */
+/* ---------- 数字显示 ---------- */
 .number-display {
   display: inline-block;
   transition: color 0.18s ease, text-shadow 0.18s ease, transform 0.18s ease;
@@ -479,4 +479,57 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   .skill-btn { flex-basis: 74px; min-width: 74px; padding: 8px 5px; font-size: 11px; }
   .skill-btn .icon { font-size: 20px; }
   .click-hint { margin-top: 14px; }
+}
+
+/* ---------- 世界跃迁 ---------- */
+.leap-flash {
+  position: fixed; inset: 0; z-index: 170; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(720px 520px at 50% 50%, rgba(255,94,138,0.16), rgba(0,0,0,0.82));
+  pointer-events: none;
+  overflow: hidden;
+  animation: leapFade 2.8s ease forwards;
+}
+.leap-rings { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.leap-rings span {
+  position: absolute; width: 110px; height: 110px; border-radius: 50%;
+  border: 2px solid rgba(255,94,138,0.7);
+  box-shadow: 0 0 30px rgba(255,94,138,0.5), inset 0 0 30px rgba(126,232,255,0.28);
+  animation: leapRing 2.8s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+.leap-rings span:nth-child(2) { animation-delay: 0.28s; border-color: rgba(178,107,255,0.75); }
+.leap-rings span:nth-child(3) { animation-delay: 0.56s; border-color: rgba(126,232,255,0.8); }
+@keyframes leapRing {
+  0% { transform: scale(0.2) rotate(0deg); opacity: 0; }
+  16% { opacity: 1; }
+  100% { transform: scale(10) rotate(40deg); opacity: 0; }
+}
+.leap-inner { text-align: center; z-index: 1; padding: 0 16px; }
+.leap-title {
+  font-size: 44px; font-weight: 900; letter-spacing: 0.3em; padding-left: 0.3em;
+  background: linear-gradient(120deg, #ff5e8a, #b26bff 45%, #7ee8ff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 26px rgba(178,107,255,0.75));
+  animation: leapShimmer 2.8s ease forwards;
+}
+.leap-sub { margin-top: 10px; color: var(--text); font-size: 15px; letter-spacing: 0.14em; opacity: 0.92; }
+.leap-cores { margin-top: 14px; font-size: 22px; color: var(--gold); text-shadow: 0 0 18px rgba(255,217,61,0.8); }
+@keyframes leapShimmer {
+  0% { opacity: 0; transform: scale(0.92); }
+  14% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+@keyframes leapFade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.leap-ready { animation: leapPulse 1.5s ease-in-out infinite; }
+@keyframes leapPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(178,107,255,0), 0 0 12px rgba(178,107,255,0.25); }
+  50% { box-shadow: 0 0 0 7px rgba(178,107,255,0), 0 0 26px rgba(178,107,255,0.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .leap-flash, .leap-rings span, .leap-title, .leap-ready { animation: none !important; }
 }

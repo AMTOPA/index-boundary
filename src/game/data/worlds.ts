@@ -7,6 +7,7 @@ export interface WorldDef {
   color: string;
   enemyStyle: string;
   bossPool: BossAffix[];
+  requiresLeap?: number; // 需要的「新世界」升级等级（0/缺省=基础世界）
 }
 
 export const WORLDS: WorldDef[] = [
@@ -42,12 +43,31 @@ export const WORLDS: WorldDef[] = [
     enemyStyle: "深紫引力扭曲体",
     bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect"],
   },
+  {
+    id: "singularity_furnace",
+    name: "奇点熔炉",
+    stageRange: [10001, 50000],
+    color: "#ff5e8a",
+    enemyStyle: "熔金棱晶",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
+    requiresLeap: 1,
+  },
+  {
+    id: "law_terminus",
+    name: "法则终境",
+    stageRange: [50001, 100000],
+    color: "#7ee8ff",
+    enemyStyle: "纯白法则体",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
+    requiresLeap: 2,
+  },
 ];
 
-export function worldForStage(stage: number): WorldDef {
+export function worldForStage(stage: number, newWorldLevel = 0): WorldDef {
   let w = WORLDS[0];
   for (const world of WORLDS) {
-    if (stage >= world.stageRange[0]) w = world;
+    const need = world.requiresLeap ?? 0;
+    if (stage >= world.stageRange[0] && newWorldLevel >= need) w = world;
   }
   return w;
 }

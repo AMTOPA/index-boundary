@@ -8,15 +8,16 @@ export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singu
 export type PassiveId = "rhythm" | "focus" | "greed";
 export type ChallengeId = "no_crit" | "slow_universe" | "poverty";
 export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "stageReach";
-export type TreeId = "destruction" | "automation" | "greed";
+export type TreeId = "destruction" | "automation" | "greed" | "singularity";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip" | "auto_prestige";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
+export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
 export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
-export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole";
+export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus";
 export type ScoreSubmitKind = "stage" | "mag" | "prestige";
 
 // 词条属性（加池型用 % 表达，独立乘区用 × 表达）
@@ -132,6 +133,14 @@ export interface PrestigeState {
   purchases: Partial<Record<PrestigeUpgradeId, number>>;
 }
 
+export interface LeapState {
+  cores: number;
+  totalCoresEarned: number;
+  totalLeaps: number;
+  lastLeapMaxStage: number; // 上次跃迁时的最大关卡（用于 ×2 判定）
+  purchases: Partial<Record<LeapUpgradeId, number>>;
+}
+
 export interface ItemState {
   consumables: Partial<Record<ItemId, number>>;
   tools: Partial<Record<ToolId, boolean>>;
@@ -178,6 +187,7 @@ export interface GameState {
   skills: SkillState;
   talents: TalentState;
   prestige: PrestigeState;
+  leap: LeapState;
   items: ItemState;
   statistics: StatisticsState;
   daily: DailyState;
@@ -199,6 +209,7 @@ export type GameEvent =
   | { type: "unlock"; key: string; label: string }
   | { type: "milestone"; magnitude: number }
   | { type: "prestige"; energyGained: number }
+  | { type: "leap"; cores: number }
   | { type: "drop"; rarity: Rarity; slot: EquipSlot }
   | { type: "achievement"; id: string }
   | { type: "levelUp"; upgrade: UpgradeId; level: number }
@@ -233,6 +244,10 @@ export interface DerivedStats {
   prestigeMult: Big;
   globalMult: Big;
   critLayersExtra: number;
+  leapGlobalMult: Big; // 世界核心全属性全局倍率
+  hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）
+  bossHpMult: Big; // Boss 生命倍率（深渊豪赌等）
+  bossGoldMult: Big; // Boss 金币倍率（深渊豪赌等）
   offlineEffTalent: number;
   skipBaseTalent: number;
   shardGainMult: number;

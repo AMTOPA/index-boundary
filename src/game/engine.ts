@@ -22,6 +22,7 @@ import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
 import { talentNodeById } from "./data/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
+import { applyLeap, canLeap as sysCanLeap, leapCores, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
@@ -74,6 +75,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       ],
     },
     prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
+    leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
@@ -112,8 +114,8 @@ export class GameEngine {
     this.rng = Rng.fromState(this.state.meta.rngState);
     this.buffs = emptyBuffs();
     ensureDaily(this.state);
-    if (toBig(this.state.combat.enemyHp).isZero()) this.spawnEnemy();
     this.derived = computeDerived(this.state, this.buffs, this.timeSec);
+    if (toBig(this.state.combat.enemyHp).isZero()) this.spawnEnemy();
   }
 
   // ---------------- 事件 ----------------
@@ -168,6 +170,13 @@ export class GameEngine {
       ensureDaily(this.state);
     }
     // 自动重构：卡墙且可重构时自动执行（每 10s 检查一次）
+    // 自动跃迁：到达跃迁阈值且卡墙时自动执行（世界核心升级解锁）
+    if ((this.state.leap?.purchases?.autoLeap ?? 0) >= 1 && this.canLeap()) {
+      const kt = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
+      if (Number.isFinite(kt) && kt > CONFIG.LEAP.AUTO_WALL_SEC) {
+        this.leap();
+      }
+    }
     this.autoPrestigeTimer -= dt;
     if (this.autoPrestigeTimer <= 0) {
       this.autoPrestigeTimer = 10;
@@ -350,8 +359,8 @@ export class GameEngine {
     this.state.statistics.totalKills += 1;
 
     const kind = c.enemyKind;
-    let gold = enemyGold(stage).mul(this.derived.goldMult);
-    if (isBoss) gold = gold.mul(Big.fromNumber(10));
+    let gold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
+    if (isBoss) gold = gold.mul(Big.fromNumber(10)).mul(this.derived.bossGoldMult);
     else if (kind === "elite") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_GOLD_MULT));
     else if (kind === "mimic") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_GOLD_MULT));
     if (isBoss && c.bossVoidTarget === "gold") gold = gold.mul(Big.fromNumber(0.5));
@@ -364,7 +373,7 @@ export class GameEngine {
     }
     // 溢出金币（仅首次通关，即超越历史最大关卡）
     if (overkill.gt(Big.ZERO) && stage > this.state.statistics.allTimeMaxStage) {
-      const baseGold = enemyGold(stage).mul(this.derived.goldMult);
+      const baseGold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
       const hpBefore = toBig(c.enemyMaxHp);
       gold = gold.add(overflowGold(overkill.add(hpBefore), hpBefore, baseGold, this.derived.overflowEffMult));
     }
@@ -455,7 +464,7 @@ export class GameEngine {
     if (isBossStage(c.stage)) {
       c.isBoss = true;
       c.enemyKind = "normal";
-      c.enemyMaxHp = bossHp(c.stage).toTuple();
+      c.enemyMaxHp = bossHp(c.stage, this.derived.hpGrowth).mul(this.derived.bossHpMult).toTuple();
       c.enemyHp = c.enemyMaxHp;
       c.bossTimer = CONFIG.BOSS_TIMER_SEC;
       c.bossAffixes = this.rollBossAffixes();
@@ -474,23 +483,23 @@ export class GameEngine {
       );
       c.enemyKind = kind;
       if (kind === "elite") {
-        c.enemyMaxHp = enemyHp(c.stage).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_HP_MULT)).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_HP_MULT)).toTuple();
         c.enemyHp = c.enemyMaxHp;
         c.bossAffixes = this.rollEliteAffixes();
         this.emit({ type: "eliteSpawn", affixes: c.bossAffixes });
       } else if (kind === "mimic") {
-        c.enemyMaxHp = enemyHp(c.stage).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_HP_MULT)).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_HP_MULT)).toTuple();
         c.enemyHp = c.enemyMaxHp;
         this.emit({ type: "mimicSpawn" });
       } else {
-        c.enemyMaxHp = enemyHp(c.stage).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).toTuple();
         c.enemyHp = c.enemyMaxHp;
       }
     }
   }
 
   private rollBossAffixes(): BossAffix[] {
-    const pool = worldForStage(this.state.combat.stage).bossPool;
+    const pool = worldForStage(this.state.combat.stage, this.state.leap?.purchases?.newWorld ?? 0).bossPool;
     const count = this.state.combat.stage >= 200 && this.rng.chance(0.5) ? 2 : 1;
     return this.rng.shuffle(pool).slice(0, count);
   }
@@ -731,7 +740,7 @@ export class GameEngine {
         this.state.combat.bossTimer = Math.min(CONFIG.BOSS_TIMER_SEC, this.state.combat.bossTimer + result.action.bossFreezeSec);
       }
     } else if (result.action.kind === "data_flood") {
-      const gold = enemyGold(this.state.combat.stage).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
+      const gold = enemyGold(this.state.combat.stage, this.derived.hpGrowth).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
       this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
       this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
       this.state.daily.goldEarned = toBig(this.state.daily.goldEarned).add(gold).toTuple();
@@ -859,6 +868,34 @@ export class GameEngine {
   }
   prestigeShopCost(id: Parameters<typeof buyPrestigeUpgrade>[1]): number {
     return canBuy(this.state, id) ? 0 : 0; // 实际价格由 UI 用 shopCost 计算
+  }
+
+  // ---------------- 世界跃迁（第二层重置）----------------
+  canLeap(): boolean {
+    return sysCanLeap(this.state);
+  }
+  leap(): { cores: number } | null {
+    if (!this.canLeap()) return null;
+    const cores = leapCores(this.state);
+    applyLeap(this.state, cores);
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.spawnEnemy();
+    this.recomputeDerived();
+    this.emit({ type: "leap", cores });
+    return { cores };
+  }
+  buyLeapUpgrade(id: Parameters<typeof sysBuyLeapUpgrade>[1]): boolean {
+    const ok = sysBuyLeapUpgrade(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  leapShopCost(id: Parameters<typeof sysBuyLeapUpgrade>[1]): number {
+    return leapShopCost(this.state, id);
+  }
+  canBuyLeap(id: Parameters<typeof sysBuyLeapUpgrade>[1]): boolean {
+    return sysCanBuyLeap(this.state, id);
   }
 
   // ---------------- 挑战模式 ----------------
@@ -1052,19 +1089,19 @@ export class GameEngine {
     let gold = Big.ZERO;
     while (t < maxSec) {
       if (isBossStage(stage)) break;
-      const hp = enemyHp(stage);
+      const hp = enemyHp(stage, GameEngine.effectiveHpGrowthOf(state));
       const killTime = hp.div(dps).toNumber();
       if (!Number.isFinite(killTime) || killTime > CONFIG.OFFLINE.WALL_KILL_TIME_SEC) break;
       const crush = derived.damagePerHit.gte(hp.mul(Big.fromNumber(CONFIG.CRUSH_THRESHOLD)));
       const per = killTime + (crush ? 0 : 0.3);
       if (t + per > maxSec) {
         const frac = (maxSec - t) / per;
-        gold = gold.add(enemyGold(stage).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
+        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
         t = maxSec;
         break;
       }
       t += per;
-      gold = gold.add(enemyGold(stage).mul(derived.goldMult));
+      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult));
       kills++;
       stage++;
     }
@@ -1079,6 +1116,13 @@ export class GameEngine {
       secondsSimulated: t,
       capped: durationSec > maxSec,
     };
+  }
+
+  // 生效怪物 HP 指数（含世界核心法则指数）
+  static effectiveHpGrowthOf(state: GameState): number {
+    const lawLv = state.leap?.purchases?.lawExponent ?? 0;
+    const lawReduction = Math.min(0.12, lawLv * CONFIG.LEAP.SHOP.lawExponent.perLevel);
+    return CONFIG.HP_GROWTH - lawReduction;
   }
 
   // 加载后结算离线（由应用层在构造引擎后调用）
