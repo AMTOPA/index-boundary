@@ -237,7 +237,7 @@ export interface DerivedStats {
   baseAttack: Big;
   attackMult: Big;
   critChance: number;
-  critDamage: number;
+  critDamage: Big;
   panelAps: number;
   effectiveAps: number;
   goldMult: Big;

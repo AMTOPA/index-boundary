@@ -1,6 +1,6 @@
 "use client";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
-import { toBig } from "@/game/bignum";
+import { Big, toBig } from "@/game/bignum";
 import { formatBig, formatNumber, formatDuration, formatPct } from "@/game/format";
 import { CONFIG } from "@/game/config";
 import {
@@ -48,11 +48,11 @@ export function StatsPanel() {
       const next = effectiveAps(d.panelAps * CONFIG.UPGRADES.aspd.effectPerLevel);
       gain = next / Math.max(0.0001, d.effectiveAps) - 1;
     } else if (id === "critChance") {
-      gain = expectedCritMult(d.critChance + CONFIG.UPGRADES.critChance.perLevel, d.critDamage, d.critLayersExtra) /
-        Math.max(1, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra)) - 1;
+      gain = expectedCritMult(d.critChance + CONFIG.UPGRADES.critChance.perLevel, d.critDamage, d.critLayersExtra).div(
+        Big.max(Big.ONE, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra))).toNumber() - 1;
     } else if (id === "critDamage") {
-      gain = expectedCritMult(d.critChance, d.critDamage + CONFIG.UPGRADES.critDamage.perLevel, d.critLayersExtra) /
-        Math.max(1, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra)) - 1;
+      gain = expectedCritMult(d.critChance, d.critDamage.add(Big.fromNumber(CONFIG.UPGRADES.critDamage.perLevel)), d.critLayersExtra).div(
+        Big.max(Big.ONE, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra))).toNumber() - 1;
     } else if (id === "gold") {
       gain = goldMultFromLevel(lv + 1) / Math.max(0.0001, goldMultFromLevel(lv)) - 1;
     }
@@ -73,7 +73,7 @@ export function StatsPanel() {
       <div className="stat-grid">
         <div className="stat-item"><div className="k">当前 DPS</div><div className="v mono" style={{ color: "var(--accent)" }}>{formatBig(d.dps)}</div></div>
         <div className="stat-item"><div className="k">单次伤害</div><div className="v mono">{formatBig(d.damagePerHit)}</div></div>
-        <div className="stat-item"><div className="k">暴击率 / 暴伤</div><div className="v mono">{formatPct(d.critChance)} / ×{d.critDamage.toFixed(2)}</div></div>
+        <div className="stat-item"><div className="k">暴击率 / 暴伤</div><div className="v mono">{formatPct(d.critChance)} / ×{formatBig(d.critDamage)}</div></div>
         <div className="stat-item"><div className="k">有效攻速</div><div className="v mono">{d.effectiveAps.toFixed(2)}/s（面板 {d.panelAps.toFixed(1)}）</div></div>
         <div className="stat-item"><div className="k">金币倍率</div><div className="v mono">{formatBig(d.goldMult)}</div></div>
         <div className="stat-item"><div className="k">Boss 伤害</div><div className="v mono">×{formatBig(d.bossDmgMult)}</div></div>

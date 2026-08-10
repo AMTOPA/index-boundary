@@ -56,7 +56,7 @@ st3.laws.purchases.critExp = 6;
 st3.laws.purchases.goldBoost = 6;
 st3.laws.purchases.apsCap = 4;
 const d = computeDerived(st3, emptyBuffs(), 0);
-check("暴击指数满级 ^1.3（2^1.3≈2.46）", Math.abs(d.critDamage - Math.pow(2, 1.3)) < 1e-9, "critDamage=" + d.critDamage.toFixed(3));
+check("暴击指数满级 ^1.3（2^1.3≈2.46）", Math.abs(d.critDamage.toNumber() - Math.pow(2, 1.3)) < 1e-9, "critDamage=" + d.critDamage.toString());
 check("金币补强 ×2.5@满级", Math.abs(lawGoldBoost(st3) - 2.5) < 1e-9);
 const dGold = computeDerived(st3, emptyBuffs(), 0);
 check("金币补强计入 goldMult", dGold.goldMult.toNumber() >= 2.49);

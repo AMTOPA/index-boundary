@@ -49,23 +49,30 @@ describe("升级成本", () => {
 
 describe("暴击", () => {
   it("roll=0 必暴击", () => {
-    const r = rollCrit(0.1, 2, 0, 0);
+    const r = rollCrit(0.1, Big.fromNumber(2), 0, 0);
     expect(r.crit).toBe(true);
     expect(r.superCrit).toBe(false);
-    expect(r.mult).toBeCloseTo(2, 10);
+    expect(r.mult.toNumber()).toBeCloseTo(2, 10);
   });
   it("roll>=chance 不暴击", () => {
-    const r = rollCrit(0.1, 2, 0, 0.5);
+    const r = rollCrit(0.1, Big.fromNumber(2), 0, 0.5);
     expect(r.crit).toBe(false);
   });
   it("chance>=1 产生多层暴击", () => {
-    const r = rollCrit(1.5, 2, 0, 0.1);
+    const r = rollCrit(1.5, Big.fromNumber(2), 0, 0.1);
     expect(r.crit).toBe(true);
     expect(r.superCrit).toBe(true);
-    expect(r.mult).toBeCloseTo(4, 10); // 2^2
+    expect(r.mult.toNumber()).toBeCloseTo(4, 10); // 2^2
   });
-  it("期望倍率单调", () => {
-    expect(expectedCritMult(0.3, 2, 0)).toBeGreaterThan(expectedCritMult(0.05, 2, 0));
+  it("multi-crit beyond JS number range stays finite Big (dps-zero regression)", () => {
+    const m = expectedCritMult(92.19, Big.fromNumber(2102), 0);
+    expect(Number.isFinite(m.log10())).toBe(true);
+    expect(m.log10()).toBeGreaterThan(300);
+    const r = rollCrit(92.19, Big.fromNumber(2102), 0, 0);
+    expect(Number.isFinite(r.mult.log10())).toBe(true);
+  });
+  it("monotonic expected crit mult", () => {
+    expect(expectedCritMult(0.3, Big.fromNumber(2), 0).toNumber()).toBeGreaterThan(expectedCritMult(0.05, Big.fromNumber(2), 0).toNumber());
   });
 });
 

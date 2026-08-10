@@ -224,7 +224,7 @@ export class GameEngine {
       const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
       crit = r.crit && !voidCrit;
       superCrit = r.superCrit && !voidCrit;
-      damage = damage.mul(Big.fromNumber(voidCrit ? 1 : r.mult));
+      damage = damage.mul(voidCrit ? Big.ONE : r.mult);
     }
     // 充能一击待发：下一次攻击 ×mult
     if (this.buffs.chargedHit.pending) {
@@ -278,7 +278,7 @@ export class GameEngine {
     if (whole <= 8) {
       for (let i = 0; i < whole; i++) {
         const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
-        const hit = d.damagePerHit.mul(Big.fromNumber(voidCrit ? 1 : r.mult));
+        const hit = d.damagePerHit.mul(voidCrit ? Big.ONE : r.mult);
         this.applyHit(hit, r.crit && !voidCrit, r.superCrit && !voidCrit, false, true);
       }
     } else {
@@ -294,7 +294,7 @@ export class GameEngine {
       return;
     }
     const expected = expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra);
-    const total = d.damagePerHit.mul(Big.fromNumber(expected)).mul(Big.fromNumber(n));
+    const total = d.damagePerHit.mul(expected).mul(Big.fromNumber(n));
     const crit = this.rng.chance(Math.min(1, d.critChance));
     this.applyHit(total, crit, false, false, true);
   }
@@ -625,10 +625,10 @@ export class GameEngine {
       gain = Math.log10(effApsRatio(panel, next));
     } else if (id === "critChance") {
       const c = critChanceFor(s);
-      gain = Math.log10(expectedCritMult(c + 0.008, critDmgFor(s)) / Math.max(1, expectedCritMult(c, critDmgFor(s))));
+      gain = expectedCritMult(c + 0.008, Big.fromNumber(critDmgFor(s))).div(Big.max(Big.ONE, expectedCritMult(c, Big.fromNumber(critDmgFor(s))))).log10();
     } else if (id === "critDamage") {
       const d = critDmgFor(s);
-      gain = Math.log10(expectedCritMult(critChanceFor(s), d + 0.15) / Math.max(1, expectedCritMult(critChanceFor(s), d)));
+      gain = expectedCritMult(critChanceFor(s), Big.fromNumber(d + 0.15)).div(Big.max(Big.ONE, expectedCritMult(critChanceFor(s), Big.fromNumber(d)))).log10();
     } else if (id === "gold") {
       gain = 0.5 * Math.log10(1 + 0.1 / (1 + s.player.upgrades.gold * 0.1));
     }

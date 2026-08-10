@@ -131,7 +131,9 @@ function unlockSkills(eng: GameEngine): void {
 function castReadySkills(eng: GameEngine): void {
   const c = eng.state.combat;
   const boss = c.isBoss;
-  const killTime = toBig(c.enemyHp).div(eng.derived.dps).toNumber();
+  const hp = toBig(c.enemyHp);
+  const dps = eng.derived.dps;
+  const killTime = hp.isZero() || dps.isZero() ? 0 : hp.div(dps).toNumber();
   const walled = Number.isFinite(killTime) && killTime > CONFIG.SKILL_CAST_WALL_SEC;
   for (const id of SKILL_IDS) {
     const inst = eng.state.skills.actives.find((s) => s.id === id);
@@ -198,9 +200,9 @@ export function runAutoPlayer(opts: SimOptions = {}): SimResult {
       }
     }
     const d = eng.derived;
-    if (!Number.isFinite(d.dps.toNumber())) throw new Error("模拟出现非有限 DPS");
+    if (!Number.isFinite(d.dps.log10())) throw new Error("sim non-finite DPS");
     if (i % (30 / dt) === 0) {
-      const kt = toBig(eng.state.combat.enemyHp).div(d.dps).toNumber();
+      const kt = toBig(eng.state.combat.enemyHp).isZero() ? 0 : toBig(eng.state.combat.enemyHp).div(d.dps).toNumber();
       killTimeSamples.push({ t: eng.timeSec, stage: eng.state.combat.stage, killTime: Number.isFinite(kt) ? kt : -1 });
     }
   }

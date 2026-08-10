@@ -97,19 +97,19 @@ export function pickSpecialEnemy(
 // ---------------- 暴击 ----------------
 
 // 期望暴击倍率（支持多重暴击）
-export function expectedCritMult(chance: number, critDamage: number, extraLayers = 0): number {
-  if (chance <= 0) return 1;
-  if (chance < 1) return 1 + chance * (critDamage - 1);
+export function expectedCritMult(chance: number, critDamage: Big, extraLayers = 0): Big {
+  if (chance <= 0) return Big.ONE;
+  if (chance < 1) return Big.fromNumber(chance).mul(critDamage).add(Big.fromNumber(1 - chance));
   const layers = Math.floor(chance) + extraLayers;
   const frac = chance - Math.floor(chance);
-  let mult = Math.pow(critDamage, layers);
-  if (frac > 0) mult *= 1 + frac * (critDamage - 1);
+  let mult = critDamage.pow(layers);
+  if (frac > 0) mult = mult.mul(Big.fromNumber(frac).mul(critDamage).add(Big.fromNumber(1 - frac)));
   return mult;
 }
 
 // 单次命中判定：roll ∈ [0,1)。返回 { crit, superCrit, mult }
-export function rollCrit(chance: number, critDamage: number, extraLayers: number, roll: number): { crit: boolean; superCrit: boolean; mult: number } {
-  if (chance <= 0 || roll >= chance) return { crit: false, superCrit: false, mult: 1 };
+export function rollCrit(chance: number, critDamage: Big, extraLayers: number, roll: number): { crit: boolean; superCrit: boolean; mult: Big } {
+  if (chance <= 0 || roll >= chance) return { crit: false, superCrit: false, mult: Big.ONE };
   let layers = 0;
   if (chance >= 1) {
     const base = Math.floor(chance);
@@ -119,7 +119,7 @@ export function rollCrit(chance: number, critDamage: number, extraLayers: number
     layers = 1;
   }
   layers += extraLayers;
-  const mult = Math.pow(critDamage, layers);
+  const mult = critDamage.pow(layers);
   return { crit: true, superCrit: layers >= 2, mult };
 }
 
@@ -237,7 +237,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   };
 
   let weaponAtkMult = Big.ONE;
-  let critDmgEquipMult = 1;
+  let critDmgEquipMult = Big.ONE;
 
   for (const slot of CONFIG.EQUIPMENT.SLOTS) {
     const eq = equipment.slots[slot];
@@ -247,7 +247,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     const mainMult = eq.main.mult * enhanceMult;
     if (eq.main.stat === "atkPct") weaponAtkMult = weaponAtkMult.mul(Big.fromNumber(mainMult));
     else if (eq.main.stat === "aspdPct") acc.aspdMult *= mainMult;
-    else if (eq.main.stat === "critDmg") critDmgEquipMult *= mainMult;
+    else if (eq.main.stat === "critDmg") critDmgEquipMult = critDmgEquipMult.mul(Big.fromNumber(mainMult));
     // 副词条
     for (const af of eq.affixes) applyAffix(af.stat, af.value, acc);
     // 传奇词条（独立乘区）
@@ -370,7 +370,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
   // 挑战：无暴击——暴击率恒为 0
   if (state.meta.activeChallenge === "no_crit") critChance = 0;
-  const critDamage = Math.pow((critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult, lawCE);
+  const critDamage = Big.fromNumber(critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd).mul(critDmgEquipMult).pow(lawCE);
 
   // ---- 世界核心（第二层）----
   const leapGlobalMult = leapAllStatsMult(state.leap?.purchases?.allStats ?? 0);
@@ -425,7 +425,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
 
   const critMultExpected = expectedCritMult(critChance, critDamage, critLayersExtra);
-  const dps = damagePerHit.mul(Big.fromNumber(critMultExpected)).mul(Big.fromNumber(Math.max(0.0001, effAps)));
+  const dps = damagePerHit.mul(critMultExpected).mul(Big.fromNumber(Math.max(0.0001, effAps)));
 
   return {
     baseAttack: base,
