@@ -2,7 +2,7 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
+  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -18,6 +18,7 @@ import {
   overclock as sysOverclock, overclockCost, canOverclock as sysCanOverclock,
 } from "./systems/equipment";
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
+import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
@@ -47,6 +48,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       settings: { sound: true, reduceMotion: false },
       lastScoreSubmit: { stage: undefined, mag: undefined, prestige: undefined },
       cloudSyncedAt: 0,
+      activeChallenge: null,
     },
     player: {
       upgrades: { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 },
@@ -70,6 +72,12 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       highestHit: [0, 0], totalClicks: 0, totalCrits: 0, totalSuperCrits: 0, totalSkillCasts: 0,
       totalPrestiges: 0, totalPlayTimeMs: 0, totalOfflineMs: 0, allTimeMaxStage: 1,
     },
+    daily: { date: "", quests: [], goldEarned: [0, 0], bestStage: 1 },
+    challenges: {
+      no_crit: { best: 0, claimed: false },
+      slow_universe: { best: 0, claimed: false },
+      poverty: { best: 0, claimed: false },
+    },
   };
 }
 
@@ -84,6 +92,7 @@ export class GameEngine {
   private attackBudget = 0;
   private recomputeTimer = 0;
   private achievementTimer = 0;
+  private dailyTimer = 0;
   private autoUpgradeTimer = 0;
   private chipUntil = 0;
   private protocolUntil = 0;
@@ -92,6 +101,7 @@ export class GameEngine {
     this.state = initial ? initial : createNewState();
     this.rng = Rng.fromState(this.state.meta.rngState);
     this.buffs = emptyBuffs();
+    ensureDaily(this.state);
     if (toBig(this.state.combat.enemyHp).isZero()) this.spawnEnemy();
     this.derived = computeDerived(this.state, this.buffs, this.timeSec);
   }
@@ -141,6 +151,11 @@ export class GameEngine {
       this.achievementTimer = 1;
       this.checkAchievements();
       this.checkMilestones();
+    }
+    this.dailyTimer -= dt;
+    if (this.dailyTimer <= 0) {
+      this.dailyTimer = 5;
+      ensureDaily(this.state);
     }
     this.recomputeTimer -= dt;
     if (this.recomputeTimer <= 0) {
@@ -335,6 +350,12 @@ export class GameEngine {
     this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
     this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
 
+    // 每日任务（仅在线进度；离线不结算）
+    this.state.daily.goldEarned = toBig(this.state.daily.goldEarned).add(gold).toTuple();
+    this.updateDailyGold();
+    this.updateDailyQuest("kills", 1);
+    if (isBoss) this.updateDailyQuest("bossKills", 1);
+
     this.emit({ type: "kill", stage, boss: isBoss, kind });
     if (isBoss) {
       this.state.statistics.totalBossKills += 1;
@@ -396,6 +417,14 @@ export class GameEngine {
     }
     c.stage = next;
     if (next > this.state.statistics.allTimeMaxStage) this.state.statistics.allTimeMaxStage = next;
+    // 挑战 / 每日任务进度
+    const chId = this.state.meta.activeChallenge;
+    if (chId) {
+      const prog = this.state.challenges[chId];
+      if (next > prog.best) prog.best = next;
+    }
+    if (next > this.state.daily.bestStage) this.state.daily.bestStage = next;
+    this.updateDailyQuest("stageReach", next);
     this.spawnEnemy();
     this.checkUnlocks();
   }
@@ -666,6 +695,7 @@ export class GameEngine {
       if (def.duration > 0) inst.activeUntil = this.timeSec + def.duration * this.derived.skillDurationMult;
     }
     this.state.statistics.totalSkillCasts += 1;
+    this.updateDailyQuest("skillCasts", 1);
     if (result.action.kind === "critical_strike") {
       this.buffs.criticalStrike.pending = true;
       this.buffs.criticalStrike.mult = result.action.mult;
@@ -680,6 +710,8 @@ export class GameEngine {
       const gold = enemyGold(this.state.combat.stage).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
       this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
       this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
+      this.state.daily.goldEarned = toBig(this.state.daily.goldEarned).add(gold).toTuple();
+      this.updateDailyGold();
     } else if (result.action.kind === "charged_hit") {
       this.buffs.chargedHit.pending = true;
       this.buffs.chargedHit.mult = result.action.mult;
@@ -753,6 +785,86 @@ export class GameEngine {
     return canBuy(this.state, id) ? 0 : 0; // 实际价格由 UI 用 shopCost 计算
   }
 
+  // ---------------- 挑战模式 ----------------
+  startChallenge(id: ChallengeId): boolean {
+    if (this.state.meta.activeChallenge === id) return false;
+    this.resetRunForChallenge();
+    this.state.meta.activeChallenge = id;
+    const prog = this.state.challenges[id];
+    this.state.challenges[id] = { best: Math.max(1, prog.best), claimed: prog.claimed };
+    this.recomputeDerived();
+    this.emit({ type: "challengeStart", id });
+    return true;
+  }
+  stopChallenge(): void {
+    if (!this.state.meta.activeChallenge) return;
+    this.state.meta.activeChallenge = null;
+    this.recomputeDerived();
+  }
+  challengeBest(id: ChallengeId): number {
+    return this.state.challenges[id]?.best ?? 0;
+  }
+  canClaimChallenge(id: ChallengeId): boolean {
+    const prog = this.state.challenges[id];
+    if (!prog || prog.claimed) return false;
+    return prog.best >= CONFIG.CHALLENGES[id].target;
+  }
+  claimChallenge(id: ChallengeId): boolean {
+    if (!this.canClaimChallenge(id)) return false;
+    this.state.challenges[id].claimed = true;
+    const def = CONFIG.CHALLENGES[id];
+    this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(def.rewardCores)).toTuple();
+    this.state.talents.points += def.rewardTalent;
+    this.emit({ type: "challengeClaim", id });
+    return true;
+  }
+  private resetRunForChallenge(): void {
+    const state = this.state;
+    state.combat = {
+      stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
+      bossTimer: -1, combo: 0, comboTimer: 0, crushStreak: 0, skipMode: false,
+      lastHitWasCrit: false, lastHitWasSuper: false, lastHitWasCrush: false,
+      enemyKind: "normal", bossShieldHits: 0, bossVoidTarget: null,
+    };
+    state.player.gold = [0, 0];
+    state.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+    const kept = ["equipment", "skills", "talents", "prestige", "achievements"];
+    state.meta.unlocks = state.meta.unlocks.filter((u) => kept.includes(u) || u.startsWith("tool_") || u.startsWith("talent_unlock_"));
+    for (const inst of state.skills.actives) {
+      inst.cdRemaining = 0;
+      inst.active = false;
+      inst.activeUntil = 0;
+    }
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.spawnEnemy();
+    this.checkUnlocks();
+    this.recomputeDerived();
+  }
+
+  // ---------------- 每日任务 ----------------
+  claimDailyQuest(index: number): boolean {
+    const q = this.state.daily.quests[index];
+    if (!q || q.claimed || q.progress < q.target) return false;
+    q.claimed = true;
+    const def = CONFIG.DAILY.POOL.find((d) => d.id === q.id);
+    const cores = def?.rewardCores ?? 2;
+    this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(cores)).toTuple();
+    this.emit({ type: "dailyClaim", id: q.id });
+    return true;
+  }
+  private updateDailyQuest(type: DailyQuestType, n: number): void {
+    for (const q of this.state.daily.quests) {
+      if (q.claimed || q.type !== type) continue;
+      if (type === "gold" || type === "stageReach") q.progress = Math.max(q.progress, n);
+      else q.progress = Math.min(q.target, q.progress + n);
+    }
+  }
+  private updateDailyGold(): void {
+    const mag = Math.floor(dailyGoldMag(this.state));
+    this.updateDailyQuest("gold", Math.max(0, mag));
+  }
   // ---------------- 道具 ----------------
   castConsumable(id: ItemId): boolean {
     const count = this.state.items.consumables[id] ?? 0;

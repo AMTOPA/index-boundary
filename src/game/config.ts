@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, Rarity, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, DailyQuestType, Rarity, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -221,7 +221,24 @@ export const CONFIG = {
     greed: { name: "贪婪协议", desc: "每级 +3% 金币（加法池）", icon: "🪙", kind: "gold", effectPerLevel: 0.03 },
   } as Record<string, { name: string; desc: string; icon: string; kind: "aspd" | "critChance" | "gold"; effectPerLevel: number }>,
   SKILL_CAST_WALL_SEC: 6, // 模拟器：击杀时间超过该值视为卡墙，才释放爆发技能
-  // 永久工具（金币购买，金币沉淀口）
+  // 挑战模式（可选难度修饰符 + 一次性通关奖励）
+  CHALLENGES: {
+    no_crit: { name: "无暴击", desc: "暴击率恒为 0——攻速 / 连击 / 技能流的主场", icon: "🚫", target: 200, rewardCores: 5, rewardTalent: 1 },
+    slow_universe: { name: "慢速宇宙", desc: "攻速 ×0.5——考验单发伤害与爆发窗口", icon: "🐢", target: 200, rewardCores: 5, rewardTalent: 1 },
+    poverty: { name: "贫困", desc: "金币 ×0.5——考验资源效率与跳关能力", icon: "🪙", target: 150, rewardCores: 5, rewardTalent: 1 },
+  } as Record<string, { name: string; desc: string; icon: string; target: number; rewardCores: number; rewardTalent: number }>,
+
+  // 每日任务（轻量：3 个 / 天，跨天重置，仅在线进度）
+  DAILY: {
+    QUESTS_PER_DAY: 3,
+    POOL: [
+      { id: "kill", type: "kills", label: "击败异常数据体", targets: [300, 800, 2000], rewardCores: 2 },
+      { id: "boss", type: "bossKills", label: "击败 Boss", targets: [5, 10, 20], rewardCores: 3 },
+      { id: "skill", type: "skillCasts", label: "释放技能", targets: [40, 100, 250], rewardCores: 2 },
+      { id: "gold", type: "gold", label: "当日累计金币达到", targets: [8, 10, 12], rewardCores: 3 },
+      { id: "stage", type: "stageReach", label: "推进关卡到", targets: [150, 300, 600], rewardCores: 2 },
+    ] as { id: string; type: DailyQuestType; label: string; targets: number[]; rewardCores: number }[],
+  },  // 永久工具（金币购买，金币沉淀口）
   TOOLS: {
     auto_upgrade: [1, 3], // 1000
     auto_boss: [1, 5], // 100k

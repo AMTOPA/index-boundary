@@ -98,6 +98,10 @@ export function normalizeState(raw: unknown): GameState {
   state.items.consumables = { ...(r.items?.consumables ?? {}) };
   state.items.tools = { ...(r.items?.tools ?? {}) };
   state.statistics = { ...base.statistics, ...(r.statistics ?? {}) };
+  state.daily = { ...base.daily, ...(r.daily ?? {}) };
+  state.daily.quests = Array.isArray(r.daily?.quests) ? r.daily.quests : [];
+  state.daily.goldEarned = Array.isArray(r.daily?.goldEarned) ? r.daily.goldEarned : [0, 0];
+  state.challenges = { ...base.challenges, ...(r.challenges ?? {}) };
   state.meta.unlocks = Array.isArray(state.meta.unlocks) ? state.meta.unlocks : [];
   state.meta.achievements = Array.isArray(state.meta.achievements) ? state.meta.achievements : [];
   state.meta.milestonesSeen = Array.isArray(state.meta.milestonesSeen) ? state.meta.milestonesSeen : [];

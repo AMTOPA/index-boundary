@@ -331,6 +331,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   if (finalProtocolActive) aspdMult *= SKILL_DEFS.final_protocol.aspdMultWhileActive ?? 1;
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
+  // 挑战：慢速宇宙——攻速减半
+  if (state.meta.activeChallenge === "slow_universe") panelAps *= 0.5;
   const effAps = effectiveAps(panelAps);
 
   // 攻速溢转（Keystone）：溢出攻速 → 独立伤害
@@ -345,7 +347,9 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
 
   // ---- 暴击 ----
-  const critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
+  let critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
+  // 挑战：无暴击——暴击率恒为 0
+  if (state.meta.activeChallenge === "no_crit") critChance = 0;
   const critDamage = (critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult;
 
   // ---- 金币 ----
@@ -358,6 +362,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   if (buffs.goldProtocolActive) goldMult = goldMult.mul(Big.fromNumber(5));
   if (finalProtocolActive) goldMult = goldMult.mul(Big.fromNumber(SKILL_DEFS.final_protocol.goldMultWhileActive ?? 1));
+  // 挑战：贫困——金币减半
+  if (state.meta.activeChallenge === "poverty") goldMult = goldMult.mul(Big.fromNumber(0.5));
 
   // ---- 全局倍率 ----
   const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);

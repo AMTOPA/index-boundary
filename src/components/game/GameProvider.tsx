@@ -103,6 +103,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         case "achievement":
           pushToast(`成就达成：${ev.id}`, "achievement");
           break;
+        case "challengeStart":
+          pushToast("挑战开启：本局已重置，注意修饰符生效", "info");
+          break;
+        case "challengeClaim":
+          playSfx("unlock");
+          pushToast("挑战通关！奖励已发放", "achievement");
+          break;
+        case "dailyClaim":
+          playSfx("upgrade");
+          pushToast("每日任务完成，奖励已发放", "info");
+          break;
         case "drop": playSfx("drop"); break;
         case "levelUp": playSfx("upgrade"); break;
         default: break;

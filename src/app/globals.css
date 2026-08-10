@@ -255,6 +255,8 @@ input { font-family: inherit; }
 }
 .passive-btn .icon { font-size: 18px; }
 .passive-btn:hover { border-color: rgba(178,107,255,0.5); }
+.progress-bar { background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.progress-bar > div { background: linear-gradient(90deg, var(--accent), var(--super)); border-radius: 4px; }
 
 /* ---------- 天赋 ---------- */
 .talent-tree { margin-bottom: 10px; }

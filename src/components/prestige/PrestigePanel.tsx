@@ -6,10 +6,11 @@ import { formatNumber, formatBigPrecise } from "@/game/format";
 import { toBig } from "@/game/bignum";
 import { prestigeEnergy, prestigeGlobalMult as pm } from "@/game/formulas";
 import { CONFIG } from "@/game/config";
-import type { PrestigeUpgradeId } from "@/game/types";
+import type { ChallengeId, PrestigeUpgradeId } from "@/game/types";
 import { shopCostFrom, canBuyFrom } from "@/game/systems/prestige";
 
 const SHOP_ORDER: PrestigeUpgradeId[] = ["startPower", "goldKeep", "fastSkip", "startSkill", "singularityAmp"];
+const CHALLENGE_ORDER: ChallengeId[] = ["no_crit", "slow_universe", "poverty"];
 
 export function PrestigePanel() {
   const { engine } = useGame();
@@ -17,6 +18,8 @@ export function PrestigePanel() {
   const energy = useGameSelector((s) => s.prestige.energy);
   const purchases = useGameSelector((s) => s.prestige.purchases);
   const runDamage = useGameSelector((s) => s.statistics.runDamage);
+  const activeChallenge = useGameSelector((s) => s.meta.activeChallenge);
+  const challenges = useGameSelector((s) => s.challenges);
   const [confirm, setConfirm] = useState(false);
 
   if (!unlocked) {
@@ -73,6 +76,37 @@ export function PrestigePanel() {
         );
       })}
 
+
+      <h3 style={{ marginTop: 14 }}>挑战模式</h3>
+      <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+        开启挑战会重置本局（关卡/金币/升级），保留装备/技能/天赋/永久升级。通关一次领取永久奖励。
+      </p>
+      {CHALLENGE_ORDER.map((id) => {
+        const def = CONFIG.CHALLENGES[id];
+        const prog = challenges[id];
+        const active = activeChallenge === id;
+        return (
+          <div className="shop-row" key={id}>
+            <div>
+              <div>{def.icon} {def.name} {active && <span style={{ color: "var(--green)" }}>（进行中）</span>}</div>
+              <div className="desc">{def.desc}</div>
+              <div className="desc">目标 {def.target} 关 · 最高 {prog.best} · 奖励：{def.rewardCores} 核心 + {def.rewardTalent} 天赋点</div>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {prog.claimed ? (
+                <span style={{ color: "var(--green)", fontSize: 12 }}>✓ 已通关</span>
+              ) : (
+                <button className="mini-btn" disabled={!engine?.canClaimChallenge(id)} onClick={() => engine?.claimChallenge(id)}>
+                  {prog.best >= def.target ? "领取奖励" : "未通关"}
+                </button>
+              )}
+              <button className="mini-btn" onClick={() => (active ? engine?.stopChallenge() : engine?.startChallenge(id))}>
+                {active ? "停用" : "开启"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
       {confirm && (
         <div className="modal-backdrop" onClick={() => setConfirm(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

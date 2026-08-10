@@ -6,6 +6,8 @@ export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary" | "mythic
 export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "beacon" | "relic";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon" | "emp_burst" | "time_freeze" | "overload_combo" | "data_flood" | "charged_hit" | "split_matrix" | "quantum_replay" | "final_protocol";
 export type PassiveId = "rhythm" | "focus" | "greed";
+export type ChallengeId = "no_crit" | "slow_universe" | "poverty";
+export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "stageReach";
 export type TreeId = "destruction" | "automation" | "greed";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip";
@@ -97,6 +99,26 @@ export interface TalentState {
   keystones: Partial<Record<TreeId, string>>; // treeId -> keystone nodeId
 }
 
+export interface DailyQuest {
+  id: string;
+  type: DailyQuestType;
+  target: number; // kills/boss/skill 为次数；gold 为数量级 log10；stageReach 为关卡数
+  progress: number;
+  claimed: boolean;
+}
+
+export interface DailyState {
+  date: string; // YYYY-MM-DD
+  quests: DailyQuest[];
+  goldEarned: BigTuple; // 当日在线金币累计
+  bestStage: number; // 当日最高关卡
+}
+
+export interface ChallengeProgress {
+  best: number; // 挑战模式下最高到达关卡
+  claimed: boolean; // 通关奖励是否已领取
+}
+
 export interface PrestigeState {
   energy: number;
   totalEnergyEarned: number;
@@ -138,6 +160,7 @@ export interface MetaState {
   settings: { sound: boolean; reduceMotion: boolean };
   lastScoreSubmit: Record<ScoreSubmitKind, { runId: string; at: number } | undefined>;
   cloudSyncedAt: number;
+  activeChallenge: ChallengeId | null; // 当前生效的挑战修饰符
 }
 
 export interface GameState {
@@ -150,6 +173,8 @@ export interface GameState {
   prestige: PrestigeState;
   items: ItemState;
   statistics: StatisticsState;
+  daily: DailyState;
+  challenges: Record<ChallengeId, ChallengeProgress>;
   // 运行期（不持久化）的瞬时数据放 engine 层，不入存档
 }
 
@@ -171,7 +196,10 @@ export type GameEvent =
   | { type: "achievement"; id: string }
   | { type: "levelUp"; upgrade: UpgradeId; level: number }
   | { type: "skillCast"; skill: SkillId }
-  | { type: "offline"; seconds: number; gold: BigTuple };
+  | { type: "offline"; seconds: number; gold: BigTuple }
+  | { type: "challengeStart"; id: ChallengeId }
+  | { type: "challengeClaim"; id: ChallengeId }
+  | { type: "dailyClaim"; id: string };
 
 export type GameEventListener = (event: GameEvent) => void;
 
