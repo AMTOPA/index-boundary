@@ -7,7 +7,7 @@ import { SKILL_IDS, SKILL_DEFS } from "./data/skills";
 import { TALENT_NODES } from "./data/talents";
 import type { EquipInstance } from "./types";
 
-export type SimStrategy = "equal" | "attack" | "gold";
+export type SimStrategy = "equal" | "attack" | "gold" | "crit" | "aspd";
 
 export interface SimOptions {
   hours?: number;
@@ -33,15 +33,37 @@ export interface SimResult {
   timeTo300: number;
   timeTo400: number;
   timeTo500: number;
+  firstPrestigeStage: number; // 首次重构时的关卡
+  reclearTime: number; // 首次重构后重新打到重构前最高关卡的耗时（秒，-1 未达到）
+  killTimeSamples: { t: number; stage: number; killTime: number }[]; // 击杀时间曲线采样（每 30s）
 }
 
-// 天赋分配优先级（理性玩家近似：先伤害，后自动化）
-const TALENT_PRIORITY: string[] = [
-  "dest_sharp", "dest_crit", "auto_beat", "dest_super", "dest_hunter",
-  "auto_offline", "auto_break", "auto_skip", "dest_keystone_absolute",
-  // 贪婪树：剩余天赋点投入资源流
-  "greed_loot", "greed_luck", "greed_pan", "greed_refine", "greed_keystone_compound",
-];
+// 天赋分配优先级（理性玩家近似：先伤害，后自动化；按构筑流派差异化）
+const TALENT_PRIORITY: Record<SimStrategy, string[]> = {
+  equal: [
+    "dest_sharp", "dest_crit", "auto_beat", "dest_super", "dest_hunter",
+    "auto_offline", "auto_break", "auto_skip", "dest_keystone_absolute",
+    "greed_loot", "greed_luck", "greed_pan", "greed_refine", "greed_keystone_compound",
+  ],
+  attack: [
+    "dest_sharp", "dest_crit", "dest_super", "dest_hunter", "dest_keystone_absolute",
+    "auto_offline", "auto_skip", "greed_loot",
+  ],
+  gold: [
+    "greed_loot", "greed_pan", "greed_refine", "greed_keystone_compound",
+    "dest_sharp", "auto_offline", "auto_skip",
+  ],
+  // 暴击流：暴击再暴击 Keystone 为核心
+  crit: [
+    "dest_crit", "dest_sharp", "dest_super", "dest_hunter", "dest_keystone_critagain",
+    "greed_loot", "auto_offline", "auto_skip",
+  ],
+  // 攻速流：永动协议 Keystone 为核心（攻速→伤害）
+  aspd: [
+    "auto_beat", "auto_break", "auto_offline", "auto_skip", "auto_keystone_perpetual",
+    "dest_sharp", "dest_crit", "greed_loot",
+  ],
+};
 
 function itemScore(item: EquipInstance): number {
   return item.main.mult * (1 + item.level * 0.15) * (1 + item.affixes.length * 0.1);
@@ -58,28 +80,40 @@ function autoEquip(eng: GameEngine): void {
   }
 }
 
-// 非退化策略：攻击优先 = 重攻击轻经济；金币优先 = 重经济保基础攻击；两者都要保证能推进/重构
+// 非退化策略：攻击优先 = 重攻击轻经济；金币优先 = 重经济保基础攻击；暴击/攻速 = 流派构筑
 function buyStrategy(eng: GameEngine, strategy: SimStrategy): void {
   if (strategy === "equal") {
-    eng.smartBuy();
+    // 活跃玩家的“自动升级+手动连点”：每个 0.5s 周期内尽量购买收益最高的升级
+    for (let k = 0; k < 30 && eng.smartBuy(); k++) { /* keep buying */ }
   } else if (strategy === "attack") {
     eng.buyUpgradeTimes("attack", 20);
     eng.buyUpgradeTimes("aspd", 5);
     eng.buyUpgradeTimes("gold", 8);
     eng.buyUpgradeTimes("critDamage", 3);
-  } else {
+  } else if (strategy === "gold") {
     eng.buyUpgradeTimes("gold", 10);
     eng.buyUpgradeTimes("attack", 12);
     eng.buyUpgradeTimes("aspd", 3);
+  } else if (strategy === "crit") {
+    eng.buyUpgradeTimes("attack", 12);
+    eng.buyUpgradeTimes("critChance", 12);
+    eng.buyUpgradeTimes("critDamage", 10);
+    eng.buyUpgradeTimes("aspd", 3);
+    eng.buyUpgradeTimes("gold", 5);
+  } else {
+    eng.buyUpgradeTimes("aspd", 16);
+    eng.buyUpgradeTimes("attack", 12);
+    eng.buyUpgradeTimes("gold", 5);
+    eng.buyUpgradeTimes("critDamage", 3);
   }
 }
 
-function allocateTalents(eng: GameEngine): void {
+function allocateTalents(eng: GameEngine, strategy: SimStrategy): void {
   let guard = 0;
   while (eng.state.talents.points > 0 && guard < 50) {
     guard += 1;
     let spent = false;
-    for (const id of TALENT_PRIORITY) {
+    for (const id of TALENT_PRIORITY[strategy]) {
       if (eng.state.talents.points <= 0) break;
       if (eng.canAllocate(id) && eng.allocate(id)) { spent = true; break; }
     }
@@ -124,6 +158,10 @@ export function runAutoPlayer(opts: SimOptions = {}): SimResult {
   let lastStageChange = 0;
   let firstPrestigeAt = -1;
   let timeTo100 = -1, timeTo300 = -1, timeTo400 = -1, timeTo500 = -1;
+  let firstPrestigeStage = -1;
+  let reclearAt = -1;
+  let sawPrestige = false;
+  const killTimeSamples: { t: number; stage: number; killTime: number }[] = [];
 
   for (let i = 0; i < ticks; i++) {
     eng.tick(dt);
@@ -142,15 +180,29 @@ export function runAutoPlayer(opts: SimOptions = {}): SimResult {
       buyStrategy(eng, strategy);
       unlockSkills(eng);
       castReadySkills(eng);
-      allocateTalents(eng);
+      allocateTalents(eng, strategy);
       if (i % 50 === 0) autoEquip(eng);
-      if (eng.canPrestige() && eng.timeSec - lastStageChange > wallSec) {
+      // 重推检测（每 0.5s）：重构后回到首次重构时的关卡即记录耗时
+      if (sawPrestige && reclearAt < 0 && eng.state.combat.stage >= firstPrestigeStage) {
+        reclearAt = eng.timeSec;
+      }
+      // 理性玩家：只在（接近）历史最高关卡的墙上重构，避免在旧进度下方反复重置
+      const nearMax = stage >= eng.state.statistics.allTimeMaxStage;
+      if (eng.canPrestige() && nearMax && eng.timeSec - lastStageChange > wallSec) {
         const r = eng.prestige();
-        if (r && firstPrestigeAt < 0) firstPrestigeAt = eng.timeSec;
+        if (r && firstPrestigeAt < 0) {
+          firstPrestigeAt = eng.timeSec;
+          firstPrestigeStage = stage;
+          sawPrestige = true;
+        }
       }
     }
     const d = eng.derived;
     if (!Number.isFinite(d.dps.toNumber())) throw new Error("模拟出现非有限 DPS");
+    if (i % (30 / dt) === 0) {
+      const kt = toBig(eng.state.combat.enemyHp).div(d.dps).toNumber();
+      killTimeSamples.push({ t: eng.timeSec, stage: eng.state.combat.stage, killTime: Number.isFinite(kt) ? kt : -1 });
+    }
   }
 
   const td = eng.state.statistics.totalDamage;
@@ -172,5 +224,8 @@ export function runAutoPlayer(opts: SimOptions = {}): SimResult {
     timeTo300,
     timeTo400,
     timeTo500,
+    firstPrestigeStage,
+    reclearTime: reclearAt >= 0 ? reclearAt - firstPrestigeAt : -1,
+    killTimeSamples,
   };
 }

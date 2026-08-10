@@ -343,7 +343,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // 永动协议（Keystone）：每 1 有效攻速 → 独立伤害 ×1.02
   let perpetualMult = Big.ONE;
   if (hasKeystone.has("perpetualProtocol")) {
-    perpetualMult = Big.fromNumber(1.02).pow(effAps);
+    perpetualMult = Big.fromNumber(1.015).pow(effAps);
   }
 
   // ---- 暴击 ----
@@ -352,9 +352,15 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (state.meta.activeChallenge === "no_crit") critChance = 0;
   const critDamage = (critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult;
 
+  // ---- 全局倍率（重构/里程碑）----
+  const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
+  const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
+
   // ---- 金币 ----
+  // 重构倍率同时放大金币收入：重推旧进度时不会被“金币清零+重买升级”卡住（验收：重推耗时 ≤ 原 20%）
   acc.goldPool += (state.skills.passives?.greed ?? 0) * CONFIG.SKILL_PASSIVES.greed.effectPerLevel;
-  let goldMult = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool));
+  let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult);
+  let goldMult = goldMultBase;
   if (goldCollapseActive) {
     const def = SKILL_DEFS.gold_collapse;
     const inst = skillMap.get("gold_collapse");
@@ -366,8 +372,6 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (state.meta.activeChallenge === "poverty") goldMult = goldMult.mul(Big.fromNumber(0.5));
 
   // ---- 全局倍率 ----
-  const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
-  const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
   const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult);
 
   // ---- 单次伤害（非暴击） ----

@@ -1,9 +1,9 @@
-// 平衡对比：三种自动购买策略在 1h / 10h 的进度差异（固定种子，可复现）
+// 平衡对比：五种自动玩家策略在 1h / 10h 的进度差异（固定种子，可复现）
 import { runAutoPlayer, type SimStrategy } from "../src/game/simulator";
 import { Big } from "../src/game/bignum";
 
 const SEED = 424242;
-const LABEL: Record<SimStrategy, string> = { equal: "均衡", attack: "攻击优先", gold: "金币优先" };
+const LABEL: Record<SimStrategy, string> = { equal: "均衡", attack: "攻击优先", gold: "金币优先", crit: "暴击流", aspd: "攻速流" };
 
 function fmt(b: Big): string {
   if (b.isZero()) return "0";
@@ -15,12 +15,12 @@ function fmt(b: Big): string {
 function pad(s: string, n: number): string { return s.padEnd(n); }
 
 function main(): void {
-  console.log("=== 三策略平衡对比（自动玩家模拟，固定种子） ===");
+  console.log("=== 五策略平衡对比（自动玩家模拟，固定种子） ===");
   const header = `${pad("策略", 10)}${pad("时长", 6)}${pad("当前关", 8)}${pad("历史最高", 10)}${pad("DPS", 14)}${pad("金币", 14)}${pad("总伤", 10)}${pad("击杀", 8)}${pad("Boss", 6)}${pad("重构", 6)}${pad("能量", 8)}${pad("首重构", 8)}`;
   console.log(header);
   console.log("-".repeat(header.length));
   let failed = false;
-  const strategies: SimStrategy[] = ["equal", "attack", "gold"];
+  const strategies: SimStrategy[] = ["equal", "attack", "gold", "crit", "aspd"];
   for (const h of [1, 10]) {
     for (const s of strategies) {
       const t0 = Date.now();

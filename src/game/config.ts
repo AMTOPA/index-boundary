@@ -260,7 +260,7 @@ export const CONFIG = {
   // 重构（第一层重置）
   PRESTIGE: {
     THRESHOLD: 20, // log10(总伤) 阈值
-    ENERGY_EXP: 1.7,
+    ENERGY_EXP: 2,
     GLOBAL_EXP: 2, // (1+E)^2
     SHOP: {
       startPower: { baseCost: 10, costGrowth: 2, perLevel: 10, max: 50, label: "起始力量", desc: "重构后起始攻击等级 +10" },

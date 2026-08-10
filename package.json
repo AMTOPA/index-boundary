@@ -7,12 +7,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run test:unit && npm run test:smoke && npm run test:balance && npm run test:save && npm run test:ssr",
+    "test": "npm run test:unit && npm run test:smoke && npm run test:balance && npm run test:save && npm run test:ssr && npm run test:acceptance",
     "test:unit": "vitest run",
     "test:smoke": "tsx scripts/smoke.ts",
     "test:balance": "tsx scripts/balance.ts",
     "test:save": "tsx scripts/save-test.ts",
     "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts",
+    "test:acceptance": "tsx scripts/builds.ts && tsx scripts/walls.ts && tsx scripts/reclear.ts",
     "test:api": "tsx scripts/api-smoke.ts"
   },
   "dependencies": {

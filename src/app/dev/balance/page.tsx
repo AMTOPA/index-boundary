@@ -11,6 +11,8 @@ const STRATEGY_LABEL: Record<SimStrategy, string> = {
   equal: "均衡（smartBuy）",
   attack: "攻击优先",
   gold: "金币优先",
+  crit: "暴击流",
+  aspd: "攻速流",
 };
 
 const CURVE_STAGES = [1, 5, 10, 25, 50, 100, 200, 300, 350, 400, 500];
@@ -25,7 +27,7 @@ export default function BalancePage() {
     window.setTimeout(() => {
       const hours = seconds / 3600;
       const out: ReturnType<typeof runAutoPlayer>[] = [];
-      (["equal", "attack", "gold"] as SimStrategy[]).forEach((s) => {
+      (["equal", "attack", "gold", "crit", "aspd"] as SimStrategy[]).forEach((s) => {
         out.push(runAutoPlayer({ hours, seed: 424242, strategy: s }));
       });
       setRows(out);
