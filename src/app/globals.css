@@ -129,7 +129,9 @@ input { font-family: inherit; }
   box-shadow: inset 0 0 10px rgba(0,0,0,0.45), 0 0 14px rgba(53,198,240,0.08);
 }
 .hp-fill { height: 100%; background: linear-gradient(90deg, #35c6f0, #3ddc84); transition: width 0.1s linear; box-shadow: 0 0 12px rgba(61,220,132,0.45); }
-.hp-fill.boss { background: linear-gradient(90deg, #ff6b6b, #ffb52e 70%, #ffd93d); box-shadow: 0 0 14px rgba(255,107,107,0.62); }
+.hp-fill.boss { background: linear-gradient(90deg, #ff6b6b, #ffb52e 70%, #ffd93d); box-shadow: 0 0 14px rgba(255,107,107,0.62); background-size: 200% 100%; animation: hpSheen 2.4s linear infinite; }
+@keyframes hpSheen { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .hp-fill.boss { animation: none; } }
 .hp-text { margin-top: 6px; font-size: 13px; color: var(--text-dim); }
 .stage-info { display: flex; gap: 16px; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); }
 .stage-info .stage { font-size: 18px; color: var(--text); font-weight: 800; }
@@ -378,6 +380,8 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   text-shadow: 0 0 22px rgba(53,198,240,0.35);
 }
 .game-title .en { font-size: 10px; color: var(--text-dim); letter-spacing: 0.28em; text-transform: uppercase; }
+@keyframes titleShimmer { 0% { background-position: 0% 0; } 100% { background-position: 220% 0; } }
+@media (prefers-reduced-motion: reduce) { .game-title .cn { animation: none; } }
 
 /* ---------- 程序化敌人 ---------- */
 .enemy {
@@ -387,7 +391,9 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
 }
 .enemy-canvas { display: block; width: min(220px, 70vw); height: auto; aspect-ratio: 1; border-radius: 18px; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--world-color, var(--accent)) 30%, transparent)); transition: filter 0.16s ease, transform 0.12s ease; }
 .enemy:active .enemy-canvas { transform: scale(0.94); }
-.enemy-stage { position: relative; width: min(240px, 76vw); height: min(240px, 76vw); display: flex; align-items: center; justify-content: center; }
+.enemy-stage { position: relative; width: min(240px, 76vw); height: min(240px, 76vw); display: flex; align-items: center; justify-content: center; animation: enemyFloat 3.4s ease-in-out infinite; }
+@keyframes enemyFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@media (prefers-reduced-motion: reduce) { .enemy-stage { animation: none; } }
 .boss-ring {
   position: absolute; inset: 4px; border-radius: 50%; opacity: 0.72; pointer-events: none;
   filter: drop-shadow(0 0 8px rgba(255,107,107,0.6));
@@ -405,6 +411,15 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
 
 /* ---------- 战斗粒子 ---------- */
 .combat-particles { position: absolute; inset: 0; pointer-events: none; z-index: 7; mix-blend-mode: screen; }
+.combat.boss-fight {
+  border-color: rgba(255,107,107,0.42);
+  animation: bossVignette 1.8s ease-in-out infinite;
+}
+@keyframes bossVignette {
+  0%, 100% { box-shadow: 0 12px 32px var(--panel-shadow), inset 0 0 54px rgba(255,40,40,0.10), 0 0 26px rgba(255,70,70,0.16); }
+  50% { box-shadow: 0 12px 32px var(--panel-shadow), inset 0 0 76px rgba(255,40,40,0.20), 0 0 44px rgba(255,70,70,0.34); }
+}
+@media (prefers-reduced-motion: reduce) { .combat.boss-fight { animation: none; box-shadow: 0 12px 32px var(--panel-shadow), inset 0 0 54px rgba(255,40,40,0.12); } }
 
 /* ---------- 震屏 ---------- */
 .combat.shake { animation: shake 0.36s ease-out; }

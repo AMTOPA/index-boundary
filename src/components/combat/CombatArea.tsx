@@ -59,7 +59,7 @@ export function CombatArea() {
 
   return (
     <div
-      className={`panel combat ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""}`}
+      className={`panel combat ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""} ${isBoss ? "boss-fight" : ""}`}
       style={{ ["--world-color" as string]: world.color }}
     >
       <div className="stage-info">
