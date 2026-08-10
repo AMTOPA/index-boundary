@@ -4,7 +4,7 @@ import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
 import { toBig } from "@/game/bignum";
 import { formatBig } from "@/game/format";
-import { worldForStage, WORLDS, BOSS_AFFIX_LABEL, BOSS_AFFIX_ICON, BOSS_AFFIX_DESC } from "@/game/data/worlds";
+import { worldForStage, WORLDS, BOSS_AFFIX_LABEL, BOSS_AFFIX_ICON, BOSS_AFFIX_DESC, VOID_TARGET_LABEL } from "@/game/data/worlds";
 import { CONFIG } from "@/game/config";
 import { EnemyCanvas } from "./EnemyCanvas";
 import { CombatParticles } from "./CombatParticles";
@@ -19,6 +19,9 @@ export function CombatArea() {
   const isBoss = useGameSelector((s) => s.combat.isBoss);
   const bossAffixes = useGameSelector((s) => s.combat.bossAffixes);
   const bossTimer = useGameSelector((s) => s.combat.bossTimer);
+  const enemyKind = useGameSelector((s) => s.combat.enemyKind);
+  const bossShieldHits = useGameSelector((s) => s.combat.bossShieldHits);
+  const bossVoidTarget = useGameSelector((s) => s.combat.bossVoidTarget);
   const combo = useGameSelector((s) => s.combat.combo);
   const skipMode = useGameSelector((s) => s.combat.skipMode);
   const autoAttack = useGameSelector((s) => s.meta.unlocks.includes("auto_attack"));
@@ -43,6 +46,10 @@ export function CombatArea() {
   const world = worldForStage(stage);
   const worldIndex = WORLDS.findIndex((w) => w.id === world.id);
   const bossPct = isBoss && bossTimer > 0 ? Math.min(100, Math.max(0, (bossTimer / CONFIG.BOSS_TIMER_SEC) * 100)) : 100;
+  const shieldMax = CONFIG.BOSS_SHIELD_HITS;
+  const shieldLeft = isBoss && bossAffixes.includes("shield") ? bossShieldHits : 0;
+  const voidLabel = isBoss && bossVoidTarget ? VOID_TARGET_LABEL[bossVoidTarget] : null;
+  const kindLabel = enemyKind === "elite" ? "精英" : enemyKind === "mimic" ? "宝箱怪" : null;
 
   return (
     <div
@@ -55,6 +62,11 @@ export function CombatArea() {
           <span className="world-tag" style={{ color: world.color }}>
             {worldIndex >= 0 && worldIndex < WORLDS.length ? `${worldIndex + 1}.` : ""}{world.name}
           </span>
+          {kindLabel && (
+            <span className="world-tag" style={{ color: enemyKind === "elite" ? "var(--danger)" : "var(--gold)" }}>
+              {enemyKind === "elite" ? "精英" : "宝箱"}
+            </span>
+          )}
         </span>
         <span className="mono">连击 {Math.floor(combo)}</span>
         {skipMode && <span style={{ color: "var(--crush)" }}>⚡极速推进</span>}
@@ -64,7 +76,7 @@ export function CombatArea() {
         <div style={{ fontSize: 11 }}>单次 <span className="mono">{formatBig(derived.damagePerHit)}</span></div>
       </div>
       <div className="enemy-wrap">
-        <div className={`enemy-stage ${isBoss ? "boss" : ""}`}>
+        <div className={`enemy-stage ${isBoss ? "boss" : ""} ${enemyKind === "elite" ? "elite" : ""} ${enemyKind === "mimic" ? "mimic" : ""}`}>
           {isBoss && <div className="boss-ring" style={{ background: `conic-gradient(var(--danger) ${bossPct}%, rgba(255,255,255,0.08) 0)` }} />}
           <button
             className="enemy"
@@ -72,9 +84,11 @@ export function CombatArea() {
             aria-label="点击攻击敌人"
             title={isBoss ? "Boss 战：限时 30 秒" : world.enemyStyle}
           >
-            <EnemyCanvas worldId={world.id} worldColor={world.color} isBoss={isBoss} affixes={bossAffixes} />
+            <EnemyCanvas worldId={world.id} worldColor={world.color} isBoss={isBoss} affixes={bossAffixes} kind={enemyKind} />
           </button>
           {isBoss && <div className="boss-name">异常核心 · 观测体</div>}
+          {enemyKind === "elite" && <div className="boss-name" style={{ color: "var(--danger)" }}>精英 · 强化体</div>}
+          {enemyKind === "mimic" && <div className="boss-name" style={{ color: "var(--gold)" }}>宝箱怪</div>}
         </div>
         <div className="hp-bar">
           <div className={`hp-fill ${isBoss ? "boss" : ""}`} style={{ width: `${pct}%` }} />
@@ -82,9 +96,19 @@ export function CombatArea() {
         <div className="hp-text mono">
           {formatBig(hp)} / {formatBig(maxHp)}
         </div>
-        {isBoss && (
+        {(isBoss || enemyKind === "elite") && (
           <>
-            <div className="boss-timer mono">⏱ {Math.max(0, bossTimer).toFixed(1)}s</div>
+            {isBoss && <div className="boss-timer mono">⏱ {Math.max(0, bossTimer).toFixed(1)}s</div>}
+            {shieldLeft > 0 && (
+              <div className="boss-timer mono" style={{ color: "var(--accent)" }}>
+                🛡️ 护盾 {shieldLeft}/{shieldMax}
+              </div>
+            )}
+            {voidLabel && (
+              <div className="boss-timer mono" style={{ color: "var(--danger)" }}>
+                🌑 虚无：免疫{voidLabel}
+              </div>
+            )}
             <div className="boss-affixes">
               {bossAffixes.map((a) => (
                 <span key={a} className="affix" title={BOSS_AFFIX_DESC[a]}>{BOSS_AFFIX_ICON[a]} {BOSS_AFFIX_LABEL[a]}</span>

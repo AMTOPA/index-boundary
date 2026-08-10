@@ -1,4 +1,4 @@
-import type { BossAffix, WorldId } from "../types";
+import type { BossAffix, VoidTarget, WorldId } from "../types";
 
 export interface WorldDef {
   id: WorldId;
@@ -59,6 +59,9 @@ export const BOSS_AFFIX_LABEL: Record<BossAffix, string> = {
   rage: "狂暴",
   harden: "硬化",
   deflect: "偏斜",
+  time: "时空",
+  shield: "能量盾",
+  void: "虚无",
 };
 
 export const BOSS_AFFIX_DESC: Record<BossAffix, string> = {
@@ -68,6 +71,9 @@ export const BOSS_AFFIX_DESC: Record<BossAffix, string> = {
   rage: "每秒防御 +2%（上限 60%）",
   harden: "每 6 秒获得 1 层硬化，每层减伤 8%（上限 40%）",
   deflect: "非暴击伤害 -70%（暴击不受影响）",
+  time: "Boss 计时流速 +50%（更紧迫）",
+  shield: "前 20 次伤害固定为 1（高单发伤害可破盾）",
+  void: "免疫 1 个随机乘区（暴击/点击/技能/金币）",
 };
 
 export const BOSS_AFFIX_ICON: Record<BossAffix, string> = {
@@ -77,4 +83,18 @@ export const BOSS_AFFIX_ICON: Record<BossAffix, string> = {
   rage: "🔥",
   harden: "🧱",
   deflect: "🪞",
+  time: "\u23f3",
+  shield: "\ud83d\udee1\ufe0f",
+  void: "\ud83c\udf11",
 };
+
+// 精英词缀池（比 Boss 轻量，不含 Boss 专属时空/能量盾/虚无）
+export const VOID_TARGET_LABEL: Record<VoidTarget, string> = {
+  crit: "暴击",
+  click: "点击",
+  skill: "技能",
+  gold: "金币",
+};
+
+export const ELITE_AFFIX_POOL: BossAffix[] = ["armor", "rage", "harden", "deflect"];
+

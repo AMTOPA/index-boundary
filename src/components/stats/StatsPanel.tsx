@@ -33,6 +33,7 @@ export function StatsPanel() {
             <div className="stat-item"><div className="k">最高单次</div><div className="v mono">{formatBig(toBig(stats.highestHit))}</div></div>
             <div className="stat-item"><div className="k">总金币</div><div className="v mono">{formatBig(toBig(stats.totalGold))}</div></div>
             <div className="stat-item"><div className="k">击杀 / Boss</div><div className="v mono">{formatNumber(stats.totalKills)} / {formatNumber(stats.totalBossKills)}</div></div>
+            <div className="stat-item"><div className="k">精英 / 宝箱怪</div><div className="v mono">{formatNumber(stats.totalEliteKills)} / {formatNumber(stats.totalMimicKills)}</div></div>
             <div className="stat-item"><div className="k">点击 / 暴击</div><div className="v mono">{formatNumber(stats.totalClicks)} / {formatNumber(stats.totalCrits)}</div></div>
             <div className="stat-item"><div className="k">超暴击</div><div className="v mono">{formatNumber(stats.totalSuperCrits)}</div></div>
             <div className="stat-item"><div className="k">重构次数</div><div className="v mono">{formatNumber(stats.totalPrestiges)}</div></div>

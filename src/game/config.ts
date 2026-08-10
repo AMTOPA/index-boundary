@@ -24,6 +24,20 @@ export const CONFIG = {
   BOSS_EVERY: 10,
   BOSS_HP_MULT: 20,
   BOSS_TIMER_SEC: 30,
+  BOSS_SHIELD_HITS: 20, // 能量盾：前 N 次伤害固定为 1
+  BOSS_TIME_DRAIN_MULT: 1.5, // 时空：Boss 计时流速 ×1.5
+  // 特殊敌人（非 Boss 关，非极速推进时出现）
+  SPECIAL_ENEMIES: {
+    ELITE_CHANCE: 0.08, // 精英出现概率（roll < 此值且未命中宝箱怪）
+    ELITE_HP_MULT: 12, // 精英生命倍数
+    ELITE_GOLD_MULT: 6, // 精英金币倍数
+    ELITE_AFFIX_COUNT: 1, // 精英词缀数量
+    ELITE_DROP_LUCK: 0.5, // 精英必掉装备的稀有度加成
+    MIMIC_CHANCE: 0.03, // 宝箱怪出现概率（roll < 此值）
+    MIMIC_HP_MULT: 0.6, // 宝箱怪生命倍数（更容易击杀）
+    MIMIC_GOLD_MULT: 25, // 宝箱怪金币倍数
+    MIMIC_CORE_CHANCE: 0.15, // 宝箱怪掉落技能核心概率
+  },
 
   // 基础属性
   BASE_CRIT_CHANCE: 0.05,

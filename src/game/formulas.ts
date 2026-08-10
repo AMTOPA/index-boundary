@@ -1,7 +1,7 @@
 // 纯数学层：无副作用，全部输入输出可测
 import { Big, toBig } from "./bignum";
 import { CONFIG, milestoneMultFor } from "./config";
-import type { DerivedStats, EquipSlot, GameState, UpgradeId } from "./types";
+import type { DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
@@ -75,6 +75,20 @@ export function isBossStage(stage: number): boolean {
 
 export function bossHp(stage: number): Big {
   return enemyHp(stage).mul(Big.fromNumber(CONFIG.BOSS_HP_MULT));
+}
+
+// 特殊敌人判定（纯函数，引擎注入 roll）：roll ∈ [0,1)；优先宝箱怪，其次精英；Boss 关与极速推进只出普通怪
+export function pickSpecialEnemy(
+  roll: number,
+  isBoss: boolean,
+  skipMode: boolean,
+  mimicChance: number,
+  eliteChance: number
+): EnemyKind {
+  if (isBoss || skipMode) return "normal";
+  if (roll < mimicChance) return "mimic";
+  if (roll < mimicChance + eliteChance) return "elite";
+  return "normal";
 }
 
 // ---------------- 暴击 ----------------

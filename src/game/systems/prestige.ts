@@ -44,6 +44,9 @@ export function applyPrestige(state: GameState, energyGained: number, goldKept: 
     lastHitWasCrit: false,
     lastHitWasSuper: false,
     lastHitWasCrush: false,
+    enemyKind: "normal",
+    bossShieldHits: 0,
+    bossVoidTarget: null,
   };
   // 金币保留
   state.player.gold = goldKept.toTuple();

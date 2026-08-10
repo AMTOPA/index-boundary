@@ -9,7 +9,9 @@ export type TreeId = "destruction" | "automation";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
-export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect";
+export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
+export type EnemyKind = "normal" | "elite" | "mimic";
+export type VoidTarget = "crit" | "click" | "skill" | "gold";
 export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
 export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole";
 export type ScoreSubmitKind = "stage" | "mag" | "prestige";
@@ -67,6 +69,9 @@ export interface CombatState {
   lastHitWasCrit: boolean;
   lastHitWasSuper: boolean;
   lastHitWasCrush: boolean;
+  enemyKind: EnemyKind; // special enemy kind: normal | elite | mimic
+  bossShieldHits: number; // shield affix: remaining absorbed hits
+  bossVoidTarget: VoidTarget | null; // void affix: nullified multiplier bucket
 }
 
 export interface EquipmentState {
@@ -105,6 +110,8 @@ export interface StatisticsState {
   totalGold: BigTuple;
   totalKills: number;
   totalBossKills: number;
+  totalEliteKills: number;
+  totalMimicKills: number;
   highestHit: BigTuple;
   totalClicks: number;
   totalCrits: number;
@@ -145,10 +152,12 @@ export interface GameState {
 export type GameEvent =
   | { type: "hit"; damage: BigTuple; crit: boolean; superCrit: boolean; crush: boolean; isClick: boolean }
   | { type: "bossFail"; stage: number }
-  | { type: "kill"; stage: number; boss: boolean }
+  | { type: "kill"; stage: number; boss: boolean; kind: EnemyKind }
   | { type: "crit"; super: boolean }
   | { type: "crush"; stage: number }
   | { type: "bossSpawn"; affixes: BossAffix[] }
+  | { type: "eliteSpawn"; affixes: BossAffix[] }
+  | { type: "mimicSpawn" }
   | { type: "bossKill" }
   | { type: "unlock"; key: string; label: string }
   | { type: "milestone"; magnitude: number }

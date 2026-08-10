@@ -3,20 +3,21 @@
 // 纯 Canvas 绘制，无任何美术资产（遵守全局规则：运行时零第三方依赖）
 import { useEffect, useRef } from "react";
 import { useGame } from "@/components/game/GameProvider";
-import type { BossAffix, WorldId } from "@/game/types";
+import type { BossAffix, EnemyKind, WorldId } from "@/game/types";
 
 interface Props {
   worldId: WorldId;
   worldColor: string;
   isBoss: boolean;
   affixes: BossAffix[];
+  kind: EnemyKind;
 }
 
 const SIZE = 220;
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
-export function EnemyCanvas({ worldId, worldColor, isBoss, affixes }: Props) {
+export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Props) {
   const { engine } = useGame();
   const ref = useRef<HTMLCanvasElement>(null);
   const flashUntil = useRef(0);
@@ -46,13 +47,18 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes }: Props) {
         drawBossHalo(ctx, t, worldColor, affixes);
       }
 
-      switch (worldId) {
-        case "data_wastes": drawDataWastes(ctx, t, worldColor, isBoss); break;
-        case "mech_city": drawMechCity(ctx, t, worldColor, isBoss); break;
-        case "star_factory": drawStarFactory(ctx, t, worldColor, isBoss); break;
-        case "black_hole": drawBlackHole(ctx, t, worldColor, isBoss); break;
-        default: drawDataWastes(ctx, t, worldColor, isBoss);
+      if (kind === "mimic") {
+        drawMimic(ctx, t);
+      } else {
+        switch (worldId) {
+          case "data_wastes": drawDataWastes(ctx, t, worldColor, isBoss); break;
+          case "mech_city": drawMechCity(ctx, t, worldColor, isBoss); break;
+          case "star_factory": drawStarFactory(ctx, t, worldColor, isBoss); break;
+          case "black_hole": drawBlackHole(ctx, t, worldColor, isBoss); break;
+          default: drawDataWastes(ctx, t, worldColor, isBoss);
+        }
       }
+      if (kind === "elite") drawEliteAura(ctx, t);
 
       // 词缀叠加特效
       for (const a of affixes) drawAffixEffect(ctx, t, a);
@@ -71,7 +77,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes }: Props) {
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [worldId, worldColor, isBoss, affixes]);
+  }, [worldId, worldColor, isBoss, affixes, kind]);
 
   return <canvas className="enemy-canvas" width={SIZE} height={SIZE} ref={ref} aria-hidden="true" />;
 }
@@ -262,6 +268,66 @@ function drawBlackHole(ctx: CanvasRenderingContext2D, t: number, color: string, 
   ctx.globalAlpha = 1;
 }
 
+// ---------- 特殊敌人 ----------
+function drawMimic(ctx: CanvasRenderingContext2D, t: number): void {
+  const bob = Math.sin(t * 2.2) * 3;
+  const w = 84, h = 62;
+  const x = CX - w / 2, y = CY - h / 2 + bob;
+  glow(ctx, CX, CY + bob, 92, "#ffd93d", 0.22 + 0.08 * Math.sin(t * 3));
+  // 盖子
+  ctx.fillStyle = "#e0b95c";
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h * 0.42, 10);
+  ctx.fill();
+  // 箱体
+  ctx.fillStyle = "#c9a66b";
+  ctx.beginPath();
+  ctx.roundRect(x, y + h * 0.36, w, h * 0.64, 8);
+  ctx.fill();
+  // 缝 + 锁
+  ctx.fillStyle = "#8a6a2f";
+  ctx.fillRect(x + 4, y + h * 0.4, w - 8, 4);
+  ctx.fillStyle = "#ffd93d";
+  ctx.beginPath();
+  ctx.arc(CX, y + h * 0.56, 7, 0, Math.PI * 2);
+  ctx.fill();
+  // 闪光
+  ctx.fillStyle = "#ffffff";
+  ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 5);
+  ctx.beginPath();
+  ctx.arc(x - 12, y + 6, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawEliteAura(ctx: CanvasRenderingContext2D, t: number): void {
+  const r = 78 + Math.sin(t * 2) * 3;
+  glow(ctx, CX, CY, r * 1.5, "#ff6b6b", 0.22 + 0.08 * Math.sin(t * 2.5));
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.rotate(t * 0.8);
+  ctx.strokeStyle = "#ff6b6b";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#ff6b6b";
+  for (let i = 0; i < 6; i++) {
+    const a = t * 1.1 + (i / 6) * Math.PI * 2;
+    ctx.save();
+    ctx.translate(Math.cos(a) * (r + 10), Math.sin(a) * (r + 10));
+    ctx.rotate(a + Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(0, -6); ctx.lineTo(5, 5); ctx.lineTo(-5, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 // ---------- Boss 光环 ----------
 function drawBossHalo(ctx: CanvasRenderingContext2D, t: number, color: string, affixes: BossAffix[]): void {
   const r = 92 + Math.sin(t * 2) * 3;
@@ -360,6 +426,45 @@ function drawAffixEffect(ctx: CanvasRenderingContext2D, t: number, affix: BossAf
       ctx.beginPath();
       ctx.arc(CX, CY, r, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case "time": {
+      // 时空钟盘
+      ctx.strokeStyle = "#9ad0ff";
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(CX, CY, r - 8, 0, Math.PI * 2);
+      ctx.stroke();
+      const ang = t * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(CX, CY);
+      ctx.lineTo(CX + Math.cos(ang) * (r - 20), CY + Math.sin(ang) * (r - 20));
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case "shield": {
+      // 六边形护盾
+      ctx.strokeStyle = "rgba(120, 200, 255, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.75 + 0.15 * Math.sin(t * 3);
+      poly(ctx, CX, CY, r + 8, 6, t * 0.2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case "void": {
+      // 紫黑漩涡
+      ctx.strokeStyle = "#b26bff";
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.8;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(CX, CY, r - i * 16, t * 1.4 + i, t * 1.4 + i + Math.PI * 1.3);
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
       break;
     }

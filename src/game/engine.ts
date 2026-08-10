@@ -2,13 +2,13 @@
 import { Big, toBig } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId,
+  BossAffix, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
   computeDerived, emptyBuffs, type RuntimeBuffs,
   enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
-  overflowGold, crushGold, upgradeCost, prestigeEnergy,
+  overflowGold, crushGold, upgradeCost, prestigeEnergy, pickSpecialEnemy,
 } from "./formulas";
 import {
   rollEquipment, addDrop, dropChance, equipItem as sysEquip, unequip as sysUnequip,
@@ -19,7 +19,7 @@ import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from 
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
-import { worldForStage, BOSS_AFFIX_LABEL } from "./data/worlds";
+import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
 import { ITEM_DEFS } from "./data/items";
 
 export interface OfflineResult {
@@ -54,6 +54,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
       bossTimer: -1, combo: 0, comboTimer: 0, crushStreak: 0, skipMode: false,
       lastHitWasCrit: false, lastHitWasSuper: false, lastHitWasCrush: false,
+      enemyKind: "normal", bossShieldHits: 0, bossVoidTarget: null,
     },
     equipment: { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null },
     skills: { actives: [], passiveLevel: 0, cores: [0, 0] },
@@ -62,6 +63,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
+      totalEliteKills: 0, totalMimicKills: 0,
       highestHit: [0, 0], totalClicks: 0, totalCrits: 0, totalSuperCrits: 0,
       totalPrestiges: 0, totalPlayTimeMs: 0, totalOfflineMs: 0, allTimeMaxStage: 1,
     },
@@ -147,19 +149,23 @@ export class GameEngine {
     this.state.statistics.totalClicks += 1;
     this.addCombo(1, false);
     this.attackCounter += 1;
-    let damage = d.damagePerHit.mul(d.clickMult);
+    const voidCrit = this.isVoid("crit");
+    const voidClick = this.isVoid("click");
+    let damage = d.damagePerHit;
+    if (!voidClick) damage = damage.mul(d.clickMult);
     let crit = false;
     let superCrit = false;
     if (this.buffs.criticalStrike.pending) {
-      damage = damage.mul(Big.fromNumber(this.buffs.criticalStrike.mult));
-      crit = true;
-      superCrit = true;
+      const mult = voidCrit ? 1 : this.buffs.criticalStrike.mult;
+      damage = damage.mul(Big.fromNumber(mult));
+      crit = !voidCrit;
+      superCrit = !voidCrit;
       this.buffs.criticalStrike.pending = false;
     } else {
       const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
-      crit = r.crit;
-      superCrit = r.superCrit;
-      damage = damage.mul(Big.fromNumber(r.mult));
+      crit = r.crit && !voidCrit;
+      superCrit = r.superCrit && !voidCrit;
+      damage = damage.mul(Big.fromNumber(voidCrit ? 1 : r.mult));
     }
     this.applyHit(damage, crit, superCrit, true);
   }
@@ -172,6 +178,7 @@ export class GameEngine {
     if (whole <= 0) return;
     this.addCombo(whole, true);
     this.attackCounter += whole;
+    const voidCrit = this.isVoid("crit");
     // 每 N 次攻击触发（everyNAttack）
     if (d.everyNAttack > 0) {
       const before = Math.floor((this.attackCounter - whole) / 10);
@@ -183,9 +190,10 @@ export class GameEngine {
     }
     // 临界打击待发
     if (this.buffs.criticalStrike.pending) {
-      const hit = d.damagePerHit.mul(Big.fromNumber(this.buffs.criticalStrike.mult));
+      const mult = voidCrit ? 1 : this.buffs.criticalStrike.mult;
+      const hit = d.damagePerHit.mul(Big.fromNumber(mult));
       this.buffs.criticalStrike.pending = false;
-      this.applyHit(hit, true, true, false);
+      this.applyHit(hit, !voidCrit, !voidCrit, false);
       if (whole > 1) {
         const rest = whole - 1;
         this.batchAttack(rest);
@@ -195,8 +203,8 @@ export class GameEngine {
     if (whole <= 8) {
       for (let i = 0; i < whole; i++) {
         const r = rollCrit(d.critChance, d.critDamage, d.critLayersExtra, this.rng.next());
-        const hit = d.damagePerHit.mul(Big.fromNumber(r.mult));
-        this.applyHit(hit, r.crit, r.superCrit, false, true);
+        const hit = d.damagePerHit.mul(Big.fromNumber(voidCrit ? 1 : r.mult));
+        this.applyHit(hit, r.crit && !voidCrit, r.superCrit && !voidCrit, false, true);
       }
     } else {
       this.batchAttack(whole);
@@ -205,31 +213,47 @@ export class GameEngine {
 
   private batchAttack(n: number): void {
     const d = this.derived;
+    if (this.isVoid("crit")) {
+      const total = d.damagePerHit.mul(Big.fromNumber(n));
+      this.applyHit(total, false, false, false, true);
+      return;
+    }
     const expected = expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra);
     const total = d.damagePerHit.mul(Big.fromNumber(expected)).mul(Big.fromNumber(n));
     const crit = this.rng.chance(Math.min(1, d.critChance));
     this.applyHit(total, crit, false, false, true);
   }
 
-  private applyHit(rawDamage: Big, crit: boolean, superCrit: boolean, isClick: boolean, batch = false): void {
+  private applyHit(rawDamage: Big, crit: boolean, superCrit: boolean, isClick: boolean, batch = false, isSkill = false): void {
     const c = this.state.combat;
     let damage = rawDamage;
-    // Boss 词缀与 Boss 伤害乘区
+    // Boss 词缀 + Boss 伤害乘区（精英同样吃词缀，但不吃 Boss 伤害乘区）
     if (c.isBoss) {
       damage = damage.mul(this.derived.bossDmgMult);
-      for (const affix of c.bossAffixes) {
-        if (affix === "armor") damage = damage.mul(Big.fromNumber(0.5));
-        else if (affix === "antiCrit" && crit) damage = damage.mul(Big.fromNumber(0.5));
-        else if (affix === "deflect" && !crit) damage = damage.mul(Big.fromNumber(0.3));
-        else if (affix === "harden") {
-          const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
-          const stacks = Math.min(5, Math.floor(Math.max(0, elapsed) / 6));
-          damage = damage.mul(Big.fromNumber(1 - stacks * 0.08));
-        }
-        else if (affix === "rage") {
-          const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
-          const def = 1 + Math.min(0.6, Math.max(0, elapsed) * 0.02);
-          damage = damage.mul(Big.fromNumber(1 / def));
+    }
+    if (c.isBoss || c.enemyKind === "elite") {
+      // 能量盾：前 N 次伤害固定为 1（Boss 专属）
+      if (c.isBoss && c.bossAffixes.includes("shield") && c.bossShieldHits > 0) {
+        c.bossShieldHits -= 1;
+        damage = Big.ONE;
+      } else {
+        for (const affix of c.bossAffixes) {
+          if (affix === "armor") damage = damage.mul(Big.fromNumber(0.5));
+          else if (affix === "antiCrit" && crit) damage = damage.mul(Big.fromNumber(0.5));
+          else if (affix === "deflect" && !crit) damage = damage.mul(Big.fromNumber(0.3));
+          else if (affix === "harden") {
+            const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
+            const stacks = Math.min(5, Math.floor(Math.max(0, elapsed) / 6));
+            damage = damage.mul(Big.fromNumber(1 - stacks * 0.08));
+          }
+          else if (affix === "rage") {
+            const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
+            const def = 1 + Math.min(0.6, Math.max(0, elapsed) * 0.02);
+            damage = damage.mul(Big.fromNumber(1 / def));
+          }
+          else if (affix === "void" && c.bossVoidTarget === "skill" && isSkill) {
+            damage = damage.div(this.derived.skillDmgMult);
+          }
         }
       }
     }
@@ -261,8 +285,12 @@ export class GameEngine {
     const isBoss = c.isBoss;
     this.state.statistics.totalKills += 1;
 
+    const kind = c.enemyKind;
     let gold = enemyGold(stage).mul(this.derived.goldMult);
     if (isBoss) gold = gold.mul(Big.fromNumber(10));
+    else if (kind === "elite") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_GOLD_MULT));
+    else if (kind === "mimic") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_GOLD_MULT));
+    if (isBoss && c.bossVoidTarget === "gold") gold = gold.mul(Big.fromNumber(0.5));
     if (crush) {
       c.crushStreak += 1;
       gold = crushGold(gold, this.derived.overflowEffMult);
@@ -273,13 +301,13 @@ export class GameEngine {
     // 溢出金币（仅首次通关，即超越历史最大关卡）
     if (overkill.gt(Big.ZERO) && stage > this.state.statistics.allTimeMaxStage) {
       const baseGold = enemyGold(stage).mul(this.derived.goldMult);
-      const hpBefore = enemyHp(stage);
+      const hpBefore = toBig(c.enemyMaxHp);
       gold = gold.add(overflowGold(overkill.add(hpBefore), hpBefore, baseGold, this.derived.overflowEffMult));
     }
     this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
     this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
 
-    this.emit({ type: "kill", stage, boss: isBoss });
+    this.emit({ type: "kill", stage, boss: isBoss, kind });
     if (isBoss) {
       this.state.statistics.totalBossKills += 1;
       this.emit({ type: "bossKill" });
@@ -288,6 +316,19 @@ export class GameEngine {
       if (!this.state.meta.unlocks.includes("first_boss_reward")) {
         this.state.meta.unlocks.push("first_boss_reward");
         this.state.talents.points += CONFIG.TALENT_POINTS_FROM_BOSS_FIRST_KILL;
+      }
+    } else if (kind === "elite") {
+      this.state.statistics.totalEliteKills += 1;
+      const item = rollEquipment(this.rng, stage, CONFIG.SPECIAL_ENEMIES.ELITE_DROP_LUCK);
+      addDrop(this.state, item);
+      this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
+    } else if (kind === "mimic") {
+      this.state.statistics.totalMimicKills += 1;
+      const item = rollEquipment(this.rng, stage, 0.5);
+      addDrop(this.state, item);
+      this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
+      if (this.rng.chance(CONFIG.SPECIAL_ENEMIES.MIMIC_CORE_CHANCE)) {
+        this.state.skills.cores = toBig(this.state.skills.cores).add(Big.ONE).toTuple();
       }
     } else {
       if (this.rng.chance(dropChance(stage, 0))) {
@@ -331,17 +372,38 @@ export class GameEngine {
     const c = this.state.combat;
     if (isBossStage(c.stage)) {
       c.isBoss = true;
+      c.enemyKind = "normal";
       c.enemyMaxHp = bossHp(c.stage).toTuple();
       c.enemyHp = c.enemyMaxHp;
       c.bossTimer = CONFIG.BOSS_TIMER_SEC;
       c.bossAffixes = this.rollBossAffixes();
+      c.bossShieldHits = c.bossAffixes.includes("shield") ? CONFIG.BOSS_SHIELD_HITS : 0;
+      c.bossVoidTarget = c.bossAffixes.includes("void") ? this.rollVoidTarget() : null;
       this.emit({ type: "bossSpawn", affixes: c.bossAffixes });
     } else {
       c.isBoss = false;
-      c.enemyMaxHp = enemyHp(c.stage).toTuple();
-      c.enemyHp = c.enemyMaxHp;
       c.bossTimer = -1;
       c.bossAffixes = [];
+      c.bossShieldHits = 0;
+      c.bossVoidTarget = null;
+      const kind = pickSpecialEnemy(
+        this.rng.next(), false, c.skipMode,
+        CONFIG.SPECIAL_ENEMIES.MIMIC_CHANCE, CONFIG.SPECIAL_ENEMIES.ELITE_CHANCE
+      );
+      c.enemyKind = kind;
+      if (kind === "elite") {
+        c.enemyMaxHp = enemyHp(c.stage).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_HP_MULT)).toTuple();
+        c.enemyHp = c.enemyMaxHp;
+        c.bossAffixes = this.rollEliteAffixes();
+        this.emit({ type: "eliteSpawn", affixes: c.bossAffixes });
+      } else if (kind === "mimic") {
+        c.enemyMaxHp = enemyHp(c.stage).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_HP_MULT)).toTuple();
+        c.enemyHp = c.enemyMaxHp;
+        this.emit({ type: "mimicSpawn" });
+      } else {
+        c.enemyMaxHp = enemyHp(c.stage).toTuple();
+        c.enemyHp = c.enemyMaxHp;
+      }
     }
   }
 
@@ -349,6 +411,21 @@ export class GameEngine {
     const pool = worldForStage(this.state.combat.stage).bossPool;
     const count = this.state.combat.stage >= 200 && this.rng.chance(0.5) ? 2 : 1;
     return this.rng.shuffle(pool).slice(0, count);
+  }
+
+  private rollEliteAffixes(): BossAffix[] {
+    const count = Math.min(CONFIG.SPECIAL_ENEMIES.ELITE_AFFIX_COUNT, ELITE_AFFIX_POOL.length);
+    return this.rng.shuffle([...ELITE_AFFIX_POOL]).slice(0, count);
+  }
+
+  private rollVoidTarget(): VoidTarget {
+    const targets: VoidTarget[] = ["crit", "click", "skill", "gold"];
+    return targets[this.rng.int(0, targets.length - 1)];
+  }
+
+  private isVoid(target: VoidTarget): boolean {
+    const c = this.state.combat;
+    return c.isBoss && c.bossVoidTarget === target;
   }
 
   private bossTimeout(): void {
@@ -363,7 +440,8 @@ export class GameEngine {
   private tickBoss(dt: number): void {
     const c = this.state.combat;
     if (!c.isBoss) return;
-    c.bossTimer -= dt;
+    const drain = c.bossAffixes.includes("time") ? CONFIG.BOSS_TIME_DRAIN_MULT : 1;
+    c.bossTimer -= dt * drain;
     if (c.bossAffixes.includes("regen")) {
       const maxHp = toBig(c.enemyMaxHp);
       const heal = maxHp.mul(Big.fromNumber(0.03 * dt));
@@ -493,8 +571,8 @@ export class GameEngine {
       this.buffs.criticalStrike.mult = result.action.mult;
     } else if (result.action.kind === "singularity_cannon") {
       const dps = this.derived.dps;
-      const damage = dps.mul(Big.fromNumber(result.action.mult));
-      this.applyHit(damage, false, false, false);
+      const damage = dps.mul(this.derived.skillDmgMult).mul(Big.fromNumber(result.action.mult));
+      this.applyHit(damage, false, false, false, false, true);
     }
     this.recomputeDerived();
     return true;
