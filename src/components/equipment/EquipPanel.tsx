@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
 import { NumberDisplay } from "@/components/common/NumberDisplay";
@@ -20,6 +21,8 @@ export function EquipPanel() {
   const inventory = useGameSelector((s) => s.equipment.inventory);
   const fragments = useGameSelector((s) => s.equipment.fragments);
   const autoBreakdown = useGameSelector((s) => s.equipment.autoBreakdown);
+  const [craftSlot, setCraftSlot] = useState<EquipSlot>("weapon");
+  const [craftRarity, setCraftRarity] = useState<Rarity>("fine");
 
   if (!unlocked) {
     return (
@@ -81,6 +84,15 @@ export function EquipPanel() {
                 强化 ({engine ? formatNumber(engine.enhanceCostOf(slot)) : 0} 碎片)
               </button>
               <button className="mini-btn" onClick={() => engine?.unequip(slot)}>卸下</button>
+              {item.affixes.length > 0 && (
+                <button
+                  className="mini-btn"
+                  disabled={!engine?.canReforge(item.uid)}
+                  onClick={() => engine?.reforge(item.uid)}
+                >
+                  重铸 ({engine ? formatNumber(engine.reforgeCostOf(item.uid)) : 0})
+                </button>
+              )}
               <button className="mini-btn" onClick={() => engine?.breakdown(item.uid)}>分解</button>
             </div>
           </div>
@@ -94,6 +106,37 @@ export function EquipPanel() {
             <span className="set-desc">{s.desc}</span>
           </div>
         ))}
+      </div>
+
+      <div className="craft-section">
+        <h3>制作</h3>
+        <div className="craft-row">
+          {SLOTS.map((sl) => (
+            <button key={sl} className={`mini-btn ${craftSlot === sl ? "active" : ""}`} onClick={() => setCraftSlot(sl)}>
+              {SLOT_ICON[sl]}
+            </button>
+          ))}
+        </div>
+        <div className="craft-row">
+          {(Object.keys(RARITY_LABEL) as Rarity[]).map((r) => (
+            <button
+              key={r}
+              className={`mini-btn ${craftRarity === r ? "active" : ""}`}
+              style={{ color: RARITY_COLOR[r] }}
+              onClick={() => setCraftRarity(r)}
+            >
+              {RARITY_LABEL[r]}
+            </button>
+          ))}
+        </div>
+        <div className="craft-row">
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            费用 {engine ? formatNumber(engine.craftCostOf(craftSlot, craftRarity)) : 0} 碎片
+          </span>
+          <button className="mini-btn" disabled={!engine?.canCraft(craftSlot, craftRarity)} onClick={() => engine?.craft(craftSlot, craftRarity)}>
+            制作
+          </button>
+        </div>
       </div>
       <h3 style={{ marginTop: 10 }}>背包 ({inventory.length}/{CONFIG.EQUIPMENT.INVENTORY_CAP})</h3>
       <div className="inventory">

@@ -2,7 +2,7 @@
 import { Big, toBig } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId, VoidTarget,
+  BossAffix, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -13,6 +13,8 @@ import {
 import {
   rollEquipment, addDrop, dropChance, equipItem as sysEquip, unequip as sysUnequip,
   enhance as sysEnhance, breakdown as sysBreakdown, canEnhance, enhanceCost,
+  reforge as sysReforge, reforgeCost, canReforge as sysCanReforge,
+  craft as sysCraft, craftCost, canCraft as sysCanCraft,
 } from "./systems/equipment";
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill } from "./systems/skills";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
@@ -555,6 +557,29 @@ export class GameEngine {
   }
   setAutoBreakdown(rarity: Rarity | null): void {
     this.state.equipment.autoBreakdown = rarity;
+  }
+  reforge(uid: string): boolean {
+    const ok = sysReforge(this.state, uid, this.rng);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  reforgeCostOf(uid: string): number {
+    const item = this.state.equipment.slots[uid as EquipSlot] ?? this.state.equipment.inventory.find((e) => e.uid === uid);
+    return item ? reforgeCost(item) : 0;
+  }
+  canReforge(uid: string): boolean {
+    return sysCanReforge(this.state, uid);
+  }
+  craft(slot: EquipSlot, rarity: Rarity): boolean {
+    const ok = sysCraft(this.state, slot, rarity, this.rng);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  craftCostOf(slot: EquipSlot, rarity: Rarity): number {
+    return craftCost(slot, rarity);
+  }
+  canCraft(slot: EquipSlot, rarity: Rarity): boolean {
+    return sysCanCraft(this.state, slot, rarity);
   }
   enhanceCostOf(slot: Parameters<typeof sysEnhance>[1]): number {
     const item = this.state.equipment.slots[slot];

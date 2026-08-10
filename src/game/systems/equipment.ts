@@ -22,10 +22,10 @@ export function rollRarity(rng: Rng, stage: number, luckMult: number): Rarity {
   return rng.weighted(weighted);
 }
 
-export function rollEquipment(rng: Rng, stage: number, luckMult = 0): EquipInstance {
-  const rarity = rollRarity(rng, stage, luckMult);
+export function rollEquipment(rng: Rng, stage: number, luckMult = 0, fixedSlot?: EquipSlot, fixedRarity?: Rarity): EquipInstance {
+  const rarity = fixedRarity ?? rollRarity(rng, stage, luckMult);
   const slots = CONFIG.EQUIPMENT.SLOTS as readonly EquipSlot[];
-  const slot = rng.pick(slots);
+  const slot = fixedSlot ?? rng.pick(slots);
   const mainStats = CONFIG.EQUIPMENT.MAIN_POOL[slot] as readonly AffixStat[];
   const mainStat = rng.pick(mainStats);
   const rarityDef = CONFIG.EQUIPMENT.RARITIES[rarity];
@@ -155,4 +155,56 @@ export function dropChance(stage: number, luckMult: number): number {
 
 export function itemPowerTier(stage: number): number {
   return Math.floor(stage / CONFIG.EQUIPMENT.DROP_STAGE_TIER);
+}
+// ---------------- 重铸 / 制作 ----------------
+export function reforgeCost(item: EquipInstance): number {
+  const shards = CONFIG.EQUIPMENT.RARITIES[item.rarity].shards;
+  return Math.ceil(CONFIG.EQUIPMENT.REFORGE_COST_BASE * shards * (1 + item.affixes.length));
+}
+
+export function canReforge(state: GameState, uid: string): boolean {
+  const item = findEquip(state, uid);
+  if (!item || item.affixes.length === 0) return false;
+  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(reforgeCost(item)));
+}
+
+// 重铸：花费碎片重抛全部副词条（稀有度/主属性/传奇词条保留）
+export function reforge(state: GameState, uid: string, rng: Rng): boolean {
+  const item = findEquip(state, uid);
+  if (!item || item.affixes.length === 0) return false;
+  const cost = reforgeCost(item);
+  if (Big.fromTuple(state.equipment.fragments).lt(Big.fromNumber(cost))) return false;
+  state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
+  const rarityDef = CONFIG.EQUIPMENT.RARITIES[item.rarity];
+  const pool = (Object.keys(CONFIG.EQUIPMENT.AFFIX_RANGES) as AffixStat[]).filter((s) => s !== item.main.stat);
+  const chosen = rng.shuffle(pool).slice(0, rarityDef.affixCount);
+  item.affixes = chosen.map((stat) => {
+    const range = CONFIG.EQUIPMENT.AFFIX_RANGES[stat];
+    const value = rollAffixValue(stat, range.min + rng.next() * (range.max - range.min));
+    return { stat, value };
+  });
+  return true;
+}
+
+export function craftCost(slot: EquipSlot, rarity: Rarity): number {
+  const shards = CONFIG.EQUIPMENT.RARITIES[rarity].shards;
+  return Math.ceil(CONFIG.EQUIPMENT.CRAFT_COST_MULT * shards);
+}
+
+// 制作门槛：稀有度需达到掉落门槛关卡，背包不满
+export function canCraft(state: GameState, slot: EquipSlot, rarity: Rarity): boolean {
+  const stage = state.combat.stage;
+  if (stage < CONFIG.EQUIPMENT.RARITIES[rarity].dropMinStage) return false;
+  if (state.equipment.inventory.length >= CONFIG.EQUIPMENT.INVENTORY_CAP) return false;
+  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(craftCost(slot, rarity)));
+}
+
+export function craft(state: GameState, slot: EquipSlot, rarity: Rarity, rng: Rng): boolean {
+  if (!canCraft(state, slot, rarity)) return false;
+  const cost = craftCost(slot, rarity);
+  state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
+  const item = rollEquipment(rng, state.combat.stage, 0, slot, rarity);
+  // 制作产物直接进背包，不受自动分解规则影响（canCraft 已限制背包不满）
+  state.equipment.inventory.push(item);
+  return true;
 }

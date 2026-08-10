@@ -94,6 +94,8 @@ export const CONFIG = {
     BASE_DROP_CHANCE: 0.015,
     DROP_STAGE_TIER: 25, // 每 25 关装备强度一档
     INVENTORY_CAP: 40,
+    REFORGE_COST_BASE: 4, // 重铸费用 = base × 碎片 × (1+副词条数)
+    CRAFT_COST_MULT: 10, // 制作费用 = mult × 稀有度碎片
     ENHANCE_COST_BASE: 5, // 强化费用 = base × shards × (level+1)^1.5
     // 副词条数值区间（% 或 倍率；% 存小数，独立乘区存 × 值）
     AFFIX_RANGES: {
