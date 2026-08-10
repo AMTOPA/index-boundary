@@ -16,13 +16,14 @@ export function CombatParticles() {
   const { engine } = useGame();
   const ref = useRef<HTMLCanvasElement>(null);
   const parts = useRef<Particle[]>([]);
+  const MAX_PARTICLES = 150;
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     let W = 0, H = 0;
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -41,6 +42,7 @@ export function CombatParticles() {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "lighter";
       const list = parts.current;
       for (let i = list.length - 1; i >= 0; i--) {
         const p = list[i];
@@ -65,6 +67,15 @@ export function CombatParticles() {
           ctx.rotate(p.vx * 0.1);
           ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
           ctx.restore();
+        } else if (p.kind === "spark") {
+          ctx.lineWidth = Math.max(1, p.size * k);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, Math.max(0.8, p.size * k * 0.65), 0, Math.PI * 2);
+          ctx.fill();
         } else {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size * k, 0, Math.PI * 2);
@@ -72,6 +83,7 @@ export function CombatParticles() {
         }
       }
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -83,6 +95,9 @@ export function CombatParticles() {
     if (!engine) return;
     const spawn = (p: Partial<Particle> & { kind: Particle["kind"]; color: string; x: number; y: number }) => {
       parts.current.push({ maxLife: 0.6, life: 0.6, vx: 0, vy: 0, size: 4, ...p } as Particle);
+      if (parts.current.length > MAX_PARTICLES) {
+        parts.current.splice(0, parts.current.length - MAX_PARTICLES);
+      }
     };
     const center = (): { x: number; y: number } => {
       const rect = ref.current?.getBoundingClientRect();

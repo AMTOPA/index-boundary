@@ -7,7 +7,11 @@ import { SKILL_DEFS, skillCooldown, skillCoreCost } from "../data/skills";
 export type CastAction =
   | { kind: "none" }
   | { kind: "critical_strike"; mult: number }
-  | { kind: "singularity_cannon"; mult: number };
+  | { kind: "singularity_cannon"; mult: number }
+  | { kind: "emp_burst"; mult: number; bossFreezeSec: number }
+  | { kind: "data_flood"; mult: number }
+  | { kind: "charged_hit"; mult: number }
+  | { kind: "quantum_replay"; seconds: number };
 
 export function castSkill(state: GameState, id: SkillId, timeSec: number): { ok: boolean; reason?: string; action: CastAction } {
   const inst = state.skills.actives.find((s) => s.id === id);
@@ -24,6 +28,18 @@ export function castSkill(state: GameState, id: SkillId, timeSec: number): { ok:
   }
   if (id === "singularity_cannon") {
     return { ok: true, action: { kind: "singularity_cannon", mult: def.baseEffect + def.effectPerLevel * (inst.level - 1) } };
+  }
+  if (id === "emp_burst") {
+    return { ok: true, action: { kind: "emp_burst", mult: def.baseEffect + def.effectPerLevel * (inst.level - 1), bossFreezeSec: def.empFreezeSec ?? 0 } };
+  }
+  if (id === "data_flood") {
+    return { ok: true, action: { kind: "data_flood", mult: def.baseEffect + def.effectPerLevel * (inst.level - 1) } };
+  }
+  if (id === "charged_hit") {
+    return { ok: true, action: { kind: "charged_hit", mult: def.baseEffect + def.effectPerLevel * (inst.level - 1) } };
+  }
+  if (id === "quantum_replay") {
+    return { ok: true, action: { kind: "quantum_replay", seconds: def.baseEffect + def.effectPerLevel * (inst.level - 1) } };
   }
   return { ok: true, action: { kind: "none" } };
 }

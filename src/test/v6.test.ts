@@ -5,7 +5,7 @@ import { Rng } from "../game/rng";
 import { rollEquipment } from "../game/systems/equipment";
 import { RARITY_LABEL, RARITY_COLOR, SLOT_LABEL, SLOT_ICON, rarityOrder } from "../game/data/equipment";
 import { CONFIG } from "../game/config";
-import type { EquipSlot, Rarity } from "../game/types";
+import type { EquipInstance, EquipSlot, Rarity } from "../game/types";
 
 describe("V6 内容：装备槽位扩展（6 槽）", () => {
   it("7 个槽位都能随机到", () => {
@@ -123,8 +123,8 @@ describe("V6 内容：自动换装工具", () => {
   it("无工具时不会自动换装", () => {
     const st = createNewState(1);
     const eng = new GameEngine(st);
-    const weak = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
-    const strong = { uid: "w2", slot: "weapon", rarity: "rare", level: 0, main: { stat: "atkPct", mult: 3.5 }, affixes: [{ stat: "atkPct", value: 0.2 }, { stat: "critDmg", value: 0.5 }] };
+    const weak: EquipInstance = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
+    const strong: EquipInstance = { uid: "w2", slot: "weapon", rarity: "rare", level: 0, main: { stat: "atkPct", mult: 3.5 }, affixes: [{ stat: "atkPct", value: 0.2 }, { stat: "critDmg", value: 0.5 }] };
     st.equipment.slots.weapon = weak;
     st.equipment.inventory = [strong];
     eng.maybeAutoEquip();
@@ -135,8 +135,8 @@ describe("V6 内容：自动换装工具", () => {
     const st = createNewState(1);
     st.player.gold = [1, 9];
     const eng = new GameEngine(st);
-    const weak = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
-    const strong = { uid: "w2", slot: "weapon", rarity: "rare", level: 0, main: { stat: "atkPct", mult: 3.5 }, affixes: [{ stat: "atkPct", value: 0.2 }, { stat: "critDmg", value: 0.5 }] };
+    const weak: EquipInstance = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
+    const strong: EquipInstance = { uid: "w2", slot: "weapon", rarity: "rare", level: 0, main: { stat: "atkPct", mult: 3.5 }, affixes: [{ stat: "atkPct", value: 0.2 }, { stat: "critDmg", value: 0.5 }] };
     st.equipment.slots.weapon = weak;
     st.equipment.inventory = [strong];
     expect(eng.buyTool("auto_equip")).toBe(true);
@@ -148,9 +148,9 @@ describe("V6 内容：自动换装工具", () => {
     const st = createNewState(2);
     const eng = new GameEngine(st);
     eng.state.items.tools.auto_equip = true;
-    const weak = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
+    const weak: EquipInstance = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
     st.equipment.slots.weapon = weak;
-    const strong = { uid: "w2", slot: "weapon", rarity: "epic", level: 0, main: { stat: "atkPct", mult: 6 }, affixes: [] };
+    const strong: EquipInstance = { uid: "w2", slot: "weapon", rarity: "epic", level: 0, main: { stat: "atkPct", mult: 6 }, affixes: [] };
     st.equipment.inventory = [strong];
     eng.maybeAutoEquip();
     expect(eng.state.equipment.slots.weapon!.uid).toBe("w2");

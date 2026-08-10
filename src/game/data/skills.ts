@@ -14,6 +14,11 @@ export interface SkillDef {
   effectPerLevel: number;
   effectCap?: number;
   cdReducePerLevel: number;
+  // 特殊机制（非倍率类）
+  empFreezeSec?: number; // 电磁脉冲：Boss 剩余时间 +秒
+  comboDmgMult?: number; // 过载连击：连击伤害倍率
+  goldMultWhileActive?: number; // 终焉协议：活跃期金币倍率
+  aspdMultWhileActive?: number; // 终焉协议：活跃期攻速倍率
 }
 
 const S = CONFIG.SKILLS;
@@ -69,9 +74,113 @@ export const SKILL_DEFS: Record<SkillId, SkillDef> = {
     effectPerLevel: S.singularity_cannon.levelEffect.multPerLevel,
     cdReducePerLevel: S.singularity_cannon.levelEffect.cdReducePerLevel,
   },
+  emp_burst: {
+    id: "emp_burst",
+    name: S.emp_burst.name,
+    desc: S.emp_burst.desc,
+    icon: "⚡",
+    color: "#4da3ff",
+    cooldown: S.emp_burst.cooldown,
+    duration: S.emp_burst.duration,
+    baseEffect: 60,
+    effectPerLevel: S.emp_burst.levelEffect.multPerLevel,
+    empFreezeSec: S.emp_burst.empFreezeSec,
+    cdReducePerLevel: S.emp_burst.levelEffect.cdReducePerLevel,
+  },
+  time_freeze: {
+    id: "time_freeze",
+    name: S.time_freeze.name,
+    desc: S.time_freeze.desc,
+    icon: "❄️",
+    color: "#7fe7ff",
+    cooldown: S.time_freeze.cooldown,
+    duration: S.time_freeze.duration,
+    baseEffect: 1.5,
+    effectPerLevel: S.time_freeze.levelEffect.multPerLevel,
+    effectCap: S.time_freeze.levelEffect.multCap,
+    cdReducePerLevel: S.time_freeze.levelEffect.cdReducePerLevel,
+  },
+  overload_combo: {
+    id: "overload_combo",
+    name: S.overload_combo.name,
+    desc: S.overload_combo.desc,
+    icon: "🔥",
+    color: "#ff8c42",
+    cooldown: S.overload_combo.cooldown,
+    duration: S.overload_combo.duration,
+    baseEffect: 40,
+    effectPerLevel: S.overload_combo.levelEffect.multPerLevel,
+    effectCap: S.overload_combo.levelEffect.multCap,
+    comboDmgMult: S.overload_combo.comboDmgMult,
+    cdReducePerLevel: S.overload_combo.levelEffect.cdReducePerLevel,
+  },
+  data_flood: {
+    id: "data_flood",
+    name: S.data_flood.name,
+    desc: S.data_flood.desc,
+    icon: "📥",
+    color: "#ffd93d",
+    cooldown: S.data_flood.cooldown,
+    duration: S.data_flood.duration,
+    baseEffect: 300,
+    effectPerLevel: S.data_flood.levelEffect.multPerLevel,
+    cdReducePerLevel: S.data_flood.levelEffect.cdReducePerLevel,
+  },
+  charged_hit: {
+    id: "charged_hit",
+    name: S.charged_hit.name,
+    desc: S.charged_hit.desc,
+    icon: "🎯",
+    color: "#ff6b6b",
+    cooldown: S.charged_hit.cooldown,
+    duration: S.charged_hit.duration,
+    baseEffect: 250,
+    effectPerLevel: S.charged_hit.levelEffect.multPerLevel,
+    cdReducePerLevel: S.charged_hit.levelEffect.cdReducePerLevel,
+  },
+  split_matrix: {
+    id: "split_matrix",
+    name: S.split_matrix.name,
+    desc: S.split_matrix.desc,
+    icon: "🪞",
+    color: "#7aff6e",
+    cooldown: S.split_matrix.cooldown,
+    duration: S.split_matrix.duration,
+    baseEffect: 0.3,
+    effectPerLevel: S.split_matrix.levelEffect.multPerLevel,
+    effectCap: S.split_matrix.levelEffect.multCap,
+    cdReducePerLevel: S.split_matrix.levelEffect.cdReducePerLevel,
+  },
+  quantum_replay: {
+    id: "quantum_replay",
+    name: S.quantum_replay.name,
+    desc: S.quantum_replay.desc,
+    icon: "🔄",
+    color: "#b26bff",
+    cooldown: S.quantum_replay.cooldown,
+    duration: S.quantum_replay.duration,
+    baseEffect: 25,
+    effectPerLevel: S.quantum_replay.levelEffect.multPerLevel,
+    cdReducePerLevel: S.quantum_replay.levelEffect.cdReducePerLevel,
+  },
+  final_protocol: {
+    id: "final_protocol",
+    name: S.final_protocol.name,
+    desc: S.final_protocol.desc,
+    icon: "☠️",
+    color: "#ff4757",
+    cooldown: S.final_protocol.cooldown,
+    duration: S.final_protocol.duration,
+    baseEffect: 3,
+    effectPerLevel: S.final_protocol.levelEffect.multPerLevel,
+    effectCap: S.final_protocol.levelEffect.multCap,
+    goldMultWhileActive: S.final_protocol.goldMultWhileActive,
+    aspdMultWhileActive: S.final_protocol.aspdMultWhileActive,
+    cdReducePerLevel: S.final_protocol.levelEffect.cdReducePerLevel,
+  },
 };
 
-export const SKILL_IDS: SkillId[] = ["overclock", "critical_strike", "gold_collapse", "singularity_cannon"];
+export const SKILL_IDS: SkillId[] = ["overclock", "critical_strike", "gold_collapse", "singularity_cannon", "emp_burst", "time_freeze", "overload_combo", "data_flood", "charged_hit", "split_matrix", "quantum_replay", "final_protocol"];
 
 export function skillEffect(def: SkillDef, level: number): number {
   let eff = def.baseEffect + def.effectPerLevel * (level - 1);

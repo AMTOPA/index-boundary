@@ -179,6 +179,11 @@ export class GameEngine {
       superCrit = r.superCrit && !voidCrit;
       damage = damage.mul(Big.fromNumber(voidCrit ? 1 : r.mult));
     }
+    // 充能一击待发：下一次攻击 ×mult
+    if (this.buffs.chargedHit.pending) {
+      damage = damage.mul(Big.fromNumber(this.buffs.chargedHit.mult));
+      this.buffs.chargedHit.pending = false;
+    }
     this.applyHit(damage, crit, superCrit, true);
   }
 
@@ -199,6 +204,17 @@ export class GameEngine {
         const bonus = d.damagePerHit.mul(Big.fromNumber(d.everyNAttack));
         this.applyHit(bonus, false, false, false, true);
       }
+    }
+    // 充能一击待发：下一次自动攻击 ×mult
+    if (this.buffs.chargedHit.pending) {
+      const hit = d.damagePerHit.mul(Big.fromNumber(this.buffs.chargedHit.mult));
+      this.buffs.chargedHit.pending = false;
+      this.applyHit(hit, false, false, false);
+      if (whole > 1) {
+        const rest = whole - 1;
+        this.batchAttack(rest);
+      }
+      return;
     }
     // 临界打击待发
     if (this.buffs.criticalStrike.pending) {
@@ -458,11 +474,17 @@ export class GameEngine {
     this.spawnEnemy();
   }
 
+  private skillActive(id: SkillId): boolean {
+    const inst = this.state.skills.actives.find((s) => s.id === id);
+    return (inst?.activeUntil ?? 0) > this.timeSec;
+  }
+
   private tickBoss(dt: number): void {
     const c = this.state.combat;
     if (!c.isBoss) return;
     const drain = c.bossAffixes.includes("time") ? CONFIG.BOSS_TIME_DRAIN_MULT : 1;
-    c.bossTimer -= dt * drain;
+    // 时空冻结：Boss 计时暂停
+    if (!this.skillActive("time_freeze")) c.bossTimer -= dt * drain;
     if (c.bossAffixes.includes("regen")) {
       const maxHp = toBig(c.enemyMaxHp);
       const heal = maxHp.mul(Big.fromNumber(0.03 * dt));
@@ -639,10 +661,25 @@ export class GameEngine {
     if (result.action.kind === "critical_strike") {
       this.buffs.criticalStrike.pending = true;
       this.buffs.criticalStrike.mult = result.action.mult;
-    } else if (result.action.kind === "singularity_cannon") {
+    } else if (result.action.kind === "singularity_cannon" || result.action.kind === "emp_burst") {
       const dps = this.derived.dps;
       const damage = dps.mul(this.derived.skillDmgMult).mul(Big.fromNumber(result.action.mult));
       this.applyHit(damage, false, false, false, false, true);
+      if (result.action.kind === "emp_burst" && this.state.combat.isBoss) {
+        this.state.combat.bossTimer = Math.min(CONFIG.BOSS_TIMER_SEC, this.state.combat.bossTimer + result.action.bossFreezeSec);
+      }
+    } else if (result.action.kind === "data_flood") {
+      const gold = enemyGold(this.state.combat.stage).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
+      this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
+      this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
+    } else if (result.action.kind === "charged_hit") {
+      this.buffs.chargedHit.pending = true;
+      this.buffs.chargedHit.mult = result.action.mult;
+    } else if (result.action.kind === "quantum_replay") {
+      for (const inst of this.state.skills.actives) {
+        if (inst.id === id) continue;
+        inst.cdRemaining = Math.max(0, inst.cdRemaining - result.action.seconds);
+      }
     }
     this.recomputeDerived();
     return true;

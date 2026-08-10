@@ -21,11 +21,18 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
   const { engine } = useGame();
   const ref = useRef<HTMLCanvasElement>(null);
   const flashUntil = useRef(0);
+  const impact = useRef({ until: 0, strength: 0, duration: 190 });
 
   useEffect(() => {
     if (!engine) return;
     return engine.onEvent((ev) => {
-      if (ev.type === "hit") flashUntil.current = performance.now() + 90;
+      if (ev.type === "hit") {
+        const now = performance.now();
+        const strength = ev.crush ? 1 : ev.superCrit ? 0.82 : ev.crit ? 0.62 : 0.38;
+        flashUntil.current = now + (ev.crush ? 150 : ev.superCrit ? 125 : 90);
+        const duration = ev.crush ? 360 : ev.superCrit ? 280 : 190;
+        impact.current = { until: now + duration, strength, duration };
+      }
     });
   }, [engine]);
 
@@ -41,6 +48,9 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       const t = (now - t0) / 1000;
       ctx.clearRect(0, 0, SIZE, SIZE);
       const flash = now < flashUntil.current;
+      const impactProgress = impact.current.until > now
+        ? 1 - (impact.current.until - now) / impact.current.duration
+        : 0;
 
       // Boss 能量光环（在主体下方）
       if (isBoss) {
@@ -64,8 +74,12 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       for (const a of affixes) drawAffixEffect(ctx, t, a);
 
       // 受击白闪
+      if (impactProgress > 0) {
+        drawImpactPulse(ctx, impactProgress, worldColor, isBoss, impact.current.strength);
+      }
+
       if (flash) {
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.42 + impact.current.strength * 0.2;
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
         ctx.arc(CX, CY, (isBoss ? 74 : 54), 0, Math.PI * 2);
@@ -329,6 +343,22 @@ function drawEliteAura(ctx: CanvasRenderingContext2D, t: number): void {
 }
 
 // ---------- Boss 光环 ----------
+function drawImpactPulse(ctx: CanvasRenderingContext2D, progress: number, color: string, isBoss: boolean, strength: number): void {
+  const eased = 1 - Math.pow(1 - Math.min(1, progress), 3);
+  const radius = (isBoss ? 68 : 52) + eased * (isBoss ? 28 : 22);
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = Math.max(0, (1 - progress) * (0.18 + strength * 0.28));
+  ctx.strokeStyle = strength > 0.8 ? "#ffffff" : color;
+  ctx.lineWidth = 2 + strength * 3;
+  ctx.beginPath();
+  ctx.arc(CX, CY, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = Math.max(0, (1 - progress) * strength * 0.16);
+  glow(ctx, CX, CY, radius + 22, strength > 0.8 ? "#ffffff" : color, 0.8);
+  ctx.restore();
+}
+
 function drawBossHalo(ctx: CanvasRenderingContext2D, t: number, color: string, affixes: BossAffix[]): void {
   const r = 92 + Math.sin(t * 2) * 3;
   ctx.save();

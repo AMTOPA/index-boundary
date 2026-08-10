@@ -156,12 +156,13 @@ export interface RuntimeBuffs {
   aspdMult: number; // 面板攻速额外倍率（技能/消耗品）
   goldMult: number; // 金币倍率（技能/消耗品）
   criticalStrike: { pending: boolean; mult: number };
+  chargedHit: { pending: boolean; mult: number };
   chipActive: boolean;
   goldProtocolActive: boolean;
 }
 
 export function emptyBuffs(): RuntimeBuffs {
-  return { aspdMult: 1, goldMult: 1, criticalStrike: { pending: false, mult: 100 }, chipActive: false, goldProtocolActive: false };
+  return { aspdMult: 1, goldMult: 1, criticalStrike: { pending: false, mult: 100 }, chargedHit: { pending: false, mult: 500 }, chipActive: false, goldProtocolActive: false };
 }
 
 interface AffixAccum {
@@ -204,6 +205,10 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   const skillMap = new Map(state.skills.actives.map((s) => [s.id, s]));
   const overclockActive = (skillMap.get("overclock")?.activeUntil ?? 0) > timeSec;
   const goldCollapseActive = (skillMap.get("gold_collapse")?.activeUntil ?? 0) > timeSec;
+  const timeFreezeActive = (skillMap.get("time_freeze")?.activeUntil ?? 0) > timeSec;
+  const overloadActive = (skillMap.get("overload_combo")?.activeUntil ?? 0) > timeSec;
+  const splitActive = (skillMap.get("split_matrix")?.activeUntil ?? 0) > timeSec;
+  const finalProtocolActive = (skillMap.get("final_protocol")?.activeUntil ?? 0) > timeSec;
 
   // ---- 加池 / 累加器 ----
   const acc: AffixAccum = {
@@ -313,6 +318,12 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     const inst = skillMap.get("overclock");
     aspdMult *= skillEffect(def, inst ? inst.level : 1);
   }
+  if (timeFreezeActive) {
+    const def = SKILL_DEFS.time_freeze;
+    const inst = skillMap.get("time_freeze");
+    aspdMult *= skillEffect(def, inst ? inst.level : 1);
+  }
+  if (finalProtocolActive) aspdMult *= SKILL_DEFS.final_protocol.aspdMultWhileActive ?? 1;
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
   const effAps = effectiveAps(panelAps);
 
@@ -339,6 +350,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     goldMult = goldMult.mul(Big.fromNumber(skillEffect(def, inst ? inst.level : 1)));
   }
   if (buffs.goldProtocolActive) goldMult = goldMult.mul(Big.fromNumber(5));
+  if (finalProtocolActive) goldMult = goldMult.mul(Big.fromNumber(SKILL_DEFS.final_protocol.goldMultWhileActive ?? 1));
 
   // ---- 全局倍率 ----
   const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
@@ -348,9 +360,28 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // ---- 单次伤害（非暴击） ----
   const base = baseAttack(player.upgrades.attack).mul(weaponAtkMult);
   const atkMult = Big.fromNumber(1 + acc.atkPool);
+  // 过载连击：活跃期连击上限提升
+  if (overloadActive) {
+    const def = SKILL_DEFS.overload_combo;
+    const inst = skillMap.get("overload_combo");
+    acc.comboCapAdd += skillEffect(def, inst ? inst.level : 1);
+  }
+  const comboDmgMult = overloadActive ? (SKILL_DEFS.overload_combo.comboDmgMult ?? 1) : 1;
   const comboBonus = Math.min(CONFIG.COMBO_CAP + acc.comboCapAdd, state.combat.combo) * CONFIG.COMBO_BONUS_PER_HIT;
   let damagePerHit = base.mul(atkMult).mul(globalMult).mul(aspdOverflowMult).mul(perpetualMult);
-  damagePerHit = damagePerHit.mul(Big.fromNumber(1 + comboBonus));
+  damagePerHit = damagePerHit.mul(Big.fromNumber(1 + comboBonus * comboDmgMult));
+  // 分裂矩阵：最终伤害独立提升
+  if (splitActive) {
+    const def = SKILL_DEFS.split_matrix;
+    const inst = skillMap.get("split_matrix");
+    damagePerHit = damagePerHit.mul(Big.fromNumber(1 + skillEffect(def, inst ? inst.level : 1)));
+  }
+  // 终焉协议：攻击力独立倍率
+  if (finalProtocolActive) {
+    const def = SKILL_DEFS.final_protocol;
+    const inst = skillMap.get("final_protocol");
+    damagePerHit = damagePerHit.mul(Big.fromNumber(skillEffect(def, inst ? inst.level : 1)));
+  }
 
   const critMultExpected = expectedCritMult(critChance, critDamage, critLayersExtra);
   const dps = damagePerHit.mul(Big.fromNumber(critMultExpected)).mul(Big.fromNumber(Math.max(0.0001, effAps)));

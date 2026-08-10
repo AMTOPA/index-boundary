@@ -4,7 +4,7 @@ import type { Big, BigTuple } from "./bignum";
 export type UpgradeId = "attack" | "aspd" | "critChance" | "critDamage" | "gold";
 export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary" | "mythic" | "aberrant" | "singularity";
 export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "beacon" | "relic";
-export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon";
+export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon" | "emp_burst" | "time_freeze" | "overload_combo" | "data_flood" | "charged_hit" | "split_matrix" | "quantum_replay" | "final_protocol";
 export type TreeId = "destruction" | "automation" | "greed";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip";

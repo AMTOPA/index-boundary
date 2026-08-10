@@ -170,9 +170,50 @@ export const CONFIG = {
       cooldown: 120, duration: 0,
       levelEffect: { multPerLevel: 100, cdReducePerLevel: 4 },
     },
-  } as Record<string, { name: string; desc: string; cooldown: number; duration: number; levelEffect: { multPerLevel: number; multCap?: number; cdReducePerLevel: number } }>,
+    emp_burst: {
+      name: "电磁脉冲", desc: "立即造成 DPS×60 伤害，Boss 剩余时间 +8 秒",
+      cooldown: 45, duration: 0, empFreezeSec: 8,
+      levelEffect: { multPerLevel: 20, cdReducePerLevel: 1 },
+    },
+    time_freeze: {
+      name: "时空冻结", desc: "8 秒内攻速 ×1.5，Boss 计时暂停",
+      cooldown: 90, duration: 8,
+      levelEffect: { multPerLevel: 0.15, multCap: 3, cdReducePerLevel: 2 },
+    },
+    overload_combo: {
+      name: "过载连击", desc: "12 秒内连击上限 +40，连击伤害 ×1.5",
+      cooldown: 60, duration: 12, comboDmgMult: 1.5,
+      levelEffect: { multPerLevel: 10, multCap: 80, cdReducePerLevel: 1.5 },
+    },
+    data_flood: {
+      name: "数据洪流", desc: "立即获得当前关卡金币 ×300（受金币倍率）",
+      cooldown: 75, duration: 0,
+      levelEffect: { multPerLevel: 100, cdReducePerLevel: 2 },
+    },
+    charged_hit: {
+      name: "充能一击", desc: "下一次攻击 ×250",
+      cooldown: 50, duration: 0,
+      levelEffect: { multPerLevel: 50, cdReducePerLevel: 1 },
+    },
+    split_matrix: {
+      name: "分裂矩阵", desc: "10 秒内最终伤害 ×1.25",
+      cooldown: 70, duration: 10,
+      levelEffect: { multPerLevel: 0.1, multCap: 0.75, cdReducePerLevel: 1.5 },
+    },
+    quantum_replay: {
+      name: "量子重演", desc: "所有其他技能冷却 -25 秒",
+      cooldown: 120, duration: 0,
+      levelEffect: { multPerLevel: 5, cdReducePerLevel: 3 },
+    },
+    final_protocol: {
+      name: "终焉协议", desc: "20 秒内攻击 ×3、金币 ×2、攻速 -50%",
+      cooldown: 150, duration: 20, goldMultWhileActive: 2, aspdMultWhileActive: 0.5,
+      levelEffect: { multPerLevel: 0.5, multCap: 6, cdReducePerLevel: 3 },
+    },
+  } as Record<string, { name: string; desc: string; cooldown: number; duration: number; levelEffect: { multPerLevel: number; multCap?: number; cdReducePerLevel: number }; empFreezeSec?: number; comboDmgMult?: number; goldMultWhileActive?: number; aspdMultWhileActive?: number }>,
   SKILL_CORE_COSTS: [1, 2, 3, 5, 8, 13, 21, 34], // 升级到下一级所需核心（累计）
   SKILL_PASSIVE_PER_LEVEL: 0.05, // 节律协议：每级 +5% 自动攻速（独立）
+  SKILL_CAST_WALL_SEC: 6, // 模拟器：击杀时间超过该值视为卡墙，才释放爆发技能
   // 永久工具（金币购买，金币沉淀口）
   TOOLS: {
     auto_upgrade: [1, 3], // 1000

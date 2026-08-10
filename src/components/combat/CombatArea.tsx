@@ -27,15 +27,21 @@ export function CombatArea() {
   const autoAttack = useGameSelector((s) => s.meta.unlocks.includes("auto_attack"));
   const derived = useDerived();
   const [shake, setShake] = useState(false);
+  const [impact, setImpact] = useState<"crush" | "boss">("crush");
   const shakeTimer = useRef(0);
 
   useEffect(() => {
     if (!engine) return;
     return engine.onEvent((ev) => {
       if (ev.type === "crush" || ev.type === "bossKill" || ev.type === "bossFail") {
+        const nextImpact = ev.type === "crush" ? "crush" : "boss";
+        setImpact(nextImpact);
         setShake(true);
         window.clearTimeout(shakeTimer.current);
-        shakeTimer.current = window.setTimeout(() => setShake(false), 360);
+        shakeTimer.current = window.setTimeout(() => {
+          setShake(false);
+          setImpact("crush");
+        }, nextImpact === "boss" ? 560 : 460);
       }
     });
   }, [engine]);
@@ -53,7 +59,7 @@ export function CombatArea() {
 
   return (
     <div
-      className={`panel combat ${shake ? "shake" : ""}`}
+      className={`panel combat ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""}`}
       style={{ ["--world-color" as string]: world.color }}
     >
       <div className="stage-info">

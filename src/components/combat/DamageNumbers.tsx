@@ -28,8 +28,9 @@ export function DamageNumbers() {
       const layer = layerRef.current;
       if (!layer) return;
       const rect = layer.getBoundingClientRect();
-      const x = 30 + Math.random() * (rect.width - 80);
-      const y = 40 + Math.random() * (rect.height * 0.4);
+      const spread = Math.max(40, rect.width - 72);
+      const x = Math.min(Math.max(18, 30 + Math.random() * spread), Math.max(18, rect.width - 52));
+      const y = Math.max(30, 40 + Math.random() * (rect.height * 0.4));
       const damage = toBig(ev.damage);
       const text = formatBig(damage);
       const item: Num = {
@@ -55,6 +56,7 @@ export function DamageNumbers() {
           key={n.id}
           className={`dmg ${n.crit ? "crit" : ""} ${n.superCrit ? "super" : ""} ${n.crush ? "crush" : ""}`}
           style={{ left: n.x, top: n.y }}
+          data-impact={n.crush ? "crush" : n.superCrit ? "super" : n.crit ? "crit" : "normal"}
         >
           {n.text}
         </div>

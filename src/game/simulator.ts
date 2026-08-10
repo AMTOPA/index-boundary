@@ -1,9 +1,9 @@
 // 自动玩家模拟器：headless 运行引擎，模拟理性玩家的购买/技能/装备/天赋/重构决策。
 // 用于 /dev/balance 页面与 scripts/balance.ts、scripts/smoke.ts（不依赖 DOM，可 Node 运行）。
 import { GameEngine, createNewState } from "./engine";
-import { Big } from "./bignum";
+import { Big, toBig } from "./bignum";
 import { CONFIG } from "./config";
-import { SKILL_IDS } from "./data/skills";
+import { SKILL_IDS, SKILL_DEFS } from "./data/skills";
 import { TALENT_NODES } from "./data/talents";
 import type { EquipInstance } from "./types";
 
@@ -92,9 +92,17 @@ function unlockSkills(eng: GameEngine): void {
 }
 
 function castReadySkills(eng: GameEngine): void {
+  const c = eng.state.combat;
+  const boss = c.isBoss;
+  const killTime = toBig(c.enemyHp).div(eng.derived.dps).toNumber();
+  const walled = Number.isFinite(killTime) && killTime > CONFIG.SKILL_CAST_WALL_SEC;
   for (const id of SKILL_IDS) {
     const inst = eng.state.skills.actives.find((s) => s.id === id);
-    if (inst && inst.cdRemaining <= 0 && !inst.active) eng.cast(id);
+    if (!inst || inst.cdRemaining > 0 || inst.active) continue;
+    // 持续增益类随时保持；瞬时爆发类只在 Boss 战/卡墙时释放（模拟理性玩家）
+    const isBurst = SKILL_DEFS[id].duration === 0;
+    if (isBurst && !(boss || walled)) continue;
+    eng.cast(id);
   }
 }
 

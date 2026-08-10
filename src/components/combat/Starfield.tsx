@@ -10,7 +10,7 @@ export function Starfield({ tint }: { tint: string }) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     let W = 0;
     let H = 0;
     let raf = 0;
@@ -24,7 +24,8 @@ export function Starfield({ tint }: { tint: string }) {
     };
     resize();
 
-    const stars = Array.from({ length: 110 }, () => ({
+    const stars = Array.from({ length: 110 }, (_, i) => ({
+      accent: i % 11 === 0,
       x: Math.random(),
       y: Math.random(),
       r: 0.4 + Math.random() * 1.4,
@@ -41,10 +42,15 @@ export function Starfield({ tint }: { tint: string }) {
         if (s.y > 1.02) { s.y = -0.02; s.x = Math.random(); }
         const a = 0.25 + 0.45 * (0.5 + 0.5 * Math.sin(s.tw + t * 2.2));
         ctx.globalAlpha = Math.max(0, a);
-        ctx.fillStyle = "#dfe8ff";
+        ctx.fillStyle = s.accent ? tint : "#dfe8ff";
         ctx.beginPath();
         ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
         ctx.fill();
+        if (s.r > 1.35) {
+          ctx.globalAlpha = Math.min(0.45, a * 0.62);
+          ctx.fillRect(s.x * W - s.r * 2.4, s.y * H - 0.35, s.r * 4.8, 0.7);
+          ctx.fillRect(s.x * W - 0.35, s.y * H - s.r * 2.4, 0.7, s.r * 4.8);
+        }
       }
       ctx.globalAlpha = 1;
       // 星云色调（低透明度，跟随世界色）
@@ -54,6 +60,11 @@ export function Starfield({ tint }: { tint: string }) {
       g.addColorStop(1, "transparent");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
+      const horizon = ctx.createLinearGradient(0, H * 0.52, 0, H);
+      horizon.addColorStop(0, "transparent");
+      horizon.addColorStop(1, "rgba(3,7,16,0.28)");
+      ctx.fillStyle = horizon;
+      ctx.fillRect(0, H * 0.52, W, H * 0.48);
       raf = requestAnimationFrame(draw);
     };
     draw();
