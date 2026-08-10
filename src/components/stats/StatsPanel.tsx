@@ -1,13 +1,71 @@
 "use client";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
-import { NumberDisplay } from "@/components/common/NumberDisplay";
 import { toBig } from "@/game/bignum";
 import { formatBig, formatNumber, formatDuration, formatPct } from "@/game/format";
+import { CONFIG } from "@/game/config";
+import {
+  enemyHp, enemyGold, bossHp, upgradeCost, prestigeEnergy, prestigeGlobalMult,
+  expectedCritMult, effectiveAps, goldMultFromLevel,
+} from "@/game/formulas";
+import type { UpgradeId } from "@/game/types";
+
+const UPGRADE_IDS: UpgradeId[] = ["attack", "aspd", "critChance", "critDamage", "gold"];
+const UPGRADE_LABEL: Record<UpgradeId, string> = {
+  attack: "攻击", aspd: "攻速", critChance: "暴击率", critDamage: "暴伤", gold: "金币",
+};
 
 export function StatsPanel() {
   const stats = useGameSelector((s) => s.statistics);
   const recorder = useGameSelector((s) => s.items.tools.combat_recorder === true);
+  const stage = useGameSelector((s) => s.combat.stage);
+  const upgrades = useGameSelector((s) => s.player.upgrades);
+  const prestige = useGameSelector((s) => s.prestige);
   const d = useDerived();
+
+  // ---- 实时战斗指标（估算） ----
+  const killTimeSec = (() => {
+    const hp = enemyHp(stage);
+    const t = hp.div(d.dps).toNumber();
+    return Number.isFinite(t) ? Math.max(0.001, t) : Infinity;
+  })();
+  const goldPerSec = (() => {
+    if (!Number.isFinite(killTimeSec)) return Infinity;
+    return enemyGold(stage).mul(d.goldMult).div(d.dps).toNumber();
+  })();
+  const bossKillSec = (() => {
+    const eff = d.dps.mul(d.bossDmgMult);
+    const t = bossHp(stage).div(eff).toNumber();
+    return Number.isFinite(t) ? t : Infinity;
+  })();
+
+  // ---- 升级回本（估算）：成本 / (金币每秒 × 提升比例) ----
+  const paybacks = UPGRADE_IDS.map((id) => {
+    const lv = upgrades[id] ?? 0;
+    const cost = upgradeCost(id, lv).toNumber();
+    let gain = 0;
+    if (id === "attack") gain = 1.12 - 1;
+    else if (id === "aspd") {
+      const next = effectiveAps(d.panelAps * CONFIG.UPGRADES.aspd.effectPerLevel);
+      gain = next / Math.max(0.0001, d.effectiveAps) - 1;
+    } else if (id === "critChance") {
+      gain = expectedCritMult(d.critChance + CONFIG.UPGRADES.critChance.perLevel, d.critDamage, d.critLayersExtra) /
+        Math.max(1, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra)) - 1;
+    } else if (id === "critDamage") {
+      gain = expectedCritMult(d.critChance, d.critDamage + CONFIG.UPGRADES.critDamage.perLevel, d.critLayersExtra) /
+        Math.max(1, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra)) - 1;
+    } else if (id === "gold") {
+      gain = goldMultFromLevel(lv + 1) / Math.max(0.0001, goldMultFromLevel(lv)) - 1;
+    }
+    if (!Number.isFinite(cost) || cost <= 0 || gain <= 0.001 || !Number.isFinite(goldPerSec) || goldPerSec <= 0) {
+      return { id, cost, payback: Infinity };
+    }
+    return { id, cost, payback: cost / (goldPerSec * gain) };
+  });
+
+  // ---- 重构预计 ----
+  const runMag = toBig(stats.runDamage).log10();
+  const previewEnergy = prestigeEnergy(toBig(stats.runDamage));
+  const previewMult = prestigeGlobalMult(prestige.energy + previewEnergy, prestige.purchases.singularityAmp ?? 0);
 
   return (
     <div className="panel">
@@ -27,6 +85,36 @@ export function StatsPanel() {
       )}
       {recorder && (
         <>
+          <h3 style={{ marginTop: 12 }}>实时战斗指标（估算）</h3>
+          <div className="stat-grid">
+            <div className="stat-item"><div className="k">面板 DPS（无暴击）</div><div className="v mono">{formatBig(d.damagePerHit.mul(toBig(Math.max(0.0001, d.effectiveAps))))}</div></div>
+            <div className="stat-item"><div className="k">期望 DPS（含暴击）</div><div className="v mono">{formatBig(d.dps)}</div></div>
+            <div className="stat-item"><div className="k">金币/秒（当前关）</div><div className="v mono">{Number.isFinite(goldPerSec) ? formatNumber(goldPerSec) : "∞"}</div></div>
+            <div className="stat-item"><div className="k">平均击杀时间</div><div className="v mono">{Number.isFinite(killTimeSec) ? formatDuration(killTimeSec) : "∞"}</div></div>
+            <div className="stat-item"><div className="k">Boss 预计击杀</div><div className="v mono">{Number.isFinite(bossKillSec) ? formatDuration(bossKillSec) : "∞"}</div></div>
+            <div className="stat-item"><div className="k">当前关卡</div><div className="v mono">{stage}</div></div>
+          </div>
+
+          <h3 style={{ marginTop: 12 }}>升级回本（估算）</h3>
+          <div className="stat-grid">
+            {paybacks.map((p) => (
+              <div className="stat-item" key={p.id}>
+                <div className="k">{UPGRADE_LABEL[p.id]} · 成本 {p.cost === Infinity ? "∞" : formatNumber(p.cost)}</div>
+                <div className="v mono" style={{ color: Number.isFinite(p.payback) && p.payback < 60 ? "var(--green)" : "var(--text)" }}>
+                  {Number.isFinite(p.payback) ? formatDuration(p.payback) : "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{ marginTop: 12 }}>重构预计</h3>
+          <div className="stat-grid">
+            <div className="stat-item"><div className="k">本局伤害</div><div className="v mono">{formatBig(toBig(stats.runDamage))}</div></div>
+            <div className="stat-item"><div className="k">伤害数量级</div><div className="v mono">{Number.isFinite(runMag) ? `10^${runMag.toFixed(1)}` : "—"}</div></div>
+            <div className="stat-item"><div className="k">重构可获能量</div><div className="v mono" style={{ color: "var(--super)" }}>{formatNumber(previewEnergy)}</div></div>
+            <div className="stat-item"><div className="k">新全局倍率</div><div className="v mono">{formatBig(previewMult)}</div></div>
+          </div>
+
           <h3 style={{ marginTop: 12 }}>完整统计</h3>
           <div className="stat-grid">
             <div className="stat-item"><div className="k">总伤害</div><div className="v mono">{formatBig(toBig(stats.totalDamage))}</div></div>
@@ -35,7 +123,7 @@ export function StatsPanel() {
             <div className="stat-item"><div className="k">击杀 / Boss</div><div className="v mono">{formatNumber(stats.totalKills)} / {formatNumber(stats.totalBossKills)}</div></div>
             <div className="stat-item"><div className="k">精英 / 宝箱怪</div><div className="v mono">{formatNumber(stats.totalEliteKills)} / {formatNumber(stats.totalMimicKills)}</div></div>
             <div className="stat-item"><div className="k">点击 / 暴击</div><div className="v mono">{formatNumber(stats.totalClicks)} / {formatNumber(stats.totalCrits)}</div></div>
-            <div className="stat-item"><div className="k">超暴击</div><div className="v mono">{formatNumber(stats.totalSuperCrits)}</div></div>
+            <div className="stat-item"><div className="k">超暴击 / 技能</div><div className="v mono">{formatNumber(stats.totalSuperCrits)} / {formatNumber(stats.totalSkillCasts)}</div></div>
             <div className="stat-item"><div className="k">重构次数</div><div className="v mono">{formatNumber(stats.totalPrestiges)}</div></div>
             <div className="stat-item"><div className="k">最高关卡</div><div className="v mono">{formatNumber(stats.allTimeMaxStage)}</div></div>
             <div className="stat-item"><div className="k">在线时长</div><div className="v">{formatDuration(stats.totalPlayTimeMs / 1000)}</div></div>
@@ -49,6 +137,8 @@ export function StatsPanel() {
             <div className="stat-item"><div className="k">重构倍率</div><div className="v mono">×{formatBig(d.prestigeMult)}</div></div>
             <div className="stat-item"><div className="k">全局倍率</div><div className="v mono">×{formatBig(d.globalMult)}</div></div>
             <div className="stat-item"><div className="k">技能倍率</div><div className="v mono">×{formatBig(d.skillDmgMult)}</div></div>
+            <div className="stat-item"><div className="k">技能冷却</div><div className="v mono">×{d.skillCdMult.toFixed(2)}</div></div>
+            <div className="stat-item"><div className="k">技能持续</div><div className="v mono">×{d.skillDurationMult.toFixed(2)}</div></div>
           </div>
         </>
       )}
