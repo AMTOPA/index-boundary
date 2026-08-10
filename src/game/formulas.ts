@@ -1,7 +1,7 @@
 // 纯数学层：无副作用，全部输入输出可测
 import { Big, toBig } from "./bignum";
 import { CONFIG, milestoneMultFor } from "./config";
-import type { ChallengeId, DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
+import type { ChallengeId, ChallengePermKind, DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { leapAllStatsMult } from "./systems/leap";
 import { lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
@@ -16,6 +16,16 @@ export function activeMods(state: GameState): ChallengeId[] {
 }
 
 // 赛季分 = 关卡 × (1 + 每个修饰符权重之和)；取整
+export function challengePermMult(state: GameState, kind: ChallengePermKind): number {
+  let m = 1;
+  const ch = state.challenges ?? {};
+  for (const id of Object.keys(ch) as ChallengeId[]) {
+    const def = CONFIG.CHALLENGES[id];
+    if (ch[id]?.claimed && def?.perm?.kind === kind) m *= def.perm.mult;
+  }
+  return m;
+}
+
 export function seasonScore(stage: number, mods: ChallengeId[]): number {
   const mult = 1 + mods.length * CONFIG.SEASON.WEIGHT_PER_MODIFIER;
   return Math.floor(stage * mult);
@@ -251,6 +261,8 @@ function applyAffix(stat: string, value: number, acc: AffixAccum): void {
 
 export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: number): DerivedStats {
   const { player, equipment, talents, prestige, statistics } = state;
+  const mods = activeMods(state);
+  const inChallenge = mods.length > 0;
 
   // ---- 技能活动状态（基于技能实例的 activeUntil）----
   const skillMap = new Map(state.skills.actives.map((s) => [s.id, s]));
@@ -381,7 +393,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   const apsCapAdd = lawApsCapAdd(state);
   const goldToDmgMult = lawGoldToDmgMult(state);
   // ---- 攻速 ----
-  let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult;
+  let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult * challengePermMult(state, "aspd");
   aspdMult *= 1 + (state.skills.passives?.rhythm ?? 0) * CONFIG.SKILL_PASSIVES.rhythm.effectPerLevel;
   if (overclockActive) {
     const def = SKILL_DEFS.overclock;
@@ -395,7 +407,6 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   if (finalProtocolActive) aspdMult *= SKILL_DEFS.final_protocol.aspdMultWhileActive ?? 1;
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
-  const mods = activeMods(state);
   // 挑战修饰符：慢速宇宙——攻速减半
   if (mods.includes("slow_universe")) panelAps *= 0.5;
   const effAps = effectiveAps(panelAps + apsCapTalent, apsCapAdd);
@@ -425,7 +436,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   const hpGrowth = Math.max(1.05, CONFIG.HP_GROWTH - (state.leap?.purchases?.lawExponent ?? 0) * CONFIG.LEAP.SHOP.lawExponent.perLevel - hpGrowthReductionTalent);
 
   // ---- 全局倍率（重构/里程碑）----
-  const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
+  const prestigeMult = inChallenge && CONFIG.CHALLENGE_DISABLE_PRESTIGE ? Big.ONE : prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
   const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
 
   // ---- 金币 ----
@@ -442,6 +453,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   if (finalProtocolActive) goldMult = goldMult.mul(Big.fromNumber(SKILL_DEFS.final_protocol.goldMultWhileActive ?? 1));
   // 挑战修饰符：贫困——金币减半
   if (mods.includes("poverty")) goldMult = goldMult.mul(Big.fromNumber(0.5));
+  // challenge permanent reward: gold x1.2 etc
+  goldMult = goldMult.mul(Big.fromNumber(challengePermMult(state, "gold")));
 
   // ---- 全局倍率 ----
   const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult);
@@ -482,13 +495,15 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     critDamage,
     panelAps,
     effectiveAps: effAps,
+    apsCapAdd,
+    apsCapTalent,
     goldMult,
-    clickMult: acc.clickMult,
+    clickMult: acc.clickMult.mul(Big.fromNumber(challengePermMult(state, "click"))),
     comboBonus,
     damagePerHit,
     dps,
-    bossDmgMult: acc.bossDmgMult,
-    skillDmgMult: acc.skillDmgMult,
+    bossDmgMult: acc.bossDmgMult.mul(Big.fromNumber(challengePermMult(state, "boss"))),
+    skillDmgMult: acc.skillDmgMult.mul(Big.fromNumber(challengePermMult(state, "skill"))),
     skillCdMult: Math.max(0.5, (1 - acc.skillCdPool) * (mods.includes("skill_slow") ? 2 : 1)),
     skillDurationMult: 1 + acc.skillDurationPool,
     overflowEffMult: acc.overflowEffMult,

@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, ChallengeId, DailyQuestType, LawId, LeapUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, LawId, LeapUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -25,6 +25,7 @@ export const CONFIG = {
   HP_SOFT_FLOOR: 1.05, // 软化下限（与 hpGrowth 全局下限一致）
   HP_SOFT_DECAY: 700, // 软化速度：每 +700 关向 1.05 逼近一半 // 可调 1.15~1.22
   GOLD_HP_EXPONENT: 0.92,
+  CHALLENGE_DISABLE_PRESTIGE: true, // 挑战/赛季进行中禁用重构（奇点能量）全局倍率
   BOSS_EVERY: 10,
   BOSS_HP_MULT: 20,
   BOSS_TIMER_SEC: 30,
@@ -50,6 +51,7 @@ export const CONFIG = {
   CRIT_OVERFLOW_TO_CRITDMG: 0.5, // 总暴击率每溢出 100% → 暴击伤害 ×(1+0.5)，有界转化，避免概率>100% 无意义
   BASE_APS: 1,
   APS_SOFT_CAP: 10,
+  UPGRADE_NEAR_CAP_RATIO: 0.005, // 升级下一级有效收益 < 0.5% 视为近上限（隐藏购买按钮）
 
   // 连击
   COMBO_WINDOW_SEC: 3,
@@ -238,12 +240,12 @@ export const CONFIG = {
   SKILL_CAST_WALL_SEC: 6, // 模拟器：击杀时间超过该值视为卡墙，才释放爆发技能
   // 挑战模式（可选难度修饰符 + 一次性通关奖励）
   CHALLENGES: {
-    no_crit: { name: "无暴击", desc: "暴击率恒为 0——攻速 / 连击 / 技能流的主场", icon: "🚫", target: 200, rewardCores: 5, rewardTalent: 1 },
-    slow_universe: { name: "慢速宇宙", desc: "攻速 ×0.5——考验单发伤害与爆发窗口", icon: "🐢", target: 200, rewardCores: 5, rewardTalent: 1 },
-    poverty: { name: "贫困", desc: "金币 ×0.5——考验资源效率与跳关能力", icon: "🪙", target: 150, rewardCores: 5, rewardTalent: 1 },
-    durable: { name: "顽石外壳", desc: "敌人生命 ×2——考验单发伤害与持续输出上限", icon: "🛡️", target: 200, rewardCores: 5, rewardTalent: 1 },
-    skill_slow: { name: "技能迟滞", desc: "主动技能冷却 ×2——考验技能释放节奏与被动构筑", icon: "⏳", target: 200, rewardCores: 5, rewardTalent: 1 },
-  } as Record<ChallengeId, { name: string; desc: string; icon: string; target: number; rewardCores: number; rewardTalent: number }>,
+    no_crit: { name: "无暴击", desc: "暴击率恒为 0——攻速 / 连击 / 技能流的主场", icon: "🚫", target: 200, rewardCores: 5, rewardTalent: 1, perm: { label: "点击伤害 ×1.2", kind: "click", mult: 1.2 } },
+    slow_universe: { name: "慢速宇宙", desc: "攻速 ×0.5——考验单发伤害与爆发窗口", icon: "🐢", target: 200, rewardCores: 5, rewardTalent: 1, perm: { label: "攻击速度 ×1.2", kind: "aspd", mult: 1.2 } },
+    poverty: { name: "贫困", desc: "金币 ×0.5——考验资源效率与跳关能力", icon: "🪙", target: 150, rewardCores: 5, rewardTalent: 1, perm: { label: "金币收益 ×1.2", kind: "gold", mult: 1.2 } },
+    durable: { name: "顽石外壳", desc: "敌人生命 ×2——考验单发伤害与持续输出上限", icon: "🛡️", target: 200, rewardCores: 5, rewardTalent: 1, perm: { label: "Boss 伤害 ×1.2", kind: "boss", mult: 1.2 } },
+    skill_slow: { name: "技能迟滞", desc: "主动技能冷却 ×2——考验技能释放节奏与被动构筑", icon: "⏳", target: 200, rewardCores: 5, rewardTalent: 1, perm: { label: "技能伤害 ×1.2", kind: "skill", mult: 1.2 } },
+  } as Record<ChallengeId, { name: string; desc: string; icon: string; target: number; rewardCores: number; rewardTalent: number; perm: { label: string; kind: ChallengePermKind; mult: number } }>,
 
   // 试炼赛季（Roguelite 挑战赛季：自选 1~3 个修饰符叠加冲分）
   SEASON: {
@@ -269,13 +271,13 @@ export const CONFIG = {
     ] as { id: string; type: DailyQuestType; label: string; targets: number[]; rewardCores: number }[],
   },  // 永久工具（金币购买，金币沉淀口）
   TOOLS: {
-    auto_upgrade: [1, 3], // 1000
-    auto_boss: [1, 5], // 100k
-    auto_breakdown: [1, 6], // 1M
-    combat_recorder: [1, 7], // 10M
-    auto_skill: [1, 8], // 100M
-    auto_equip: [1, 9], // 1e9
-    auto_prestige: [1, 12], // 1e12
+    auto_upgrade: [1, 5], // 1e5
+    auto_boss: [1, 7], // 1e7
+    auto_breakdown: [1, 8], // 1e8
+    combat_recorder: [1, 10], // 1e10
+    auto_skill: [1, 12], // 1e12
+    auto_equip: [1, 14], // 1e14
+    auto_prestige: [1, 24], // 1e24
   } as Record<ToolId, BigTuple>,
 
   // 天赋

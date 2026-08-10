@@ -1,6 +1,6 @@
 "use client";
 import { useGame } from "@/components/game/GameProvider";
-import { useGameSelector } from "@/components/common/hooks";
+import { useGameSelector, useDerived } from "@/components/common/hooks";
 import { NumberDisplay } from "@/components/common/NumberDisplay";
 import { toBig } from "@/game/bignum";
 import { formatBig, formatPct } from "@/game/format";
@@ -8,6 +8,7 @@ import {
   upgradeCost, attackMult, panelApsFromLevel, effectiveAps,
   critChanceFromLevel, critDamageFromLevel, goldMultFromLevel,
 } from "@/game/formulas";
+import { CONFIG } from "@/game/config";
 import type { UpgradeId } from "@/game/types";
 
 interface UpgradeDef {
@@ -17,6 +18,7 @@ interface UpgradeDef {
   gate: string | null;
   effect: (level: number) => string;
   nextEffect: (level: number) => string;
+  gainRatio: (level: number) => number; // 下一级收益倍率（用于判断是否接近上限）
 }
 
 const DEFS: UpgradeDef[] = [
@@ -24,36 +26,53 @@ const DEFS: UpgradeDef[] = [
     id: "attack", name: "攻击", icon: "⚔️", gate: null,
     effect: (lv) => `×${formatBig(attackMult(lv))}`,
     nextEffect: (lv) => `×${formatBig(attackMult(lv + 1))}`,
+    gainRatio: (lv) => attackMult(lv + 1).div(attackMult(lv)).toNumber() - 1,
   },
   {
     id: "aspd", name: "攻速", icon: "⚡", gate: "aspd_upgrade",
     effect: (lv) => `${effectiveAps(panelApsFromLevel(lv)).toFixed(2)}/s`,
     nextEffect: (lv) => `${effectiveAps(panelApsFromLevel(lv + 1)).toFixed(2)}/s`,
+    gainRatio: (lv) => effectiveAps(panelApsFromLevel(lv + 1)) / effectiveAps(panelApsFromLevel(lv)) - 1,
   },
   {
     id: "critChance", name: "暴击率", icon: "🎯", gate: "crit",
     effect: (lv) => formatPct(critChanceFromLevel(lv)),
     nextEffect: (lv) => formatPct(critChanceFromLevel(lv + 1)),
+    gainRatio: (lv) => critChanceFromLevel(lv + 1) / critChanceFromLevel(lv) - 1,
   },
   {
     id: "critDamage", name: "暴击伤害", icon: "💥", gate: "crit",
     effect: (lv) => `×${critDamageFromLevel(lv).toFixed(2)}`,
     nextEffect: (lv) => `×${critDamageFromLevel(lv + 1).toFixed(2)}`,
+    gainRatio: (lv) => critDamageFromLevel(lv + 1) / critDamageFromLevel(lv) - 1,
   },
   {
     id: "gold", name: "金币", icon: "💰", gate: null,
     effect: (lv) => `×${goldMultFromLevel(lv).toFixed(2)}`,
     nextEffect: (lv) => `×${goldMultFromLevel(lv + 1).toFixed(2)}`,
+    gainRatio: (lv) => goldMultFromLevel(lv + 1) / goldMultFromLevel(lv) - 1,
   },
 ];
+
+const BULK_STEPS = [10, 25, 100];
 
 export function UpgradePanel() {
   const { engine } = useGame();
   const upgrades = useGameSelector((s) => s.player.upgrades);
   const gold = useGameSelector((s) => s.player.gold);
   const unlocks = useGameSelector((s) => s.meta.unlocks);
+  const derived = useDerived();
 
   const goldBig = toBig(gold);
+
+  // 攻速：面板攻速达到软上限（含天赋/法则破限）即视为“已升满”，隐藏购买按钮
+  const aspdSoftCap = CONFIG.APS_SOFT_CAP + derived.apsCapAdd + derived.apsCapTalent;
+  const isNearCap = (id: UpgradeId, level: number): boolean => {
+    if (level <= 0) return false;
+    if (id === "aspd") return panelApsFromLevel(level) + derived.apsCapTalent >= aspdSoftCap;
+    const def = DEFS.find((d) => d.id === id);
+    return def ? def.gainRatio(level) < CONFIG.UPGRADE_NEAR_CAP_RATIO : false;
+  };
   return (
     <div className="panel">
       <div className="panel-title">
@@ -65,6 +84,7 @@ export function UpgradePanel() {
         const cost = upgradeCost(def.id, level);
         const afford = goldBig.gte(cost);
         const gated = def.gate !== null && !unlocks.includes(def.gate);
+        const nearCap = !gated && isNearCap(def.id, level);
         return (
           <div className="upgrade-row" key={def.id} style={gated ? { opacity: 0.4 } : undefined}>
             <div className="upgrade-info">
@@ -72,20 +92,22 @@ export function UpgradePanel() {
               <div className="upgrade-effect">{def.effect(level)}{def.gate === null || unlocks.includes(def.gate!) ? ` → ${def.nextEffect(level)}` : "（未解锁）"}</div>
               <div className="upgrade-cost">费用 <NumberDisplay value={cost} /></div>
             </div>
-            {!gated && (
+            {!gated && !nearCap && (
               <div className="upgrade-buy">
                 <button className={`buy-btn ${afford ? "afford" : ""}`} disabled={!afford} onClick={() => engine?.buyUpgrade(def.id)}>购买</button>
+                <div className="buy-counts">
+                  {BULK_STEPS.map((n) => (
+                    <button key={n} className="mini-btn" onClick={() => engine?.buyUpgradeTimes(def.id, n)}>×{n}</button>
+                  ))}
+                </div>
               </div>
+            )}
+            {!gated && nearCap && (
+              <span className="near-cap-tag">{def.id === "aspd" ? "已达攻速软上限" : "已近上限"}</span>
             )}
           </div>
         );
       })}
-      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-        {[10, 25, 100].map((n) => (
-          <button key={n} className="mini-btn" onClick={() => engine?.buyUpgradeTimes("attack", n)}>攻击×{n}</button>
-        ))}
-        <button className="mini-btn" onClick={() => engine?.buyUpgradeTimes("attack", 500)}>攻击 MAX</button>
-      </div>
     </div>
   );
 }

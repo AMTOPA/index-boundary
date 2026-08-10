@@ -133,7 +133,7 @@ describe("V6 内容：自动换装工具", () => {
 
   it("购买工具后自动装备评分更高的装备", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 9];
+    st.player.gold = [1, 15]; // 1e15 ≥ 1e14（auto_equip 新价）
     const eng = new GameEngine(st);
     const weak: EquipInstance = { uid: "w1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1 }, affixes: [] };
     const strong: EquipInstance = { uid: "w2", slot: "weapon", rarity: "rare", level: 0, main: { stat: "atkPct", mult: 3.5 }, affixes: [{ stat: "atkPct", value: 0.2 }, { stat: "critDmg", value: 0.5 }] };

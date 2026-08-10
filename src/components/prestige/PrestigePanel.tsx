@@ -93,7 +93,10 @@ export function PrestigePanel() {
 
       <h3 style={{ marginTop: 14 }}>挑战模式</h3>
       <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-        开启挑战会重置本局（关卡/金币/升级），保留装备/技能/天赋/永久升级。通关一次领取永久奖励。
+        开启挑战会重置本局（关卡/金币/升级），保留装备/技能/天赋/永久升级。通关一次领取永久奖励（永久加成）。
+      </p>
+      <p style={{ fontSize: 12, color: "var(--danger)", marginBottom: 8 }}>
+        ⚠ 挑战 / 赛季进行中禁用重构（奇点能量）全局倍率，请真正构筑 Build 通关。
       </p>
       {CHALLENGE_ORDER.map((id) => {
         const def = CONFIG.CHALLENGES[id];
@@ -104,11 +107,14 @@ export function PrestigePanel() {
             <div>
               <div>{def.icon} {def.name} {active && <span style={{ color: "var(--green)" }}>（进行中）</span>}</div>
               <div className="desc">{def.desc}</div>
-              <div className="desc">目标 {def.target} 关 · 最高 {prog.best} · 奖励：{def.rewardCores} 核心 + {def.rewardTalent} 天赋点</div>
+              <div className="desc">目标 {def.target} 关 · 最高 {prog.best}</div>
+              <div className="desc" style={{ color: "var(--gold)" }}>
+                奖励：{def.rewardCores} 核心 + {def.rewardTalent} 天赋点 · 首次通关永久：{def.perm.label}
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               {prog.claimed ? (
-                <span style={{ color: "var(--green)", fontSize: 12 }}>✓ 已通关</span>
+                <span style={{ color: "var(--green)", fontSize: 12 }}>✓ 已通关（永久 {def.perm.label}）</span>
               ) : (
                 <button className="mini-btn" disabled={!engine?.canClaimChallenge(id)} onClick={() => engine?.claimChallenge(id)}>
                   {prog.best >= def.target ? "领取奖励" : "未通关"}

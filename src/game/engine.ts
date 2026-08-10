@@ -16,7 +16,7 @@ import {
   enhance as sysEnhance, breakdown as sysBreakdown, canEnhance, enhanceCost,
   reforge as sysReforge, reforgeCost, canReforge as sysCanReforge,
   craft as sysCraft, craftCost, canCraft as sysCanCraft,
-  overclock as sysOverclock, overclockCost, canOverclock as sysCanOverclock,
+  overclock as sysOverclock, overclockCost, canOverclock as sysCanOverclock, shardsForRarity,
 } from "./systems/equipment";
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
 import { dailyGoldMag, ensureDaily } from "./systems/daily";
@@ -119,6 +119,10 @@ export class GameEngine {
   private dailyTimer = 0;
   private autoPrestigeTimer = 0;
   private autoUpgradeTimer = 0;
+  // 自动分解统计（供 UI 节流 emit 提示）
+  private autoBreakdownCount = 0;
+  private autoBreakdownShards = 0;
+  private autoBreakdownEmitTimer = 0;
   private chipUntil = 0;
   private protocolUntil = 0;
 
@@ -198,6 +202,16 @@ export class GameEngine {
         if (Number.isFinite(killTime) && killTime > CONFIG.PRESTIGE.AUTO_WALL_SEC) {
           this.prestige();
         }
+      }
+    }
+    // 自动分解反馈节流：约每 3s 汇总 emit 一次
+    if (this.autoBreakdownCount > 0) {
+      this.autoBreakdownEmitTimer -= dt;
+      if (this.autoBreakdownEmitTimer <= 0) {
+        this.autoBreakdownEmitTimer = 3;
+        this.emit({ type: "autoBreakdown", count: this.autoBreakdownCount, shards: this.autoBreakdownShards });
+        this.autoBreakdownCount = 0;
+        this.autoBreakdownShards = 0;
       }
     }
     this.recomputeTimer -= dt;
@@ -412,13 +426,13 @@ export class GameEngine {
     } else if (kind === "elite") {
       this.state.statistics.totalEliteKills += 1;
       const item = rollEquipment(this.rng, stage, CONFIG.SPECIAL_ENEMIES.ELITE_DROP_LUCK);
-      addDrop(this.state, item);
+      this.dropItem(item);
       this.maybeAutoEquip();
       this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
     } else if (kind === "mimic") {
       this.state.statistics.totalMimicKills += 1;
       const item = rollEquipment(this.rng, stage, 0.5);
-      addDrop(this.state, item);
+      this.dropItem(item);
       this.maybeAutoEquip();
       this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
       if (this.rng.chance(CONFIG.SPECIAL_ENEMIES.MIMIC_CORE_CHANCE)) {
@@ -427,7 +441,7 @@ export class GameEngine {
     } else {
       if (this.rng.chance(dropChance(stage, this.derived.dropMult.toNumber() - 1))) {
         const item = rollEquipment(this.rng, stage, 0);
-        addDrop(this.state, item);
+        this.dropItem(item);
       this.maybeAutoEquip();
         this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
       }
@@ -435,11 +449,43 @@ export class GameEngine {
     this.advanceStage(crush);
   }
 
+  // 统一掉落入口：背包满时按自动分解档位拆解
+  private dropItem(item: EquipInstance): void {
+    const kept = addDrop(this.state, item);
+    if (!kept) {
+      this.autoBreakdownCount += 1;
+      this.autoBreakdownShards += shardsForRarity(item.rarity);
+    }
+    this.maybeAutoEquip();
+  }
+
+  // 按当前自动分解档位清理背包存量
+  private sweepAutoBreakdownInventory(): { count: number; shards: number } {
+    const threshold = this.state.equipment.autoBreakdown;
+    if (!threshold) return { count: 0, shards: 0 };
+    const order = { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4 } as Record<Rarity, number>;
+    let count = 0;
+    let shards = 0;
+    const kept: EquipInstance[] = [];
+    for (const item of this.state.equipment.inventory) {
+      if (order[item.rarity] <= order[threshold]) {
+        count += 1;
+        shards += shardsForRarity(item.rarity);
+      } else {
+        kept.push(item);
+      }
+    }
+    if (count > 0) {
+      this.state.equipment.inventory = kept;
+      this.state.equipment.fragments = toBig(this.state.equipment.fragments).add(Big.fromNumber(shards)).toTuple();
+    }
+    return { count, shards };
+  }
+
   private grantBossRewards(stage: number): void {
     // 必掉装备
     const item = rollEquipment(this.rng, stage, 0);
-    addDrop(this.state, item);
-      this.maybeAutoEquip();
+    this.dropItem(item);
     this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
     // 技能核心
     const cores = this.rng.int(1, 3);
@@ -682,6 +728,9 @@ export class GameEngine {
   setAutoBreakdown(rarity: Rarity | null): boolean {
     if (rarity && !this.state.items.tools.auto_breakdown) return false;
     this.state.equipment.autoBreakdown = rarity;
+    // 设定档位后立即清理背包存量并反馈
+    const swept = this.sweepAutoBreakdownInventory();
+    if (swept.count > 0) this.emit({ type: "autoBreakdown", count: swept.count, shards: swept.shards });
     return true;
   }
   reforge(uid: string): boolean {
@@ -1116,17 +1165,24 @@ export class GameEngine {
   }
   canBuyTool(id: ToolId): boolean {
     if (this.toolOwned(id)) return false;
+    if (id === "auto_prestige" && this.state.prestige.totalEnergyEarned <= 0) return false;
     const cost = Big.fromTuple(CONFIG.TOOLS[id]);
     return toBig(this.state.player.gold).gte(cost);
   }
   buyTool(id: ToolId): boolean {
     if (this.toolOwned(id)) return false;
+    if (id === "auto_prestige" && this.state.prestige.totalEnergyEarned <= 0) return false;
     const cost = Big.fromTuple(CONFIG.TOOLS[id]);
     if (toBig(this.state.player.gold).lt(cost)) return false;
     this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
     this.state.items.tools[id] = true;
     this.emit({ type: "unlock", key: id, label: TOOL_DEFS[id].name });
     if (id === "auto_equip") this.maybeAutoEquip();
+    // 购买自动分解后立即生效（若已设定档位）
+    if (id === "auto_breakdown" && this.state.equipment.autoBreakdown) {
+      const swept = this.sweepAutoBreakdownInventory();
+      if (swept.count > 0) this.emit({ type: "autoBreakdown", count: swept.count, shards: swept.shards });
+    }
     return true;
   }
 
@@ -1255,7 +1311,7 @@ export class GameEngine {
     this.state.meta.lastSeenAt = Date.now();
     for (let i = 0; i < result.drops; i++) {
       const item = rollEquipment(this.rng, Math.max(1, finalStage), 0);
-      addDrop(this.state, item);
+      this.dropItem(item);
       this.maybeAutoEquip();
     }
     this.spawnEnemy();

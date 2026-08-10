@@ -122,11 +122,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
           break;
         case "challengeClaim":
           playSfx("unlock");
-          pushToast("挑战通关！奖励已发放", "achievement");
+          const perm = CONFIG.CHALLENGES[ev.id]?.perm;
+          pushToast(`挑战通关！永久 ${perm?.label ?? "加成"} 已生效`, "achievement");
           break;
         case "dailyClaim":
           playSfx("upgrade");
           pushToast("每日任务完成，奖励已发放", "info");
+          break;
+        case "autoBreakdown":
+          playSfx("drop");
+          pushToast("自动分解 $(${ev.count}) 件装备，+$(${ev.shards}) 碎片", "frag");
           break;
         case "drop": playSfx("drop"); break;
         case "levelUp": playSfx("upgrade"); break;

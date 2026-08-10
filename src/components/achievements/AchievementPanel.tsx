@@ -1,4 +1,5 @@
 "use client";
+import { useMemo, useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
 import { ACHIEVEMENTS } from "@/game/data/achievements";
@@ -17,12 +18,28 @@ function questProgressText(q: DailyQuest): string {
   return formatNumber(q.progress);
 }
 
+type AchFilter = "all" | "done" | "locked";
+
 export function AchievementPanel() {
   const { engine } = useGame();
   const unlockedList = useGameSelector((s) => s.meta.achievements);
-  const unlockedSet = new Set(unlockedList);
-  const done = ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id)).length;
+  const unlockedSet = useMemo(() => new Set(unlockedList), [unlockedList]);
   const daily = useGameSelector((s) => s.daily);
+  const [filter, setFilter] = useState<AchFilter>("all");
+  const [expanded, setExpanded] = useState(false);
+
+  const done = ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id)).length;
+  const locked = ACHIEVEMENTS.filter((a) => !unlockedSet.has(a.id));
+
+  const visible = useMemo(() => {
+    const base = filter === "done" ? ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id))
+      : filter === "locked" ? locked
+      : ACHIEVEMENTS;
+    // 未展开时：全部达成 + 前 6 个未达成
+    if (expanded || filter !== "all") return base;
+    const doneList = ACHIEVEMENTS.filter((a) => unlockedSet.has(a.id));
+    return [...doneList, ...locked.slice(0, 6)];
+  }, [filter, expanded, locked, unlockedSet]);
 
   return (
     <div className="panel">
@@ -61,18 +78,34 @@ export function AchievementPanel() {
         <h3>成就</h3>
         <span className="hint">{done}/{ACHIEVEMENTS.length}</span>
       </div>
-      {ACHIEVEMENTS.map((a) => {
-        const got = unlockedSet.has(a.id);
-        return (
-          <div className="upgrade-row" key={a.id} style={{ opacity: got ? 1 : 0.5 }}>
-            <div>
-              <div>{got ? "🏆" : "🔒"} {a.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{a.desc}</div>
+      <div className="ach-filters">
+        {([["all", "全部"], ["done", "已达成"], ["locked", "未达成"]] as [AchFilter, string][]).map(([f, label]) => (
+          <button key={f} className={`mini-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
+            {label}
+          </button>
+        ))}
+        {filter === "all" && !expanded && (
+          <button className="mini-btn" onClick={() => setExpanded(true)}>展开全部（{ACHIEVEMENTS.length - 6 - done > 0 ? ACHIEVEMENTS.length - 6 - done : 0} 隐藏）</button>
+        )}
+        {filter === "all" && expanded && (
+          <button className="mini-btn" onClick={() => setExpanded(false)}>收起</button>
+        )}
+      </div>
+      <div className="ach-grid">
+        {visible.map((a) => {
+          const got = unlockedSet.has(a.id);
+          return (
+            <div key={a.id} className={`ach-card ${got ? "done" : "locked"}`} title={a.desc}>
+              <span className="ach-icon">{got ? "🏆" : "🔒"}</span>
+              <span className="ach-info">
+                <span className="ach-name">{a.name}</span>
+                <span className="ach-desc">{a.desc}</span>
+              </span>
             </div>
-            {got && <span style={{ color: "var(--green)", fontSize: 16 }}>✓</span>}
-          </div>
-        );
-      })}
+          );
+        })}
+        {visible.length === 0 && <p style={{ fontSize: 12, color: "var(--text-dim)" }}>无成就</p>}
+      </div>
     </div>
   );
 }

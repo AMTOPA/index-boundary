@@ -37,7 +37,7 @@ describe("V4 内容：永久工具商店", () => {
 
   it("buyTool 触发 unlock 事件", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 9];
+    st.player.gold = [1, 15]; // 1e15 ≥ 1e12（auto_skill 新价）
     const eng = new GameEngine(st);
     const keys: string[] = [];
     eng.onEvent((e: GameEvent) => {

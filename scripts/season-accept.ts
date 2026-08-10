@@ -57,7 +57,7 @@ check("技能迟滞：冷却 ×2", Math.abs(sk.derived.skillCdMult - cdBefore * 
 const mix = weakEngine(4); unlockBase(mix);
 mix.startSeason(["no_crit", "slow_universe"]);
 mix.state.player.upgrades.aspd = 10; mix.state.player.upgrades.critChance = 20; mix.recomputeDerived();
-const base = weakEngine(5); base.state.player.upgrades.aspd = 10; base.recomputeDerived();
+const base = weakEngine(5); unlockBase(base); base.state.player.upgrades.aspd = 10; base.recomputeDerived();
 check("叠加：无暴击+慢速宇宙同时生效", mix.derived.critChance === 0 && Math.abs(mix.derived.panelAps - base.derived.panelAps * 0.5) < 1e-6);
 
 // 5. 计分与进度

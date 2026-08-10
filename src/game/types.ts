@@ -7,6 +7,7 @@ export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "bea
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon" | "emp_burst" | "time_freeze" | "overload_combo" | "data_flood" | "charged_hit" | "split_matrix" | "quantum_replay" | "final_protocol";
 export type PassiveId = "rhythm" | "focus" | "greed";
 export type ChallengeId = "no_crit" | "slow_universe" | "poverty" | "durable" | "skill_slow";
+export type ChallengePermKind = "click" | "aspd" | "gold" | "boss" | "skill";
 export type SeasonTierId = "bronze" | "silver" | "gold";
 export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "stageReach";
 export type TreeId = "destruction" | "automation" | "greed" | "singularity";
@@ -233,6 +234,7 @@ export type GameEvent =
   | { type: "leap"; cores: number }
   | { type: "lawRewrite"; shards: number }
   | { type: "drop"; rarity: Rarity; slot: EquipSlot }
+  | { type: "autoBreakdown"; count: number; shards: number }
   | { type: "achievement"; id: string }
   | { type: "levelUp"; upgrade: UpgradeId; level: number }
   | { type: "skillCast"; skill: SkillId }
@@ -253,6 +255,8 @@ export interface DerivedStats {
   critDamage: Big;
   panelAps: number;
   effectiveAps: number;
+  apsCapAdd: number;
+  apsCapTalent: number;
   goldMult: Big;
   clickMult: Big;
   comboBonus: number;

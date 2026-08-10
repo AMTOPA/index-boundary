@@ -7,6 +7,7 @@ import { ResourceChip } from "@/components/common/ResourceChip";
 import { UpgradePanel } from "@/components/upgrade/UpgradePanel";
 import { CombatArea } from "@/components/combat/CombatArea";
 import { EquipPanel } from "@/components/equipment/EquipPanel";
+import { InventoryPanel } from "@/components/equipment/InventoryPanel";
 import { TalentPanel } from "@/components/talents/TalentPanel";
 import { PrestigePanel } from "@/components/prestige/PrestigePanel";
 import { StatsPanel } from "@/components/stats/StatsPanel";
@@ -42,9 +43,22 @@ export default function Page() {
   );
 }
 
+function useWideLayout(): boolean {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const fn = () => setWide(mq.matches);
+    fn();
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+  return wide;
+}
+
 function Shell() {
   const [tab, setTab] = useState<PanelTab>("equip");
   const [mobileView, setMobileView] = useState<MobileView>("combat");
+  const wide = useWideLayout();
   const selectTab = (t: PanelTab) => { setTab(t); setMobileView("panel"); };
   const worldTint = useGameSelector((s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0).color);
   return (
@@ -52,7 +66,7 @@ function Shell() {
       <Starfield tint={worldTint} />
       <div className="app">
       <TopBar />
-      <div className="main-grid">
+      <div className={`main-grid ${wide ? "wide" : ""}`}>
         <aside className="side-left">
           <UpgradePanel />
         </aside>
@@ -67,8 +81,13 @@ function Shell() {
               </button>
             ))}
           </div>
-          {mobileView === "upgrades" ? <UpgradePanel /> : <Panel tab={tab} />}
+          {mobileView === "upgrades" ? <UpgradePanel /> : <Panel tab={tab} wide={wide} />}
         </aside>
+        {wide && (
+          <aside className="side-inventory">
+            <InventoryPanel />
+          </aside>
+        )}
       </div>
       <nav className="bottom-nav">
         <button className={mobileView === "combat" ? "active" : ""} onClick={() => setMobileView("combat")}>
@@ -88,9 +107,9 @@ function Shell() {
   );
 }
 
-function Panel({ tab }: { tab: PanelTab }) {
+function Panel({ tab, wide }: { tab: PanelTab; wide?: boolean }) {
   switch (tab) {
-    case "equip": return <EquipPanel />;
+    case "equip": return <EquipPanel wide={wide} />;
     case "talents": return <TalentPanel />;
     case "prestige": return <PrestigePanel />;
     case "stats": return <StatsPanel />;

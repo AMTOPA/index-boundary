@@ -10,6 +10,7 @@ export function ItemsPanel() {
   const { engine } = useGame();
   const consumables = useGameSelector((s) => s.items.consumables);
   const tools = useGameSelector((s) => s.items.tools);
+  const prestige = useGameSelector((s) => s.prestige);
 
   return (
     <div className="panel items-panel">
@@ -49,6 +50,10 @@ export function ItemsPanel() {
               <div className="item-card-desc">{def.desc}</div>
               {owned ? (
                 <span className="item-card-owned-label">已解锁</span>
+              ) : id === "auto_prestige" && prestige.totalEnergyEarned <= 0 ? (
+                <button className="mini-btn item-card-btn" disabled title="需先手动完成一次重构才能购买自动重构">
+                  需先重构 1 次
+                </button>
               ) : (
                 <button
                   className="mini-btn item-card-btn buy"

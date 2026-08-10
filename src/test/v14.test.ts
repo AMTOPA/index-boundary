@@ -111,7 +111,8 @@ describe("V14 内容：试炼赛季（Roguelite 挑战赛季）", () => {
     const base = weakEngine(8);
     base.state.player.upgrades.aspd = 10;
     base.recomputeDerived();
-    expect(eng.derived.panelAps).toBeCloseTo(base.derived.panelAps * 0.5, 8);
+    // unlockBase 已通关慢速宇宙 → 永久攻速 ×1.2 在赛季中也生效
+    expect(eng.derived.panelAps).toBeCloseTo(base.derived.panelAps * 0.5 * 1.2, 8);
   });
 
   it("进度：赛季分 / 最佳关随推关更新，且计入对应基础挑战", () => {
