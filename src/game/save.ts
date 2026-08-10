@@ -92,6 +92,10 @@ export function normalizeState(raw: unknown): GameState {
   state.talents = { ...base.talents, ...(r.talents ?? {}) };
   state.talents.allocations = { ...(r.talents?.allocations ?? {}) };
   state.talents.keystones = { ...(r.talents?.keystones ?? {}) };
+  state.talents.presets = Array.isArray(r.talents?.presets) ? [...r.talents.presets] : [];
+  while (state.talents.presets.length < 3) {
+    state.talents.presets.push({ name: "", talents: {}, keystones: {} });
+  }
   state.prestige = { ...base.prestige, ...(r.prestige ?? {}) };
   state.prestige.purchases = { ...(r.prestige?.purchases ?? {}) };
   state.items = { ...base.items, ...(r.items ?? {}) };

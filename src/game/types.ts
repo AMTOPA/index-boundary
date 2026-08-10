@@ -93,10 +93,17 @@ export interface SkillState {
   cores: BigTuple;
 }
 
+export interface BuildPreset {
+  name: string;
+  talents: Record<string, number>; // nodeId -> 点数快照
+  keystones: Partial<Record<TreeId, string>>;
+}
+
 export interface TalentState {
   points: number;
   allocations: Record<string, number>; // nodeId -> 已投点数
   keystones: Partial<Record<TreeId, string>>; // treeId -> keystone nodeId
+  presets: BuildPreset[]; // 构筑预设槽（3 个）
 }
 
 export interface DailyQuest {

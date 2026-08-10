@@ -2,7 +2,7 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
+  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -20,6 +20,7 @@ import {
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
 import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
+import { talentNodeById } from "./data/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
@@ -64,7 +65,14 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     },
     equipment: { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null },
     skills: { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] },
-    talents: { points: 0, allocations: {}, keystones: {} },
+    talents: {
+      points: 0, allocations: {}, keystones: {},
+      presets: [
+        { name: "", talents: {}, keystones: {} },
+        { name: "", talents: {}, keystones: {} },
+        { name: "", talents: {}, keystones: {} },
+      ],
+    },
     prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
     items: { consumables: {}, tools: {} },
     statistics: {
@@ -772,6 +780,58 @@ export class GameEngine {
   resetTree(tree: Parameters<typeof sysResetTree>[1]): void {
     sysResetTree(this.state, tree);
     this.recomputeDerived();
+  }
+
+  // ---------------- 构筑预设 ----------------
+  buildPresetCostOf(slot: number): number {
+    const preset = this.state.talents.presets[slot];
+    if (!preset) return 0;
+    let cost = 0;
+    for (const [nodeId, pts] of Object.entries(preset.talents)) {
+      const def = talentNodeById(nodeId);
+      if (def && pts > 0) cost += pts * def.cost;
+    }
+    return cost;
+  }
+  saveBuild(slot: number, name: string): boolean {
+    if (slot < 0 || slot >= this.state.talents.presets.length) return false;
+    this.state.talents.presets[slot] = {
+      name,
+      talents: { ...this.state.talents.allocations },
+      keystones: { ...this.state.talents.keystones },
+    };
+    return true;
+  }
+  canLoadBuild(slot: number): boolean {
+    const preset = this.state.talents.presets[slot];
+    if (!preset || !preset.name) return false;
+    // 全量重置后可用点 = 未投入点 + 已投入点（按 cost 返还）
+    let available = this.state.talents.points;
+    for (const [nodeId, pts] of Object.entries(this.state.talents.allocations)) {
+      const def = talentNodeById(nodeId);
+      if (def && pts > 0) available += pts * def.cost;
+    }
+    return available >= this.buildPresetCostOf(slot);
+  }
+  loadBuild(slot: number): boolean {
+    const preset = this.state.talents.presets[slot];
+    if (!preset || !preset.name || !this.canLoadBuild(slot)) return false;
+    for (const tree of ["destruction", "automation", "greed"] as const) {
+      sysResetTree(this.state, tree);
+    }
+    for (const [nodeId, pts] of Object.entries(preset.talents)) {
+      if (pts <= 0) continue;
+      const def = talentNodeById(nodeId);
+      if (!def) continue;
+      this.state.talents.allocations[nodeId] = pts;
+      this.state.talents.points -= pts * def.cost;
+      if (def.type === "keystone") this.state.talents.keystones[def.tree] = nodeId;
+    }
+    for (const [tree, nodeId] of Object.entries(preset.keystones)) {
+      if (nodeId) this.state.talents.keystones[tree as TreeId] = nodeId;
+    }
+    this.recomputeDerived();
+    return true;
   }
 
   // ---------------- 重构 ----------------

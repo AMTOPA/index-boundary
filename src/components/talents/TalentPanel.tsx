@@ -11,6 +11,7 @@ export function TalentPanel() {
   const points = useGameSelector((s) => s.talents.points);
   const allocations = useGameSelector((s) => s.talents.allocations);
   const keystones = useGameSelector((s) => s.talents.keystones);
+  const presets = useGameSelector((s) => s.talents.presets);
   const [confirmTree, setConfirmTree] = useState<TreeId | null>(null);
 
   const trees = useMemo(() => Object.keys(TALENT_TREES) as TreeId[], []);
@@ -30,7 +31,24 @@ export function TalentPanel() {
         <h3>天赋</h3>
         <span className="hint">可用点数 <span className="mono" style={{ color: "var(--green)" }}>{points}</span></span>
       </div>
-      {trees.map((tree) => {
+      <h3 style={{ marginTop: 12 }}>构筑预设</h3>
+      <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>保存当前天赋方案，随时切换（加载需足够天赋点）。</p>
+      {presets.map((p, i) => {
+        const letter = ["A", "B", "C"][i];
+        const cost = engine ? engine.buildPresetCostOf(i) : 0;
+        return (
+          <div className="shop-row" key={i}>
+            <div>
+              <div>{letter}. {p.name || `空槽位 ${letter}`}</div>
+              <div className="desc">{p.name ? `方案点数 ${cost}` : "尚未保存"}</div>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button className="mini-btn" onClick={() => engine?.saveBuild(i, `预设${letter}`)}>保存</button>
+              <button className="mini-btn" disabled={!p.name || !engine?.canLoadBuild(i)} onClick={() => engine?.loadBuild(i)}>加载</button>
+            </div>
+          </div>
+        );
+      })}      {trees.map((tree) => {
         const nodes = TALENT_NODES.filter((n) => n.tree === tree).sort((a, b) => a.tier - b.tier);
         const chosen = keystones[tree];
         return (
