@@ -64,6 +64,8 @@ export const AFFIX_LABEL: Record<AffixStat, string> = {
   comboCap: "连击上限",
   comboWindow: "连击窗口",
   everyNAttack: "每N次攻击",
+  skillCd: "技能冷却",
+  skillDuration: "技能持续",
 };
 
 export const AFFIX_HINT: Record<AffixStat, string> = {
@@ -79,6 +81,8 @@ export const AFFIX_HINT: Record<AffixStat, string> = {
   comboCap: "连击上限 +",
   comboWindow: "连击窗口 +秒",
   everyNAttack: "每 N 次攻击触发伤害 ×",
+  skillCd: "技能冷却缩减 +%（加法池，冷却 ×(1-池)）",
+  skillDuration: "技能持续时间 +%（加法池，持续 ×(1+池)）",
 };
 
 export const MAIN_STAT_LABEL: Record<AffixStat, string> = {
@@ -94,6 +98,8 @@ export const MAIN_STAT_LABEL: Record<AffixStat, string> = {
   comboCap: "连击上限",
   comboWindow: "连击窗口",
   everyNAttack: "每N次攻击",
+  skillCd: "技能冷却",
+  skillDuration: "技能持续",
 };
 
 export function rarityOrder(r: Rarity): number {

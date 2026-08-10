@@ -5,6 +5,7 @@ export type UpgradeId = "attack" | "aspd" | "critChance" | "critDamage" | "gold"
 export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary" | "mythic" | "aberrant" | "singularity";
 export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "beacon" | "relic";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon" | "emp_burst" | "time_freeze" | "overload_combo" | "data_flood" | "charged_hit" | "split_matrix" | "quantum_replay" | "final_protocol";
+export type PassiveId = "rhythm" | "focus" | "greed";
 export type TreeId = "destruction" | "automation" | "greed";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip";
@@ -29,7 +30,9 @@ export type AffixStat =
   | "clickDmg"
   | "comboCap"
   | "comboWindow"
-  | "everyNAttack";
+  | "everyNAttack"
+  | "skillCd"
+  | "skillDuration";
 
 export interface EquipInstance {
   uid: string;
@@ -84,7 +87,7 @@ export interface EquipmentState {
 
 export interface SkillState {
   actives: SkillInstance[];
-  passiveLevel: number;
+  passives: Record<PassiveId, number>; // 被动技能等级（节律/聚能/贪婪）
   cores: BigTuple;
 }
 
@@ -117,6 +120,7 @@ export interface StatisticsState {
   totalClicks: number;
   totalCrits: number;
   totalSuperCrits: number;
+  totalSkillCasts: number;
   totalPrestiges: number;
   totalPlayTimeMs: number;
   totalOfflineMs: number;
@@ -186,6 +190,8 @@ export interface DerivedStats {
   dps: Big;
   bossDmgMult: Big;
   skillDmgMult: Big;
+  skillCdMult: number; // 技能冷却缩减（乘法）
+  skillDurationMult: number; // 技能持续时间（乘法）
   overflowEffMult: Big;
   dropMult: Big;
   talentMult: Big;

@@ -247,6 +247,14 @@ input { font-family: inherit; }
 .skill-btn .cd-overlay { position: absolute; left: 0; bottom: 0; background: rgba(0,0,0,0.55); width: 100%; }
 .skill-btn.ready { border-color: rgba(53,198,240,0.5); }
 .skill-btn.ready:hover { filter: brightness(1.2); }
+.passive-bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 720px; margin-top: 8px; }
+.passive-btn {
+  flex: 1 1 96px; min-width: min(96px, 28vw); max-width: 132px; padding: 8px; border-radius: 10px;
+  border: 1px dashed var(--panel-border); background: rgba(178,107,255,0.05); color: var(--text);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px;
+}
+.passive-btn .icon { font-size: 18px; }
+.passive-btn:hover { border-color: rgba(178,107,255,0.5); }
 
 /* ---------- 天赋 ---------- */
 .talent-tree { margin-bottom: 10px; }

@@ -2,7 +2,7 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
+  BossAffix, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -17,7 +17,7 @@ import {
   craft as sysCraft, craftCost, canCraft as sysCanCraft,
   overclock as sysOverclock, overclockCost, canOverclock as sysCanOverclock,
 } from "./systems/equipment";
-import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill } from "./systems/skills";
+import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
@@ -60,14 +60,14 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       enemyKind: "normal", bossShieldHits: 0, bossVoidTarget: null,
     },
     equipment: { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null },
-    skills: { actives: [], passiveLevel: 0, cores: [0, 0] },
+    skills: { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] },
     talents: { points: 0, allocations: {}, keystones: {} },
     prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
       totalEliteKills: 0, totalMimicKills: 0,
-      highestHit: [0, 0], totalClicks: 0, totalCrits: 0, totalSuperCrits: 0,
+      highestHit: [0, 0], totalClicks: 0, totalCrits: 0, totalSuperCrits: 0, totalSkillCasts: 0,
       totalPrestiges: 0, totalPlayTimeMs: 0, totalOfflineMs: 0, allTimeMaxStage: 1,
     },
   };
@@ -658,6 +658,14 @@ export class GameEngine {
     const result = castSkill(this.state, id, this.timeSec);
     if (!result.ok) return false;
     this.emit({ type: "skillCast", skill: id });
+    // 技能联动词条：冷却缩减 / 持续时间延长（装备词条）
+    const inst = this.state.skills.actives.find((s) => s.id === id);
+    if (inst) {
+      inst.cdRemaining = Math.max(1, inst.cdRemaining * this.derived.skillCdMult);
+      const def = SKILL_DEFS[id];
+      if (def.duration > 0) inst.activeUntil = this.timeSec + def.duration * this.derived.skillDurationMult;
+    }
+    this.state.statistics.totalSkillCasts += 1;
     if (result.action.kind === "critical_strike") {
       this.buffs.criticalStrike.pending = true;
       this.buffs.criticalStrike.mult = result.action.mult;
@@ -686,6 +694,14 @@ export class GameEngine {
   }
   upgradeSkill(id: SkillId): boolean {
     return sysUpgradeSkill(this.state, id);
+  }
+  canUpgradePassive(id: PassiveId): boolean {
+    return sysCanUpgradePassive(this.state, id);
+  }
+  upgradePassive(id: PassiveId): boolean {
+    const ok = sysUpgradePassive(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
   }
   // 解锁技能：skills 解锁后可用（技能核心用于升级，解锁免费）
   unlockSkill(id: SkillId): boolean {

@@ -13,7 +13,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 1,
+  SAVE_VERSION: 2,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -122,6 +122,8 @@ export const CONFIG = {
       comboCap: { min: 10, max: 50, kind: "flat" },
       comboWindow: { min: 0.5, max: 2, kind: "flat" },
       everyNAttack: { min: 0.1, max: 0.6, kind: "mult" },
+      skillCd: { min: 0.02, max: 0.12, kind: "pct" },
+      skillDuration: { min: 0.05, max: 0.2, kind: "pct" },
     } as Record<AffixStat, { min: number; max: number; kind: "pct" | "mult" | "flat" }>,
     LEGENDARY_POOL: [
       { label: "Boss 杀手", mult: 2 },
@@ -212,7 +214,12 @@ export const CONFIG = {
     },
   } as Record<string, { name: string; desc: string; cooldown: number; duration: number; levelEffect: { multPerLevel: number; multCap?: number; cdReducePerLevel: number }; empFreezeSec?: number; comboDmgMult?: number; goldMultWhileActive?: number; aspdMultWhileActive?: number }>,
   SKILL_CORE_COSTS: [1, 2, 3, 5, 8, 13, 21, 34], // 升级到下一级所需核心（累计）
-  SKILL_PASSIVE_PER_LEVEL: 0.05, // 节律协议：每级 +5% 自动攻速（独立）
+  // 被动技能（技能核心升级，独立成长线）
+  SKILL_PASSIVES: {
+    rhythm: { name: "节律协议", desc: "每级 +5% 自动攻速（独立乘区）", icon: "🎵", kind: "aspd", effectPerLevel: 0.05 },
+    focus: { name: "聚能协议", desc: "每级 +1% 暴击率", icon: "🎯", kind: "critChance", effectPerLevel: 0.01 },
+    greed: { name: "贪婪协议", desc: "每级 +3% 金币（加法池）", icon: "🪙", kind: "gold", effectPerLevel: 0.03 },
+  } as Record<string, { name: string; desc: string; icon: string; kind: "aspd" | "critChance" | "gold"; effectPerLevel: number }>,
   SKILL_CAST_WALL_SEC: 6, // 模拟器：击杀时间超过该值视为卡墙，才释放爆发技能
   // 永久工具（金币购买，金币沉淀口）
   TOOLS: {

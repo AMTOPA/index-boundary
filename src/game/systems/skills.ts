@@ -1,7 +1,7 @@
 // 技能系统：释放 / 冷却 / 升级
 import { Big } from "../bignum";
-import type { GameState, SkillId } from "../types";
-import { SKILL_DEFS, skillCooldown, skillCoreCost } from "../data/skills";
+import type { GameState, PassiveId, SkillId } from "../types";
+import { SKILL_DEFS, skillCooldown, skillCoreCost, passiveCoreCost } from "../data/skills";
 
 // 释放结果：engine 需要据 action 处理临界打击/奇点炮
 export type CastAction =
@@ -67,5 +67,18 @@ export function upgradeSkill(state: GameState, id: SkillId): boolean {
   const cost = skillCoreCost(inst.level);
   state.skills.cores = Big.fromTuple(state.skills.cores).sub(Big.fromNumber(cost)).toTuple();
   inst.level += 1;
+  return true;
+}
+// ---------------- 被动技能 ----------------
+export function canUpgradePassive(state: GameState, id: PassiveId): boolean {
+  const cost = passiveCoreCost(state.skills.passives[id]);
+  return Big.fromTuple(state.skills.cores).gte(Big.fromNumber(cost));
+}
+
+export function upgradePassive(state: GameState, id: PassiveId): boolean {
+  if (!canUpgradePassive(state, id)) return false;
+  const cost = passiveCoreCost(state.skills.passives[id]);
+  state.skills.cores = Big.fromTuple(state.skills.cores).sub(Big.fromNumber(cost)).toTuple();
+  state.skills.passives[id] += 1;
   return true;
 }

@@ -51,8 +51,15 @@ export function makeSave(state: GameState): SaveFile {
 // ---------------- 版本迁移 ----------------
 // 迁移链：v1 → v2 → v3 …
 const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, unknown>> = {
-  // 示例（未来版本加迁移）：
-  // 1: (s) => { s.meta.newField = 0; return s; },
+  // v1 → v2：被动技能从单一 passiveLevel 迁移为 3 条独立被动（节律/聚能/贪婪）
+  1: (s) => {
+    const skills = (s.skills ?? {}) as Record<string, unknown>;
+    if (typeof skills.passiveLevel === "number") {
+      skills.passives = { rhythm: skills.passiveLevel as number, focus: 0, greed: 0 };
+      delete skills.passiveLevel;
+    }
+    return s;
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>, fromVersion: number): Record<string, unknown> {
@@ -81,6 +88,7 @@ export function normalizeState(raw: unknown): GameState {
   state.equipment.inventory = Array.isArray(r.equipment?.inventory) ? r.equipment.inventory : [];
   state.skills = { ...base.skills, ...(r.skills ?? {}) };
   state.skills.actives = Array.isArray(r.skills?.actives) ? r.skills.actives : [];
+  state.skills.passives = { ...base.skills.passives, ...(r.skills?.passives ?? {}) };
   state.talents = { ...base.talents, ...(r.talents ?? {}) };
   state.talents.allocations = { ...(r.talents?.allocations ?? {}) };
   state.talents.keystones = { ...(r.talents?.keystones ?? {}) };

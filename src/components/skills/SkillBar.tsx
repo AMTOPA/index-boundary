@@ -1,16 +1,17 @@
 "use client";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
-import { SKILL_DEFS, SKILL_IDS, skillCooldown, skillCoreCost } from "@/game/data/skills";
+import { SKILL_DEFS, SKILL_IDS, skillCooldown, skillCoreCost, PASSIVE_DEFS, PASSIVE_IDS, passiveCoreCost } from "@/game/data/skills";
 import { toBig } from "@/game/bignum";
 import { formatNumber } from "@/game/format";
-import type { SkillId } from "@/game/types";
+import type { PassiveId, SkillId } from "@/game/types";
 
 export function SkillBar() {
   const { engine } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("skills"));
   const actives = useGameSelector((s) => s.skills.actives);
   const cores = useGameSelector((s) => s.skills.cores);
+  const passives = useGameSelector((s) => s.skills.passives);
   if (!unlocked) return null;
 
   const coreNum = toBig(cores).toNumber();
@@ -54,6 +55,30 @@ export function SkillBar() {
           </div>
         );
       })}
+            <div className="passive-bar" title="被动技能：常驻效果，用技能核心升级">
+        {PASSIVE_IDS.map((id) => {
+          const def = PASSIVE_DEFS[id];
+          const lv = passives[id] ?? 0;
+          const upCost = passiveCoreCost(lv);
+          return (
+            <div key={id} className="passive-btn" title={`${def.name}：${def.desc}（Lv${lv}）`}>
+              <span className="icon">{def.icon}</span>
+              <span>{def.name}</span>
+              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Lv{lv}</span>
+              <span
+                className={`skill-up ${coreNum >= upCost ? "afford" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  engine?.upgradePassive(id as PassiveId);
+                }}
+                title={`升级到 Lv${lv + 1}（消耗 ${upCost} 核心）`}
+              >
+                ▲{upCost}
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {locked.map((id) => {
         const def = SKILL_DEFS[id];
         return (

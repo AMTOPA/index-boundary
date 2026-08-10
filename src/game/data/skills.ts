@@ -1,5 +1,5 @@
 import { CONFIG } from "../config";
-import type { SkillId } from "../types";
+import type { PassiveId, SkillId } from "../types";
 
 export interface SkillDef {
   id: SkillId;
@@ -194,6 +194,36 @@ export function skillCooldown(def: SkillDef, level: number): number {
 }
 
 export function skillCoreCost(currentLevel: number): number {
+  const costs = CONFIG.SKILL_CORE_COSTS;
+  if (currentLevel <= 0) return costs[0];
+  const idx = Math.min(currentLevel, costs.length - 1);
+  return costs[idx];
+}
+// ---------------- 被动技能 ----------------
+export interface PassiveDef {
+  id: PassiveId;
+  name: string;
+  desc: string;
+  icon: string;
+  kind: "aspd" | "critChance" | "gold";
+  effectPerLevel: number;
+}
+
+const P = CONFIG.SKILL_PASSIVES;
+
+export const PASSIVE_DEFS: Record<PassiveId, PassiveDef> = {
+  rhythm: { id: "rhythm", name: P.rhythm.name, desc: P.rhythm.desc, icon: P.rhythm.icon, kind: P.rhythm.kind, effectPerLevel: P.rhythm.effectPerLevel },
+  focus: { id: "focus", name: P.focus.name, desc: P.focus.desc, icon: P.focus.icon, kind: P.focus.kind, effectPerLevel: P.focus.effectPerLevel },
+  greed: { id: "greed", name: P.greed.name, desc: P.greed.desc, icon: P.greed.icon, kind: P.greed.kind, effectPerLevel: P.greed.effectPerLevel },
+};
+
+export const PASSIVE_IDS: PassiveId[] = ["rhythm", "focus", "greed"];
+
+export function passiveEffect(def: PassiveDef, level: number): number {
+  return def.effectPerLevel * level;
+}
+
+export function passiveCoreCost(currentLevel: number): number {
   const costs = CONFIG.SKILL_CORE_COSTS;
   if (currentLevel <= 0) return costs[0];
   const idx = Math.min(currentLevel, costs.length - 1);

@@ -179,6 +179,8 @@ interface AffixAccum {
   comboCapAdd: number;
   comboWindowAdd: number;
   everyNAttack: number;
+  skillCdPool: number;
+  skillDurationPool: number;
 }
 
 function applyAffix(stat: string, value: number, acc: AffixAccum): void {
@@ -195,6 +197,8 @@ function applyAffix(stat: string, value: number, acc: AffixAccum): void {
     case "comboCap": acc.comboCapAdd += value; break;
     case "comboWindow": acc.comboWindowAdd += value; break;
     case "everyNAttack": acc.everyNAttack += value; break;
+    case "skillCd": acc.skillCdPool += value; break;
+    case "skillDuration": acc.skillDurationPool += value; break;
   }
 }
 
@@ -225,6 +229,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     comboCapAdd: 0,
     comboWindowAdd: 0,
     everyNAttack: 0,
+    skillCdPool: 0,
+    skillDurationPool: 0,
   };
 
   let weaponAtkMult = Big.ONE;
@@ -312,7 +318,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
 
   // ---- 攻速 ----
   let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult;
-  aspdMult *= 1 + state.skills.passiveLevel * CONFIG.SKILL_PASSIVE_PER_LEVEL;
+  aspdMult *= 1 + (state.skills.passives?.rhythm ?? 0) * CONFIG.SKILL_PASSIVES.rhythm.effectPerLevel;
   if (overclockActive) {
     const def = SKILL_DEFS.overclock;
     const inst = skillMap.get("overclock");
@@ -339,10 +345,11 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
 
   // ---- 暴击 ----
-  const critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd;
+  const critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
   const critDamage = (critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult;
 
   // ---- 金币 ----
+  acc.goldPool += (state.skills.passives?.greed ?? 0) * CONFIG.SKILL_PASSIVES.greed.effectPerLevel;
   let goldMult = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool));
   if (goldCollapseActive) {
     const def = SKILL_DEFS.gold_collapse;
@@ -400,6 +407,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     dps,
     bossDmgMult: acc.bossDmgMult,
     skillDmgMult: acc.skillDmgMult,
+    skillCdMult: Math.max(0.5, 1 - acc.skillCdPool),
+    skillDurationMult: 1 + acc.skillDurationPool,
     overflowEffMult: acc.overflowEffMult,
     dropMult: Big.fromNumber(Math.max(1, 1 + dropRateTalent)),
     talentMult: talentGlobal,
