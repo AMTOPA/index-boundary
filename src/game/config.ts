@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, DailyQuestType, LeapUpgradeId, Rarity, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, DailyQuestType, LawId, LeapUpgradeId, Rarity, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -287,6 +287,23 @@ export const CONFIG = {
     AUTO_WALL_SEC: 8, // 自动跃迁：卡墙判定秒数
   },
 
+  // 法则重写（第三层重置）：30000 关解锁，改写公式系数/指数，全部有硬上限
+  LAWS: {
+    REWRITE_STAGE: 30000, // 解锁法则重写的关卡
+    SHARD_DIVISOR: 10000,
+    SHARD_BASE_OFFSET: 2, // 碎片 = floor(maxStage/10000) - 2（30000 → 1）
+    DOUBLE_MULT: 2, // 本次最大关卡 ≥ 上次×2 → 碎片翻倍
+    GOLD_TO_DMG_LOG_FLOOR: 12, // 金币转伤：从 10^12 金币起算
+    GOLD_TO_DMG_PER_STEP: 0.1, // 每高 10 倍 → +10%
+    GOLD_TO_DMG_MAX_LOG: 60, // 金币转伤有界（上限 1.1^60 ≈ 304×）
+    PATCHES: {
+      critExp: { perLevel: 0.05, max: 6, costBase: 1, label: "暴击指数", desc: "暴击伤害指数 +0.05/级（满级 ^1.3 ≈ ×2.46，有界）" },
+      goldExp: { perLevel: 0.01, max: 6, costBase: 1, label: "金币指数", desc: "怪物金币指数 +0.01/级（0.92→0.98，有界）" },
+      apsCap: { perLevel: 1, max: 4, costBase: 1, label: "攻速破限", desc: "攻速软上限 +1/级（10→14，有界）" },
+      goldToDmg: { perLevel: 1, max: 1, costBase: 3, label: "金币转伤", desc: "解锁公式：持有金币每高 10 倍（≥10^12）→ 全伤害 +10%（有界）" },
+    } as Record<LawId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
+  },
+
   // 解锁节奏（关卡）
   UNLOCKS: [
     { key: "auto_attack", stage: 5, label: "自动攻击" },
@@ -298,6 +315,7 @@ export const CONFIG = {
     { key: "talents", stage: 150, label: "天赋系统" },
     { key: "prestige", stage: 350, label: "重构" },
     { key: "leap", stage: 10000, label: "世界跃迁" },
+    { key: "lawRewrite", stage: 30000, label: "法则重写" },
     { key: "achievements", stage: 30, label: "成就" },
   ] as { key: string; stage: number; label: string }[],
 

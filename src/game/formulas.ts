@@ -4,6 +4,7 @@ import { CONFIG, milestoneMultFor } from "./config";
 import type { DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { leapAllStatsMult } from "./systems/leap";
+import { lawCritExp, lawGoldExp, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
 // ---------------- 升级 ----------------
@@ -43,9 +44,10 @@ export function panelApsFromLevel(level: number): number {
   return Math.min(raw, 1e6); // 防御性截断，避免 Number 溢出
 }
 
-export function effectiveAps(panel: number): number {
-  if (panel <= CONFIG.APS_SOFT_CAP) return panel;
-  return CONFIG.APS_SOFT_CAP + Math.sqrt(panel - CONFIG.APS_SOFT_CAP);
+export function effectiveAps(panel: number, capAdd = 0): number {
+  const cap = CONFIG.APS_SOFT_CAP + capAdd;
+  if (panel <= cap) return panel;
+  return cap + Math.sqrt(panel - cap);
 }
 
 export function critChanceFromLevel(level: number): number {
@@ -66,8 +68,8 @@ export function enemyHp(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big
   return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(hpGrowth).pow(stage));
 }
 
-export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
-  return enemyHp(stage, hpGrowth).pow(CONFIG.GOLD_HP_EXPONENT);
+export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH, goldExp: number = CONFIG.GOLD_HP_EXPONENT): Big {
+  return enemyHp(stage, hpGrowth).pow(goldExp);
 }
 
 export function isBossStage(stage: number): boolean {
@@ -330,6 +332,11 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     goldKeystoneMult = goldKeystoneMult.mul(Big.fromNumber(1.15).pow(goldSteps));
   }
 
+  // ---- 法则补丁（第三层，全部有硬上限）----
+  const lawCE = lawCritExp(state);
+  const goldHpExp = lawGoldExp(state);
+  const apsCapAdd = lawApsCapAdd(state);
+  const goldToDmgMult = lawGoldToDmgMult(state);
   // ---- 攻速 ----
   let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult;
   aspdMult *= 1 + (state.skills.passives?.rhythm ?? 0) * CONFIG.SKILL_PASSIVES.rhythm.effectPerLevel;
@@ -347,7 +354,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
   // 挑战：慢速宇宙——攻速减半
   if (state.meta.activeChallenge === "slow_universe") panelAps *= 0.5;
-  const effAps = effectiveAps(panelAps + apsCapTalent);
+  const effAps = effectiveAps(panelAps + apsCapTalent, apsCapAdd);
 
   // 攻速溢转（Keystone）：溢出攻速 → 独立伤害
   let aspdOverflowMult = Big.ONE;
@@ -364,7 +371,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
   // 挑战：无暴击——暴击率恒为 0
   if (state.meta.activeChallenge === "no_crit") critChance = 0;
-  const critDamage = (critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult;
+  const critDamage = Math.pow((critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd) * critDmgEquipMult, lawCE);
 
   // ---- 世界核心（第二层）----
   const leapGlobalMult = leapAllStatsMult(state.leap?.purchases?.allStats ?? 0);
@@ -403,7 +410,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   const comboDmgMult = overloadActive ? (SKILL_DEFS.overload_combo.comboDmgMult ?? 1) : 1;
   const comboBonus = Math.min(CONFIG.COMBO_CAP + acc.comboCapAdd, state.combat.combo) * CONFIG.COMBO_BONUS_PER_HIT;
-  let damagePerHit = base.mul(atkMult).mul(globalMult).mul(aspdOverflowMult).mul(perpetualMult);
+  let damagePerHit = base.mul(atkMult).mul(globalMult).mul(goldToDmgMult).mul(aspdOverflowMult).mul(perpetualMult);
   damagePerHit = damagePerHit.mul(Big.fromNumber(1 + comboBonus * comboDmgMult));
   // 分裂矩阵：最终伤害独立提升
   if (splitActive) {
@@ -447,6 +454,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     hpGrowth,
     bossHpMult,
     bossGoldMult,
+    goldHpExp,
+    goldToDmgMult,
     offlineEffTalent,
     skipBaseTalent,
     shardGainMult: Math.max(1, 1 + shardGainTalent),

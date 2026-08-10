@@ -533,3 +533,25 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
 @media (prefers-reduced-motion: reduce) {
   .leap-flash, .leap-rings span, .leap-title, .leap-ready { animation: none !important; }
 }
+
+/* ---------- 法则重写 ---------- */
+.law-flash {
+  position: fixed; inset: 0; z-index: 171; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(720px 520px at 50% 50%, rgba(255,217,61,0.15), rgba(0,0,0,0.84));
+  pointer-events: none;
+  overflow: hidden;
+  animation: leapFade 2.8s ease forwards;
+}
+.law-flash .leap-rings span { border-color: rgba(255,217,61,0.7); box-shadow: 0 0 30px rgba(255,217,61,0.5), inset 0 0 30px rgba(126,232,255,0.25); }
+.law-flash .leap-rings span:nth-child(2) { border-color: rgba(126,232,255,0.75); }
+.law-flash .leap-rings span:nth-child(3) { border-color: rgba(53,198,240,0.8); }
+.law-title {
+  font-size: 44px; font-weight: 900; letter-spacing: 0.3em; padding-left: 0.3em;
+  background: linear-gradient(120deg, #ffd93d, #35c6f0 45%, #7ee8ff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 26px rgba(255,217,61,0.7));
+  animation: leapShimmer 2.8s ease forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .law-flash { animation: none !important; }
+}

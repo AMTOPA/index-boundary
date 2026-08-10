@@ -13,6 +13,7 @@ export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip" | "auto_prestige";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
+export type LawId = "critExp" | "goldExp" | "apsCap" | "goldToDmg";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
@@ -141,6 +142,14 @@ export interface LeapState {
   purchases: Partial<Record<LeapUpgradeId, number>>;
 }
 
+export interface LawState {
+  shards: number; // 法则碎片（第三层货币）
+  totalShardsEarned: number;
+  totalRewrites: number;
+  lastRewriteMaxStage: number; // 上次法则重写时的最大关卡（×2 判定）
+  purchases: Partial<Record<LawId, number>>;
+}
+
 export interface ItemState {
   consumables: Partial<Record<ItemId, number>>;
   tools: Partial<Record<ToolId, boolean>>;
@@ -188,6 +197,7 @@ export interface GameState {
   talents: TalentState;
   prestige: PrestigeState;
   leap: LeapState;
+  laws: LawState;
   items: ItemState;
   statistics: StatisticsState;
   daily: DailyState;
@@ -210,6 +220,7 @@ export type GameEvent =
   | { type: "milestone"; magnitude: number }
   | { type: "prestige"; energyGained: number }
   | { type: "leap"; cores: number }
+  | { type: "lawRewrite"; shards: number }
   | { type: "drop"; rarity: Rarity; slot: EquipSlot }
   | { type: "achievement"; id: string }
   | { type: "levelUp"; upgrade: UpgradeId; level: number }
@@ -248,6 +259,8 @@ export interface DerivedStats {
   hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）
   bossHpMult: Big; // Boss 生命倍率（深渊豪赌等）
   bossGoldMult: Big; // Boss 金币倍率（深渊豪赌等）
+  goldHpExp: number; // 生效的怪物金币指数（法则补丁）
+  goldToDmgMult: Big; // 金币转伤（法则解锁的独立乘区）
   offlineEffTalent: number;
   skipBaseTalent: number;
   shardGainMult: number;

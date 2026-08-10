@@ -23,6 +23,7 @@ import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from 
 import { talentNodeById } from "./data/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { applyLeap, canLeap as sysCanLeap, leapCores, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
+import { applyLawRewrite, canRewriteLaw as sysCanRewriteLaw, lawShards, buyLawPatch as sysBuyLawPatch, lawShopCost as sysLawShopCost, canBuyLaw as sysCanBuyLaw } from "./systems/law";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
@@ -76,6 +77,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     },
     prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
     leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
+    laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
@@ -359,7 +361,7 @@ export class GameEngine {
     this.state.statistics.totalKills += 1;
 
     const kind = c.enemyKind;
-    let gold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
+    let gold = enemyGold(stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(this.derived.goldMult);
     if (isBoss) gold = gold.mul(Big.fromNumber(10)).mul(this.derived.bossGoldMult);
     else if (kind === "elite") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_GOLD_MULT));
     else if (kind === "mimic") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_GOLD_MULT));
@@ -373,7 +375,7 @@ export class GameEngine {
     }
     // 溢出金币（仅首次通关，即超越历史最大关卡）
     if (overkill.gt(Big.ZERO) && stage > this.state.statistics.allTimeMaxStage) {
-      const baseGold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
+      const baseGold = enemyGold(stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(this.derived.goldMult);
       const hpBefore = toBig(c.enemyMaxHp);
       gold = gold.add(overflowGold(overkill.add(hpBefore), hpBefore, baseGold, this.derived.overflowEffMult));
     }
@@ -740,7 +742,7 @@ export class GameEngine {
         this.state.combat.bossTimer = Math.min(CONFIG.BOSS_TIMER_SEC, this.state.combat.bossTimer + result.action.bossFreezeSec);
       }
     } else if (result.action.kind === "data_flood") {
-      const gold = enemyGold(this.state.combat.stage, this.derived.hpGrowth).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
+      const gold = enemyGold(this.state.combat.stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
       this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
       this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
       this.state.daily.goldEarned = toBig(this.state.daily.goldEarned).add(gold).toTuple();
@@ -896,6 +898,34 @@ export class GameEngine {
   }
   canBuyLeap(id: Parameters<typeof sysBuyLeapUpgrade>[1]): boolean {
     return sysCanBuyLeap(this.state, id);
+  }
+
+  // ---------------- 法则重写（第三层重置）----------------
+  canRewriteLaw(): boolean {
+    return sysCanRewriteLaw(this.state);
+  }
+  rewriteLaw(): { shards: number } | null {
+    if (!this.canRewriteLaw()) return null;
+    const shards = lawShards(this.state);
+    applyLawRewrite(this.state, shards);
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.spawnEnemy();
+    this.recomputeDerived();
+    this.emit({ type: "lawRewrite", shards });
+    return { shards };
+  }
+  buyLawPatch(id: Parameters<typeof sysBuyLawPatch>[1]): boolean {
+    const ok = sysBuyLawPatch(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  lawShopCost(id: Parameters<typeof sysBuyLawPatch>[1]): number {
+    return sysLawShopCost(this.state, id);
+  }
+  canBuyLaw(id: Parameters<typeof sysBuyLawPatch>[1]): boolean {
+    return sysCanBuyLaw(this.state, id);
   }
 
   // ---------------- 挑战模式 ----------------
@@ -1096,12 +1126,12 @@ export class GameEngine {
       const per = killTime + (crush ? 0 : 0.3);
       if (t + per > maxSec) {
         const frac = (maxSec - t) / per;
-        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
+        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state), derived.goldHpExp).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
         t = maxSec;
         break;
       }
       t += per;
-      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult));
+      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state), derived.goldHpExp).mul(derived.goldMult));
       kills++;
       stage++;
     }

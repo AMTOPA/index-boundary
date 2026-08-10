@@ -33,6 +33,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [unlockCard, setUnlockCard] = useState<string | null>(null);
   const [milestoneFlash, setMilestoneFlash] = useState<number | null>(null);
   const [leapFlash, setLeapFlash] = useState<number | null>(null);
+  const [lawFlash, setLawFlash] = useState<number | null>(null);
   const [offline, setOffline] = useState<OfflineResult | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -102,6 +103,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
           pushToast("世界跃迁！获得 " + ev.cores + " 世界核心，进入新世界线", "energy");
           setLeapFlash(ev.cores);
           window.setTimeout(() => setLeapFlash((v) => (v === ev.cores ? null : v)), 2800);
+          break;
+        case "lawRewrite":
+          playSfx("prestige");
+          pushToast("法则重写！获得 " + ev.shards + " 法则碎片，公式已被改写", "energy");
+          setLawFlash(ev.shards);
+          window.setTimeout(() => setLawFlash((v) => (v === ev.shards ? null : v)), 2800);
           break;
         case "prestige":
           playSfx("prestige");
@@ -225,6 +232,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
             <div className="leap-title">世界跃迁</div>
             <div className="leap-sub">跨越世界线 · 新的法则展开</div>
             <div className="leap-cores mono">+{leapFlash} 世界核心</div>
+          </div>
+        </div>
+      )}
+      {lawFlash !== null && (
+        <div className="law-flash">
+          <div className="leap-rings"><span /><span /><span /></div>
+          <div className="leap-inner">
+            <div className="law-title">法则重写</div>
+            <div className="leap-sub">法典重铸 · 公式被改写</div>
+            <div className="leap-cores mono">+{lawFlash} 法则碎片</div>
           </div>
         </div>
       )}

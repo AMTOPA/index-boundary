@@ -170,6 +170,10 @@ function TopBar() {
           <span className="value mono" style={{ color: "var(--super)" }}>{formatNumber(state.leap?.cores ?? 0)}</span>
         </div>
         <div className="resource">
+          <span className="label">📜 法则碎片</span>
+          <span className="value mono" style={{ color: "var(--gold)" }}>{formatNumber(state.laws?.shards ?? 0)}</span>
+        </div>
+        <div className="resource">
           <span className="label">🏰 关卡</span>
           <span className="value mono">{state.combat.stage}</span>
         </div>
