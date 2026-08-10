@@ -94,7 +94,7 @@ export const CONFIG = {
       ],
       milestoneRepeatEvery: 200, // 200 级后每 200 级再 ×5
     },
-    gold: { baseCost: 10, growth: 1.22, rebaseEvery: 25, rebaseMult: 5, perLevel: 0.1 },
+    gold: { baseCost: 15, growth: 1.38, rebaseEvery: 25, rebaseMult: 5, perLevel: 0.03 },
   } as const,
 
   // 装备

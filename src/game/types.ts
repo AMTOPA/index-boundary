@@ -88,7 +88,7 @@ export interface EquipmentState {
   slots: Partial<Record<EquipSlot, EquipInstance>>;
   inventory: EquipInstance[];
   fragments: BigTuple;
-  autoBreakdown: Rarity | null; // null=不自动分解；否则分解 ≤ 该稀有度
+  autoBreakdown: Rarity | null; // null=不自动分解；否则分解 < 该稀有度（严格低于档位）
 }
 
 export interface SkillState {
@@ -238,7 +238,6 @@ export type GameEvent =
   | { type: "achievement"; id: string }
   | { type: "levelUp"; upgrade: UpgradeId; level: number }
   | { type: "skillCast"; skill: SkillId }
-  | { type: "offline"; seconds: number; gold: BigTuple }
   | { type: "challengeStart"; id: ChallengeId }
   | { type: "challengeClaim"; id: ChallengeId }
   | { type: "seasonStart"; modifiers: ChallengeId[] }

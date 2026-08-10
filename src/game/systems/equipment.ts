@@ -171,8 +171,8 @@ export function unequip(state: GameState, slot: EquipSlot): boolean {
 export function addDrop(state: GameState, item: EquipInstance): boolean {
   const threshold = state.equipment.autoBreakdown;
   if (threshold) {
-    const order = { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4 } as Record<Rarity, number>;
-    if (order[item.rarity] <= order[threshold]) {
+    const order = (Object.keys(CONFIG.EQUIPMENT.RARITIES) as Rarity[]).reduce((acc, r, i) => { acc[r] = i; return acc; }, {} as Record<Rarity, number>);
+    if (order[item.rarity] < order[threshold]) { // 严格低于档位才自动分解
       state.equipment.fragments = Big.fromTuple(state.equipment.fragments).add(Big.fromNumber(shardsForRarity(item.rarity))).toTuple();
       return false;
     }

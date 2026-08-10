@@ -43,6 +43,51 @@ export function upgradeCost(id: UpgradeId, level: number): Big {
   }
   return cost;
 }
+export function upgradeTotalCost(id: UpgradeId, fromLevel: number, n: number): Big {
+  // 从 fromLevel 起连续购买 n 级的总价（闭式解，O(1)）
+  if (n <= 0) return Big.ZERO;
+  const u = CONFIG.UPGRADES[id];
+  const growth = u.growth;
+  const g = Big.fromNumber(growth);
+  const base = Big.fromNumber(u.baseCost);
+  const R = u.rebaseEvery;
+  const RM = u.rebaseMult;
+  const gMinus1 = Big.fromNumber(growth - 1);
+  if (R <= 0) {
+    // sum base*g^(from+i) = base*g^from*(g^n-1)/(g-1)
+    return base.mul(g.pow(fromLevel)).mul(g.pow(n).sub(Big.ONE).div(gMinus1));
+  }
+  const r0 = fromLevel % R;
+  let done = 0;
+  let total = Big.ZERO;
+  // 第一段：当前重基块内剩余 (R - r0) 级
+  if (r0 > 0) {
+    const k = Math.min(R - r0, n);
+    const seg = base.mul(g.pow(fromLevel)).mul(Big.fromNumber(Math.pow(RM, Math.floor(fromLevel / R)))).mul(g.pow(k).sub(Big.ONE).div(gMinus1));
+    total = total.add(seg);
+    done += k;
+  }
+  if (done >= n) return total;
+  // 完整重基块：每块 R 级，块间为等比
+  const startLevel = fromLevel + done;
+  const fullBlocks = Math.floor((n - done) / R);
+  if (fullBlocks > 0) {
+    const qStart = Math.floor(startLevel / R);
+    const blockGeom = g.pow(R).sub(Big.ONE).div(gMinus1);
+    const A = base.mul(blockGeom).mul(g.pow(startLevel)).mul(Big.fromNumber(Math.pow(RM, qStart)));
+    const ratio = g.pow(R).mul(Big.fromNumber(RM));
+    total = total.add(A.mul(ratio.pow(fullBlocks).sub(Big.ONE).div(ratio.sub(Big.ONE))));
+    done += fullBlocks * R;
+  }
+  // 余数块
+  const rem = n - done;
+  if (rem > 0) {
+    const qStart = Math.floor((fromLevel + done) / R);
+    const seg = base.mul(g.pow(fromLevel + done)).mul(Big.fromNumber(Math.pow(RM, qStart))).mul(g.pow(rem).sub(Big.ONE).div(gMinus1));
+    total = total.add(seg);
+  }
+  return total;
+}
 
 export function attackMult(level: number): Big {
   let m = Big.fromNumber(CONFIG.UPGRADES.attack.effectPerLevel).pow(level);
@@ -100,7 +145,8 @@ export function critDamageFromLevel(level: number): number {
 }
 
 export function goldMultFromLevel(level: number): number {
-  return 1 + level * CONFIG.UPGRADES.gold.perLevel;
+  // 指数增长：每级 ×(1+perLevel)，无上限、不衰减（与攻击同构）
+  return Math.pow(1 + CONFIG.UPGRADES.gold.perLevel, level);
 }
 
 // ---------------- 怪物 ----------------

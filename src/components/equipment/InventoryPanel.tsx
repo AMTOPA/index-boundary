@@ -35,7 +35,7 @@ export function InventoryPanel() {
         <ResourceChip icon="💠" label="碎片" value={fragments} tone="frag" />
       </div>
       <div className="equip-toolbar">
-        <span className="equip-toolbar-label">自动分解 ≤</span>
+        <span className="equip-toolbar-label">自动分解 &lt;</span>
         <select
           className="equip-select"
           value={autoBreakdown ?? ""}

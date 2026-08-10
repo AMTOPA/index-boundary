@@ -192,6 +192,8 @@ input { font-family: inherit; }
 .buy-counts { display: flex; gap: 6px; margin-left: 8px; }
 .mini-btn { background: #16233f; border: 1px solid var(--panel-border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; }
 .mini-btn:hover:not(:disabled) { border-color: var(--accent); }
+.mini-btn.buy-max { background: linear-gradient(135deg, #b18cff, #7c5cff); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+
 
 /* ---------- 通用按钮 ---------- */
 .btn {

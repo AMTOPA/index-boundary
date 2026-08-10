@@ -69,9 +69,13 @@ export function UpgradePanel() {
   const aspdSoftCap = CONFIG.APS_SOFT_CAP + derived.apsCapAdd + derived.apsCapTalent;
   const isNearCap = (id: UpgradeId, level: number): boolean => {
     if (level <= 0) return false;
+    // 仅攻速（软上限）与暴击率（饱和上限）会接近上限；攻击/暴击伤害/金币均无上限，始终可买
     if (id === "aspd") return panelApsFromLevel(level) + derived.apsCapTalent >= aspdSoftCap;
-    const def = DEFS.find((d) => d.id === id);
-    return def ? def.gainRatio(level) < CONFIG.UPGRADE_NEAR_CAP_RATIO : false;
+    if (id === "critChance") {
+      const def = DEFS.find((d) => d.id === id);
+      return def ? def.gainRatio(level) < CONFIG.UPGRADE_NEAR_CAP_RATIO : false;
+    }
+    return false;
   };
   return (
     <div className="panel">
@@ -99,6 +103,7 @@ export function UpgradePanel() {
                   {BULK_STEPS.map((n) => (
                     <button key={n} className="mini-btn" onClick={() => engine?.buyUpgradeTimes(def.id, n)}>×{n}</button>
                   ))}
+                  <button key="max" className="mini-btn buy-max" onClick={() => engine?.buyUpgradeMax(def.id)}>MAX</button>
                 </div>
               </div>
             )}

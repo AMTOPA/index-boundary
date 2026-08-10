@@ -131,7 +131,7 @@ function InventorySection({ engine }: { engine: GameEngine | null }) {
   return (
     <div className="inventory-section">
       <div className="equip-toolbar" style={{ marginBottom: 6 }}>
-        <span className="equip-toolbar-label">自动分解 ≤</span>
+        <span className="equip-toolbar-label">自动分解 &lt;</span>
         <select
           className="equip-select"
           value={autoBreakdown ?? ""}

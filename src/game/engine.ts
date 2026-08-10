@@ -8,7 +8,7 @@ import { Rng } from "./rng";
 import {
   computeDerived, emptyBuffs, type RuntimeBuffs,
   enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
-  overflowGold, crushGold, upgradeCost, prestigeEnergy, pickSpecialEnemy, seasonScore,
+  overflowGold, crushGold, upgradeCost, upgradeTotalCost, prestigeEnergy, pickSpecialEnemy, seasonScore,
   critChanceFromLevel, critDamageFromLevel,
 } from "./formulas";
 import {
@@ -36,7 +36,7 @@ export interface OfflineResult {
   kills: number;
   stagesAdvanced: number;
   drops: number;
-  secondsSimulated: number;
+  seconds: number; // 真实离线时长（封顶到 OFFLINE.MAX_HOURS）
   capped: boolean;
 }
 
@@ -463,12 +463,12 @@ export class GameEngine {
   private sweepAutoBreakdownInventory(): { count: number; shards: number } {
     const threshold = this.state.equipment.autoBreakdown;
     if (!threshold) return { count: 0, shards: 0 };
-    const order = { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4 } as Record<Rarity, number>;
+    const order = (Object.keys(CONFIG.EQUIPMENT.RARITIES) as Rarity[]).reduce((acc, r, i) => { acc[r] = i; return acc; }, {} as Record<Rarity, number>);
     let count = 0;
     let shards = 0;
     const kept: EquipInstance[] = [];
     for (const item of this.state.equipment.inventory) {
-      if (order[item.rarity] <= order[threshold]) {
+      if (order[item.rarity] < order[threshold]) { // 严格低于档位才自动分解
         count += 1;
         shards += shardsForRarity(item.rarity);
       } else {
@@ -664,6 +664,29 @@ export class GameEngine {
     return bought;
   }
 
+  // 一次买满：二分查找当前金币可购买的最大等级数（闭式成本 O(log n)）
+  buyUpgradeMax(id: UpgradeId): number {
+    if (!this.upgradeUnlocked(id)) return 0;
+    const gold = toBig(this.state.player.gold);
+    const from = this.state.player.upgrades[id];
+    const MAX_BUY = 100000000; // 1e8 级封顶，防极端输入
+    let lo = 0;
+    let hi = 1;
+    while (hi <= MAX_BUY && gold.gte(upgradeTotalCost(id, from, hi))) hi *= 2;
+    hi = Math.min(hi, MAX_BUY);
+    while (lo + 1 < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (gold.gte(upgradeTotalCost(id, from, mid))) lo = mid; else hi = mid;
+    }
+    if (lo <= 0) return 0;
+    const cost = upgradeTotalCost(id, from, lo);
+    this.state.player.gold = gold.sub(cost).toTuple();
+    this.state.player.upgrades[id] = from + lo;
+    this.recomputeDerived();
+    this.emit({ type: "levelUp", upgrade: id, level: from + lo });
+    return lo;
+  }
+
   // Smart Buy：按 DPS 提升 / 成本 选择
   smartBuy(): boolean {
     const candidates: UpgradeId[] = ["attack", "aspd", "critChance", "critDamage", "gold"];
@@ -698,7 +721,7 @@ export class GameEngine {
       const d = critDmgFor(s);
       gain = expectedCritMult(critChanceFor(s), Big.fromNumber(critDamageFromLevel(s.player.upgrades.critDamage + 1))).div(Big.max(Big.ONE, expectedCritMult(critChanceFor(s), Big.fromNumber(d)))).log10();
     } else if (id === "gold") {
-      gain = 0.5 * Math.log10(1 + 0.1 / (1 + s.player.upgrades.gold * 0.1));
+      gain = 0.5 * Math.log10(1 + CONFIG.UPGRADES.gold.perLevel); // 指数增长：每级固定 ×(1+perLevel)
     }
     return gain / cost;
   }
@@ -1269,7 +1292,7 @@ export class GameEngine {
       kills,
       stagesAdvanced: stage - state.combat.stage,
       drops,
-      secondsSimulated: t,
+      seconds: maxSec, // 真实离线时长（封顶）；t 为模拟战斗墙内时间
       capped: durationSec > maxSec,
     };
   }
@@ -1289,12 +1312,13 @@ export class GameEngine {
       return null;
     }
     const result = GameEngine.simulateOffline(this.state, elapsedSec);
-    if (result.secondsSimulated <= 0) {
+    if (result.seconds <= 0) {
       this.state.meta.lastSeenAt = nowMs;
       return null;
     }
     this.applyOfflineResult(result);
     this.state.meta.lastSeenAt = nowMs;
+    // 只要真实离线超过 5s 就弹窗（显示真实时长；卡墙 0 收益也如实展示，时长已计入统计）
     return result;
   }
 
@@ -1302,7 +1326,7 @@ export class GameEngine {
     this.state.player.gold = toBig(this.state.player.gold).add(result.goldGained).toTuple();
     this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(result.goldGained).toTuple();
     this.state.statistics.totalKills += result.kills;
-    this.state.statistics.totalOfflineMs += result.secondsSimulated * 1000;
+    this.state.statistics.totalOfflineMs += result.seconds * 1000;
     let finalStage = this.state.combat.stage + result.stagesAdvanced;
     if (isBossStage(finalStage)) finalStage -= 1;
     if (finalStage < 1) finalStage = 1;
@@ -1317,7 +1341,6 @@ export class GameEngine {
     this.spawnEnemy();
     this.checkUnlocks();
     this.recomputeDerived();
-    this.emit({ type: "offline", seconds: result.secondsSimulated, gold: result.goldGained.toTuple() });
   }
 }
 

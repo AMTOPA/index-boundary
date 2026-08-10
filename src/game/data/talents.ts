@@ -79,7 +79,7 @@ export const TALENT_NODES: TalentNodeDef[] = [
   { id: "greed_keystone_craft", tree: "greed", name: "精密制造", desc: "重铸 -50% 与制作 -30% 费用", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["greed_pan", "greed_refine"], exclusiveGroup: "greed_keystone", effect: { kind: "keystone", key: "preciseCraft" } },
 
 { id: "sing_law", tree: "singularity", name: "法则扭曲", desc: "怪物 HP 指数基数 -0.003/点", max: 3, cost: 2, type: "additive", tier: 1, effect: { kind: "hpGrowthReduction", perPoint: 0.003 } },
-  { id: "sing_cap", tree: "singularity", name: "攻速破限", desc: "攻速软上限 +1/点", max: 3, cost: 2, type: "additive", tier: 1, effect: { kind: "apsCap", perPoint: 1 } },
+  { id: "sing_cap", tree: "singularity", name: "攻速跃升", desc: "攻速 ×1.2/点（乘法乘区，3 点共 +72.8%）", max: 3, cost: 2, type: "mult", tier: 1, effect: { kind: "aspdPct", perPoint: 0.2 } },
   { id: "sing_skill_cd", tree: "singularity", name: "时空折叠", desc: "技能冷却 -4%/点", max: 3, cost: 2, type: "additive", tier: 2, requires: ["sing_law"], effect: { kind: "skillCdPct", perPoint: 0.04 } },
   { id: "sing_overflow", tree: "singularity", name: "溢流共振", desc: "溢出效率 +30%/点", max: 3, cost: 2, type: "mult", tier: 2, requires: ["sing_cap"], effect: { kind: "overflowEff", perPoint: 0.3 } },
   { id: "sing_keystone_boss", tree: "singularity", name: "深渊豪赌", desc: "Boss 生命 ×2，Boss 金币 ×6（猎杀流）", max: 1, cost: 4, type: "keystone", tier: 3, requires: ["sing_skill_cd", "sing_overflow"], exclusiveGroup: "singularity_keystone", effect: { kind: "keystone", key: "bossGamble" } },

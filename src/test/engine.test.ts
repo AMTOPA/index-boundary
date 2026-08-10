@@ -3,6 +3,7 @@ import { GameEngine, createNewState } from "../game/engine";
 import { Big } from "../game/bignum";
 import { CONFIG } from "../game/config";
 import { SKILL_IDS } from "../game/data/skills";
+import { upgradeCost, upgradeTotalCost, goldMultFromLevel } from "../game/formulas";
 
 describe("GameEngine", () => {
   it("新存档生成敌人", () => {
@@ -79,7 +80,7 @@ describe("GameEngine", () => {
     const off = eng.handleOffline(Date.now());
     expect(off).not.toBeNull();
     if (off) {
-      expect(off.secondsSimulated).toBeGreaterThan(0);
+      expect(off.seconds).toBeGreaterThan(0);
       expect(Number.isFinite(off.goldGained.toNumber())).toBe(true);
       expect(off.kills).toBeGreaterThan(0);
       expect(off.stagesAdvanced).toBeGreaterThan(0);
@@ -113,5 +114,44 @@ describe("GameEngine", () => {
     expect(eng.state.combat.stage).toBeGreaterThan(1);
     expect(eng.state.statistics.totalKills).toBeGreaterThan(50);
     expect(eng.state.statistics.allTimeMaxStage).toBeGreaterThanOrEqual(eng.state.combat.stage);
+  });
+
+  it("buyUpgradeMax：闭式总价与暴力求和一致（全部升级类型）", () => {
+    const types = ["attack", "aspd", "critChance", "critDamage", "gold"] as const;
+    const cases: [number, number][] = [[0, 1], [0, 10], [3, 7], [24, 3], [25, 10], [49, 5], [50, 12], [99, 25], [0, 100]];
+    for (const id of types) {
+      for (const [from, n] of cases) {
+        const eng = new GameEngine(createNewState(1));
+        // 暴力求和
+        let brute = Big.ZERO;
+        for (let i = 0; i < n; i++) {
+          brute = brute.add(upgradeCost(id, from + i));
+        }
+        const total = upgradeTotalCost(id, from, n);
+        expect(Math.abs(total.sub(brute).div(brute).toNumber())).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it("buyUpgradeMax：用当前金币买满不超支", () => {
+    const eng = new GameEngine(createNewState(1));
+    eng.state.player.gold = [1e9, 0];
+    const before = eng.state.player.upgrades.attack;
+    const goldBefore = Big.fromTuple(eng.state.player.gold);
+    const n = eng.buyUpgradeMax("attack");
+    expect(n).toBeGreaterThan(0);
+    expect(eng.state.player.upgrades.attack).toBe(before + n);
+    expect(goldBefore.gte(upgradeTotalCost("attack", before, n))).toBe(true);
+    // 买完后再买应买不起（金币已耗尽）
+    const n2 = eng.buyUpgradeMax("attack");
+    expect(n2).toBe(0);
+  });
+
+  it("金币升级指数无上限：等级越高倍率越高且持续增长", () => {
+    
+    expect(goldMultFromLevel(0)).toBe(1);
+    const g1 = goldMultFromLevel(50);
+    const g2 = goldMultFromLevel(500);
+    expect(g2).toBeGreaterThan(g1 * 1e5); // 无软上限：500 级远高于 50 级（1.03^450≈6e5）
   });
 });

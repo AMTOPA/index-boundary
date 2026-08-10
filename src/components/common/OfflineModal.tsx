@@ -9,7 +9,7 @@ export function OfflineModal({ result, onClose }: { result: OfflineResult; onClo
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>离线收益</h2>
         <div className="stat-grid">
-          <div className="stat-item"><div className="k">离线时长</div><div className="v">{formatDuration(result.secondsSimulated)}</div></div>
+          <div className="stat-item"><div className="k">离线时长</div><div className="v">{formatDuration(result.seconds)}</div></div>
           <div className="stat-item"><div className="k">获得金币</div><div className="v mono" style={{ color: "var(--gold)" }}>{formatBig(result.goldGained)}</div></div>
           <div className="stat-item"><div className="k">击杀</div><div className="v">{result.kills}</div></div>
           <div className="stat-item"><div className="k">推进关卡</div><div className="v">+{result.stagesAdvanced}</div></div>

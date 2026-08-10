@@ -45,11 +45,12 @@ describe("V15 内容：挑战永久增益 + 挑战禁用重构倍率 + 自动分
     mk("common"); mk("rare"); mk("legendary");
     const fragBefore = toBig(eng.state.equipment.fragments).toNumber();
     eng.setAutoBreakdown("rare");
-    // common + rare 被清理，legendary 保留
-    expect(eng.state.equipment.inventory.length).toBe(1);
-    expect(eng.state.equipment.inventory[0].rarity).toBe("legendary");
+    // 严格低于档位：common 被清理，rare/legendary 保留
+    expect(eng.state.equipment.inventory.length).toBe(2);
+    expect(eng.state.equipment.inventory.some((i) => i.rarity === "rare")).toBe(true);
+    expect(eng.state.equipment.inventory.some((i) => i.rarity === "legendary")).toBe(true);
     const gain = toBig(eng.state.equipment.fragments).toNumber() - fragBefore;
-    expect(gain).toBe(CONFIG.EQUIPMENT.RARITIES.common.shards + CONFIG.EQUIPMENT.RARITIES.rare.shards);
+    expect(gain).toBe(CONFIG.EQUIPMENT.RARITIES.common.shards);
   });
 
   it("购买自动分解器且已设档位时也立即清理一次背包", () => {

@@ -131,7 +131,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           break;
         case "autoBreakdown":
           playSfx("drop");
-          pushToast("自动分解 $(${ev.count}) 件装备，+$(${ev.shards}) 碎片", "frag");
+          pushToast(`自动分解 ${ev.count} 件装备，+${ev.shards} 碎片`, "frag");
           break;
         case "drop": playSfx("drop"); break;
         case "levelUp": playSfx("upgrade"); break;
@@ -141,7 +141,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     cleanupRef.current.push(unsub);
 
     const off = eng.handleOffline(Date.now());
-    if (off && off.secondsSimulated > 0) setOffline(off);
+    if (off) setOffline(off);
     gameStore.setState(eng.state);
     derivedStore.setState({ v: derivedStore.getState().v + 1, derived: eng.derived });
     setEngine(eng);
