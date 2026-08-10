@@ -246,6 +246,7 @@ export const CONFIG = {
     combat_recorder: [1, 7], // 10M
     auto_skill: [1, 8], // 100M
     auto_equip: [1, 9], // 1e9
+    auto_prestige: [1, 12], // 1e12
   } as Record<ToolId, BigTuple>,
 
   // 天赋
@@ -268,6 +269,7 @@ export const CONFIG = {
       startSkill: { baseCost: 40, costGrowth: 1, perLevel: 1, max: 1, label: "初始技能", desc: "开局解锁 1 个技能" },
       singularityAmp: { baseCost: 100, costGrowth: 3, perLevel: 1, max: 5, label: "奇点放大", desc: "奇点能量效果 ×2（能量指数 +1）" },
     },
+    AUTO_WALL_SEC: 5, // 自动重构：击杀时间超过该秒数视为卡墙才触发
   },
 
   // 解锁节奏（关卡）

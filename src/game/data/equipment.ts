@@ -117,3 +117,7 @@ export function formatAffixValue(stat: AffixStat, value: number): string {
   }
   return `+${Math.round(value * 100)}%`;
 }
+// 装备评分（自动换装 / UI 展示共用）：主词条 × 强化 × 副词条数 × 超频
+export function equipScore(item: { main: { mult: number }; level: number; affixes: unknown[]; overclock?: number }): number {
+  return item.main.mult * (1 + item.level * 0.15) * (1 + item.affixes.length * 0.1) * (1 + (item.overclock ?? 0) * 0.2);
+}

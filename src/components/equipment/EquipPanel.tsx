@@ -7,7 +7,7 @@ import { toBig } from "@/game/bignum";
 import { formatNumber } from "@/game/format";
 import {
   RARITY_LABEL, RARITY_COLOR, SLOT_LABEL, SLOT_ICON, AFFIX_LABEL,
-  rarityOrder, activeSets,
+  rarityOrder, activeSets, equipScore,
 } from "@/game/data/equipment";
 import { CONFIG } from "@/game/config";
 import type { EquipSlot, Rarity } from "@/game/types";
@@ -66,7 +66,7 @@ export function EquipPanel() {
         return (
           <div className="equip-slot" key={slot}>
             <div className="equip-head">
-              <span>{SLOT_ICON[slot]} {SLOT_LABEL[slot]} <span className="mono" style={{ color: "var(--text-dim)" }}>+{item.level}</span>{item.overclock ? <span className="mono" style={{ color: "var(--gold)" }}> ×{item.overclock}超频</span> : null}</span>
+              <span>{SLOT_ICON[slot]} {SLOT_LABEL[slot]} <span className="mono" style={{ color: "var(--text-dim)" }}>+{item.level}</span>{item.overclock ? <span className="mono" style={{ color: "var(--gold)" }}> ×{item.overclock}超频</span> : null} <span className="mono" style={{ color: "var(--accent)", fontSize: 11 }}>评分 {equipScore(item).toFixed(1)}</span></span>
               <span className="equip-rarity" style={{ color: rc }}>{RARITY_LABEL[item.rarity]}</span>
             </div>
             <div className="equip-main" style={{ color: rc }}>

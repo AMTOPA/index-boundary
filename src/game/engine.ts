@@ -24,6 +24,7 @@ import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./sy
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
+import { equipScore } from "./data/equipment";
 import { ITEM_DEFS, TOOL_DEFS } from "./data/items";
 
 export interface OfflineResult {
@@ -93,6 +94,7 @@ export class GameEngine {
   private recomputeTimer = 0;
   private achievementTimer = 0;
   private dailyTimer = 0;
+  private autoPrestigeTimer = 0;
   private autoUpgradeTimer = 0;
   private chipUntil = 0;
   private protocolUntil = 0;
@@ -156,6 +158,17 @@ export class GameEngine {
     if (this.dailyTimer <= 0) {
       this.dailyTimer = 5;
       ensureDaily(this.state);
+    }
+    // 自动重构：卡墙且可重构时自动执行（每 10s 检查一次）
+    this.autoPrestigeTimer -= dt;
+    if (this.autoPrestigeTimer <= 0) {
+      this.autoPrestigeTimer = 10;
+      if (this.state.items.tools.auto_prestige && this.canPrestige()) {
+        const killTime = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
+        if (Number.isFinite(killTime) && killTime > CONFIG.PRESTIGE.AUTO_WALL_SEC) {
+          this.prestige();
+        }
+      }
     }
     this.recomputeTimer -= dt;
     if (this.recomputeTimer <= 0) {
@@ -654,9 +667,12 @@ export class GameEngine {
     if (ok) this.recomputeDerived();
     return ok;
   }
-  // 简单评分：主词条 × 强化 × 副词条数 × 超频
+  // 简单评分：主词条 × 强化 × 副词条数 × 超频（与 UI 共用 data/equipment.equipScore）
   private itemScore(item: EquipInstance): number {
-    return item.main.mult * (1 + item.level * 0.15) * (1 + item.affixes.length * 0.1) * (1 + (item.overclock ?? 0) * 0.2);
+    return equipScore(item);
+  }
+  scoreOf(item: EquipInstance): number {
+    return equipScore(item);
   }
   // 自动换装：背包中评分更高的装备自动穿上（需购买工具）
   maybeAutoEquip(): void {
