@@ -58,16 +58,19 @@ function autoEquip(eng: GameEngine): void {
   }
 }
 
+// 非退化策略：攻击优先 = 重攻击轻经济；金币优先 = 重经济保基础攻击；两者都要保证能推进/重构
 function buyStrategy(eng: GameEngine, strategy: SimStrategy): void {
   if (strategy === "equal") {
     eng.smartBuy();
   } else if (strategy === "attack") {
-    eng.buyUpgradeTimes("attack", 50);
+    eng.buyUpgradeTimes("attack", 20);
     eng.buyUpgradeTimes("aspd", 5);
-    eng.buyUpgradeTimes("gold", 5);
+    eng.buyUpgradeTimes("gold", 8);
+    eng.buyUpgradeTimes("critDamage", 3);
   } else {
-    eng.buyUpgradeTimes("gold", 50);
-    eng.buyUpgradeTimes("attack", 5);
+    eng.buyUpgradeTimes("gold", 10);
+    eng.buyUpgradeTimes("attack", 12);
+    eng.buyUpgradeTimes("aspd", 3);
   }
 }
 
