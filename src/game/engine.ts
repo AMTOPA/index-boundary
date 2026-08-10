@@ -9,6 +9,7 @@ import {
   computeDerived, emptyBuffs, type RuntimeBuffs,
   enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
   overflowGold, crushGold, upgradeCost, prestigeEnergy, pickSpecialEnemy, seasonScore,
+  critChanceFromLevel, critDamageFromLevel,
 } from "./formulas";
 import {
   rollEquipment, addDrop, dropChance, equipItem as sysEquip, unequip as sysUnequip,
@@ -646,10 +647,10 @@ export class GameEngine {
       gain = Math.log10(effApsRatio(panel, next));
     } else if (id === "critChance") {
       const c = critChanceFor(s);
-      gain = expectedCritMult(c + 0.008, Big.fromNumber(critDmgFor(s))).div(Big.max(Big.ONE, expectedCritMult(c, Big.fromNumber(critDmgFor(s))))).log10();
+      gain = expectedCritMult(critChanceFromLevel(s.player.upgrades.critChance + 1), Big.fromNumber(critDmgFor(s))).div(Big.max(Big.ONE, expectedCritMult(c, Big.fromNumber(critDmgFor(s))))).log10();
     } else if (id === "critDamage") {
       const d = critDmgFor(s);
-      gain = expectedCritMult(critChanceFor(s), Big.fromNumber(d + 0.15)).div(Big.max(Big.ONE, expectedCritMult(critChanceFor(s), Big.fromNumber(d)))).log10();
+      gain = expectedCritMult(critChanceFor(s), Big.fromNumber(critDamageFromLevel(s.player.upgrades.critDamage + 1))).div(Big.max(Big.ONE, expectedCritMult(critChanceFor(s), Big.fromNumber(d)))).log10();
     } else if (id === "gold") {
       gain = 0.5 * Math.log10(1 + 0.1 / (1 + s.player.upgrades.gold * 0.1));
     }
@@ -1277,8 +1278,8 @@ function effApsRatio(a: number, b: number): number {
   return fb / Math.max(0.0001, fa);
 }
 function critChanceFor(s: GameState): number {
-  return CONFIG.BASE_CRIT_CHANCE + lv(s, "critChance") * CONFIG.UPGRADES.critChance.perLevel;
+  return critChanceFromLevel(lv(s, "critChance"));
 }
 function critDmgFor(s: GameState): number {
-  return CONFIG.BASE_CRIT_DAMAGE + lv(s, "critDamage") * CONFIG.UPGRADES.critDamage.perLevel;
+  return critDamageFromLevel(lv(s, "critDamage"));
 }

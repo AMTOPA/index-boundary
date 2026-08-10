@@ -43,6 +43,8 @@ export const CONFIG = {
   // 基础属性
   BASE_CRIT_CHANCE: 0.05,
   BASE_CRIT_DAMAGE: 2,
+  CRIT_CHANCE_UPGRADE_CAP: 0.92, // 暴击率升级的渐近软上限（升级单独到不了 100%，需装备/天赋/被动补齐）
+  CRIT_OVERFLOW_TO_CRITDMG: 0.5, // 总暴击率每溢出 100% → 暴击伤害 ×(1+0.5)，有界转化，避免概率>100% 无意义
   BASE_APS: 1,
   APS_SOFT_CAP: 10,
 
@@ -75,8 +77,18 @@ export const CONFIG = {
       milestoneRepeatEvery: 100, // 100 级后每 100 级再 ×10
     },
     aspd: { baseCost: 15, growth: 1.3, rebaseEvery: 0, rebaseMult: 1, effectPerLevel: 1.08 },
-    critChance: { baseCost: 30, growth: 1.35, rebaseEvery: 0, rebaseMult: 1, perLevel: 0.008 },
-    critDamage: { baseCost: 25, growth: 1.28, rebaseEvery: 0, rebaseMult: 1, perLevel: 0.15 },
+    critChance: { baseCost: 15, growth: 1.25, rebaseEvery: 0, rebaseMult: 1, perLevel: 0.012 },
+    critDamage: {
+      baseCost: 25, growth: 1.28, rebaseEvery: 0, rebaseMult: 1,
+      perLevel: 0.22,
+      milestones: [
+        { level: 75, mult: 1.5 },
+        { level: 140, mult: 2 },
+        { level: 280, mult: 3 },
+        { level: 520, mult: 5 },
+      ],
+      milestoneRepeatEvery: 200, // 200 级后每 200 级再 ×5
+    },
     gold: { baseCost: 10, growth: 1.22, rebaseEvery: 25, rebaseMult: 5, perLevel: 0.1 },
   } as const,
 

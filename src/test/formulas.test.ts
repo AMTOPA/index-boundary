@@ -3,7 +3,9 @@ import { Big } from "../game/bignum";
 import {
   enemyHp, enemyGold, isBossStage, bossHp, upgradeCost, prestigeEnergy,
   rollCrit, expectedCritMult, prestigeGlobalMult,
+  critChanceFromLevel, computeDerived, emptyBuffs,
 } from "../game/formulas";
+import { createNewState } from "../game/engine";
 import { CONFIG } from "../game/config";
 
 describe("怪物与关卡公式", () => {
@@ -91,5 +93,44 @@ describe("重构", () => {
     expect(g0).toBeCloseTo(Math.pow(11, 2), 6);
     const g1 = prestigeGlobalMult(10, 1).toNumber();
     expect(g1).toBeCloseTo(Math.pow(11, 3), 6);
+  });
+});
+
+describe("暴击率封顶与溢出转化（平衡修复）", () => {
+  it("升级暴击率渐近软上限，永不超 100%", () => {
+    const asymptote = CONFIG.BASE_CRIT_CHANCE + CONFIG.CRIT_CHANCE_UPGRADE_CAP;
+    expect(asymptote).toBeLessThan(1);
+    for (const lv of [1, 10, 50, 100, 300, 1000, 10000]) {
+      expect(critChanceFromLevel(lv)).toBeLessThan(asymptote + 1e-9);
+      expect(critChanceFromLevel(lv)).toBeLessThan(1);
+    }
+    // 早期保持接近线性手感：10 级 ≈ 0.05 + perLevel×10（渐近曲线偏差在 1 位小数容差内）
+    expect(critChanceFromLevel(10)).toBeCloseTo(0.05 + CONFIG.UPGRADES.critChance.perLevel * 10, 1);
+  });
+
+  it("critAgain（暴击再次暴击）对 chance<1 同样生效（与 rollCrit 一致）", () => {
+    const withKeystone = expectedCritMult(0.5, Big.fromNumber(3), 1);
+    const without = expectedCritMult(0.5, Big.fromNumber(3), 0);
+    // 期望：0.5×3^2 + 0.5 = 5；无 Keystone：0.5×3 + 0.5 = 2
+    expect(withKeystone.toNumber()).toBeCloseTo(5, 8);
+    expect(without.toNumber()).toBeCloseTo(2, 8);
+    // 与 rollCrit 单次语义一致：暴击时 ×3^(1+1)=9
+    const r = rollCrit(0.5, Big.fromNumber(3), 1, 0);
+    expect(r.crit).toBe(true);
+    expect(r.mult.toNumber()).toBeCloseTo(9, 8);
+  });
+
+  it("computeDerived 暴击率封顶 100%，溢出转暴击伤害", () => {
+    const st = createNewState(1);
+    st.player.upgrades.critChance = 10000; // 升级渐近到上限
+    st.skills.passives.focus = 100; // 被动 +100% → 溢出
+    const d = computeDerived(st, emptyBuffs(), 0);
+    expect(d.critChance).toBe(1); // 封顶
+
+    const st0 = createNewState(2);
+    st0.player.upgrades.critChance = 10000;
+    const d0 = computeDerived(st0, emptyBuffs(), 0);
+    expect(d0.critChance).toBeLessThan(1); // 仅升级未到 100%
+    expect(d.critDamage.toNumber()).toBeGreaterThan(d0.critDamage.toNumber()); // 溢出转暴伤
   });
 });

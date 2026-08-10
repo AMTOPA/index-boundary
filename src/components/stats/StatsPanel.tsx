@@ -5,7 +5,7 @@ import { formatBig, formatNumber, formatDuration, formatPct } from "@/game/forma
 import { CONFIG } from "@/game/config";
 import {
   enemyHp, enemyGold, bossHp, upgradeCost, prestigeEnergy, prestigeGlobalMult,
-  expectedCritMult, effectiveAps, goldMultFromLevel,
+  expectedCritMult, effectiveAps, goldMultFromLevel, critChanceFromLevel, critDamageFromLevel,
 } from "@/game/formulas";
 import type { UpgradeId } from "@/game/types";
 
@@ -48,11 +48,15 @@ export function StatsPanel() {
       const next = effectiveAps(d.panelAps * CONFIG.UPGRADES.aspd.effectPerLevel);
       gain = next / Math.max(0.0001, d.effectiveAps) - 1;
     } else if (id === "critChance") {
-      gain = expectedCritMult(d.critChance + CONFIG.UPGRADES.critChance.perLevel, d.critDamage, d.critLayersExtra).div(
-        Big.max(Big.ONE, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra))).toNumber() - 1;
+      const c0 = critChanceFromLevel(lv);
+      const c1 = critChanceFromLevel(lv + 1);
+      gain = expectedCritMult(c1, d.critDamage, d.critLayersExtra).div(
+        Big.max(Big.ONE, expectedCritMult(c0, d.critDamage, d.critLayersExtra))).toNumber() - 1;
     } else if (id === "critDamage") {
-      gain = expectedCritMult(d.critChance, d.critDamage.add(Big.fromNumber(CONFIG.UPGRADES.critDamage.perLevel)), d.critLayersExtra).div(
-        Big.max(Big.ONE, expectedCritMult(d.critChance, d.critDamage, d.critLayersExtra))).toNumber() - 1;
+      const d0 = critDamageFromLevel(lv);
+      const d1 = critDamageFromLevel(lv + 1);
+      gain = expectedCritMult(d.critChance, Big.fromNumber(d1), d.critLayersExtra).div(
+        Big.max(Big.ONE, expectedCritMult(d.critChance, Big.fromNumber(d0), d.critLayersExtra))).toNumber() - 1;
     } else if (id === "gold") {
       gain = goldMultFromLevel(lv + 1) / Math.max(0.0001, goldMultFromLevel(lv)) - 1;
     }

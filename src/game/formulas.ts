@@ -65,11 +65,28 @@ export function effectiveAps(panel: number, capAdd = 0): number {
 }
 
 export function critChanceFromLevel(level: number): number {
-  return CONFIG.BASE_CRIT_CHANCE + level * CONFIG.UPGRADES.critChance.perLevel;
+  // 渐近软上限：早期 ≈ 每级 0.8%，随等级饱和到 CRIT_CHANCE_UPGRADE_CAP（升级单独永远到不了 100%）
+  const per = CONFIG.UPGRADES.critChance.perLevel;
+  const cap = CONFIG.CRIT_CHANCE_UPGRADE_CAP;
+  const growth = per / cap;
+  return CONFIG.BASE_CRIT_CHANCE + cap * (1 - Math.pow(1 - growth, level));
 }
 
 export function critDamageFromLevel(level: number): number {
-  return CONFIG.BASE_CRIT_DAMAGE + level * CONFIG.UPGRADES.critDamage.perLevel;
+  const def = CONFIG.UPGRADES.critDamage;
+  let cd = CONFIG.BASE_CRIT_DAMAGE + level * def.perLevel;
+  // 里程碑（镜像攻击升级，起点后移避免加速前期）：75/140/280/520 级 ×1.5/×2/×3/×5，之后每 200 级再 ×5
+  if (def.milestones) {
+    for (const ms of def.milestones) {
+      if (level >= ms.level) cd *= ms.mult;
+    }
+    const rep = def.milestoneRepeatEvery ?? 0;
+    if (rep > 0 && level >= rep) {
+      const repeats = Math.floor(level / rep);
+      for (let r = 2; r <= repeats; r++) cd *= 5;
+    }
+  }
+  return cd;
 }
 
 export function goldMultFromLevel(level: number): number {
@@ -110,10 +127,14 @@ export function pickSpecialEnemy(
 
 // ---------------- 暴击 ----------------
 
-// 期望暴击倍率（支持多重暴击）
+// 期望暴击倍率（支持多重暴击；extraLayers 即「暴击再次暴击」Keystone，对 chance<1 同样生效）
 export function expectedCritMult(chance: number, critDamage: Big, extraLayers = 0): Big {
   if (chance <= 0) return Big.ONE;
-  if (chance < 1) return Big.fromNumber(chance).mul(critDamage).add(Big.fromNumber(1 - chance));
+  if (chance < 1) {
+    // 暴击时倍率 = critDamage^(1+extraLayers)，与 rollCrit 保持一致
+    const critMult = critDamage.pow(1 + extraLayers);
+    return Big.fromNumber(chance).mul(critMult).add(Big.fromNumber(1 - chance));
+  }
   const layers = Math.floor(chance) + extraLayers;
   const frac = chance - Math.floor(chance);
   let mult = critDamage.pow(layers);
@@ -382,10 +403,13 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
 
   // ---- 暴击 ----
-  let critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
+  const rawCritChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
   // 挑战修饰符：无暴击——暴击率恒为 0
-  if (mods.includes("no_crit")) critChance = 0;
-  const critDamage = Big.fromNumber(critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd).mul(critDmgEquipMult).pow(lawCE);
+  const critChance = Math.min(1, mods.includes("no_crit") ? 0 : rawCritChance);
+  // 暴击率溢出（>100%）有界转化为暴击伤害，概率显示封顶 100%
+  const critOverflow = mods.includes("no_crit") ? 0 : Math.max(0, rawCritChance - 1);
+  let critDamage = Big.fromNumber(critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd).mul(critDmgEquipMult).pow(lawCE);
+  if (critOverflow > 0) critDamage = critDamage.mul(Big.fromNumber(1 + critOverflow * CONFIG.CRIT_OVERFLOW_TO_CRITDMG));
 
   // ---- 世界核心（第二层）----
   const leapGlobalMult = leapAllStatsMult(state.leap?.purchases?.allStats ?? 0);

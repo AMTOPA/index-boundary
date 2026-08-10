@@ -95,11 +95,12 @@ function buyStrategy(eng: GameEngine, strategy: SimStrategy): void {
     eng.buyUpgradeTimes("attack", 12);
     eng.buyUpgradeTimes("aspd", 3);
   } else if (strategy === "crit") {
-    eng.buyUpgradeTimes("attack", 12);
-    eng.buyUpgradeTimes("critChance", 12);
-    eng.buyUpgradeTimes("critDamage", 10);
+    eng.buyUpgradeTimes("attack", 14);
+    // 暴击率是渐近软上限：达到 ~92% 后边际收益骤降，理性玩家停止购买，转投攻击/暴伤
+    if (eng.derived.critChance < 0.92) eng.buyUpgradeTimes("critChance", 4);
+    eng.buyUpgradeTimes("critDamage", 16);
     eng.buyUpgradeTimes("aspd", 3);
-    eng.buyUpgradeTimes("gold", 5);
+    eng.buyUpgradeTimes("gold", 6);
   } else {
     eng.buyUpgradeTimes("aspd", 16);
     eng.buyUpgradeTimes("attack", 12);
