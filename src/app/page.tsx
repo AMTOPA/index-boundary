@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { GameProvider, useGame } from "@/components/game/GameProvider";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
 import { NumberDisplay } from "@/components/common/NumberDisplay";
+import { ResourceChip } from "@/components/common/ResourceChip";
 import { UpgradePanel } from "@/components/upgrade/UpgradePanel";
 import { CombatArea } from "@/components/combat/CombatArea";
 import { EquipPanel } from "@/components/equipment/EquipPanel";
@@ -153,10 +154,7 @@ function TopBar() {
           <span className="label">🪙 金币</span>
           <NumberDisplay className="value gold" value={state.player.gold} />
         </div>
-        <div className="resource">
-          <span className="label">💠 碎片</span>
-          <NumberDisplay className="value frag" value={state.equipment.fragments} />
-        </div>
+        <ResourceChip icon="💠" label="碎片" value={state.equipment.fragments} tone="frag" />
         <div className="resource">
           <span className="label">🔷 技能核心</span>
           <NumberDisplay className="value core" value={state.skills.cores} />

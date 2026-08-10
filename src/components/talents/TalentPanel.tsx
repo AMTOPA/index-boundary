@@ -1,9 +1,17 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
-import { TALENT_NODES, TALENT_TREES, talentNodeById } from "@/game/data/talents";
+import { TALENT_NODES, TALENT_TREES, treePoints } from "@/game/data/talents";
 import type { TreeId } from "@/game/types";
+import type { TalentNodeDef } from "@/game/data/talents";
+
+const TREE_ICON: Record<TreeId, string> = {
+  destruction: "🔥",
+  automation: "🤖",
+  greed: "💰",
+  singularity: "🌌",
+};
 
 export function TalentPanel() {
   const { engine } = useGame();
@@ -27,67 +35,99 @@ export function TalentPanel() {
   }
 
   return (
-    <div className="panel">
+    <div className="panel talent-panel">
       <div className="panel-title">
         <h3>天赋</h3>
-        <span className="hint">可用点数 <span className="mono" style={{ color: "var(--green)" }}>{points}</span></span>
+        <span className="points-chip"><span className="pc-icon">⚡</span><span>可用点数</span><span className="mono pc-val">{points}</span></span>
       </div>
-      <h3 style={{ marginTop: 12 }}>构筑预设</h3>
-      <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>保存当前天赋方案，随时切换（加载需足够天赋点）。</p>
-      {presets.map((p, i) => {
-        const letter = ["A", "B", "C"][i];
-        const cost = engine ? engine.buildPresetCostOf(i) : 0;
-        return (
-          <div className="shop-row" key={i}>
-            <div>
-              <div>{letter}. {p.name || `空槽位 ${letter}`}</div>
-              <div className="desc">{p.name ? `方案点数 ${cost}` : "尚未保存"}</div>
+
+      <div className="presets">
+        <h3>构筑预设</h3>
+        <p className="presets-hint">保存当前天赋方案，随时切换（加载需足够天赋点）。</p>
+        {presets.map((p, i) => {
+          const letter = ["A", "B", "C"][i];
+          const cost = engine ? engine.buildPresetCostOf(i) : 0;
+          return (
+            <div className="preset-row" key={i}>
+              <span className="preset-letter">{letter}</span>
+              <div className="preset-info">
+                <div className="preset-name">{p.name || `空槽位 ${letter}`}</div>
+                <div className="desc">{p.name ? `方案点数 ${cost}` : "尚未保存"}</div>
+              </div>
+              <div className="preset-actions">
+                <button className="mini-btn" onClick={() => engine?.saveBuild(i, `预设${letter}`)}>保存</button>
+                <button className="mini-btn" disabled={!p.name || !engine?.canLoadBuild(i)} onClick={() => engine?.loadBuild(i)}>加载</button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <button className="mini-btn" onClick={() => engine?.saveBuild(i, `预设${letter}`)}>保存</button>
-              <button className="mini-btn" disabled={!p.name || !engine?.canLoadBuild(i)} onClick={() => engine?.loadBuild(i)}>加载</button>
-            </div>
-          </div>
-        );
-      })}      {trees.map((tree) => {
-        const nodes = TALENT_NODES.filter((n) => n.tree === tree).sort((a, b) => a.tier - b.tier);
+          );
+        })}
+      </div>
+
+      {trees.map((tree) => {
+        const nodes = TALENT_NODES.filter((n) => n.tree === tree);
+        const tiers = [1, 2, 3]
+          .map((t) => nodes.filter((n) => n.tier === t))
+          .filter((group) => group.length > 0);
         const chosen = keystones[tree];
+        const invested = treePoints({ allocations }, tree);
         return (
-          <div className="talent-tree" key={tree}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <strong>{TALENT_TREES[tree].name} · {TALENT_TREES[tree].desc}</strong>
-              <button className="mini-btn" onClick={() => setConfirmTree(tree)}>重置</button>
-            </div>
-            {nodes.map((node) => {
-              const cur = allocations[node.id] ?? 0;
-              const def = talentNodeById(node.id)!;
-              const can = engine?.canAllocate(node.id) ?? false;
-              const isKeystone = node.type === "keystone";
-              const chosenThis = chosen === node.id;
-              const cls = [
-                "talent-node",
-                isKeystone ? "keystone" : "",
-                can ? "can" : "",
-                cur >= node.max && !chosenThis ? "locked" : "",
-              ].join(" ");
-              return (
-                <div className={cls} key={node.id} style={{ opacity: isKeystone && !chosenThis && chosen ? 0.4 : undefined }}>
-                  <div>
-                    <div>{isKeystone ? "✦ " : ""}{node.name} {chosenThis ? "✓" : ""}</div>
-                    <div style={{ color: "var(--text-dim)", fontSize: 11 }}>{node.desc}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span className="pts">{cur}/{node.max}</span>
-                    <button className="mini-btn" disabled={!can} onClick={() => engine?.allocate(node.id)}>
-                      {node.cost}点
-                    </button>
-                  </div>
+          <div className="talent-tree" data-tree={tree} key={tree}>
+            <div className="talent-tree-head">
+              <div className="talent-tree-title">
+                <span className="talent-tree-icon">{TREE_ICON[tree]}</span>
+                <div>
+                  <div className="talent-tree-name">{TALENT_TREES[tree].name}</div>
+                  <div className="talent-tree-desc">{TALENT_TREES[tree].desc}</div>
                 </div>
-              );
-            })}
+              </div>
+              <div className="talent-tree-head-right">
+                <span className="talent-tree-pts mono">已投入 {invested}</span>
+                <button className="mini-btn talent-reset" onClick={() => setConfirmTree(tree)}>重置</button>
+              </div>
+            </div>
+            <div className="talent-flow">
+              {tiers.map((tierNodes, ti) => {
+                const isKeystoneTier = ti === tiers.length - 1;
+                return (
+                  <Fragment key={ti}>
+                    {ti > 0 && (
+                      <div className={`talent-link ${isKeystoneTier ? "branch" : ""}`}>
+                        <i className="ln up l1" />
+                        <i className="ln up l2" />
+                        {isKeystoneTier && (
+                          <>
+                            <i className="rail" />
+                            {tierNodes.map((_, i) => (
+                              <i
+                                key={i}
+                                className="ln down"
+                                style={{ left: `${((i + 0.5) / tierNodes.length) * 100}%` }}
+                              />
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <div className={`talent-tier ${isKeystoneTier ? "keystone-tier" : ""} cols-${tierNodes.length}`}>
+                      {tierNodes.map((node) => (
+                        <TalentNodeCard
+                          key={node.id}
+                          node={node}
+                          cur={allocations[node.id] ?? 0}
+                          can={engine?.canAllocate(node.id) ?? false}
+                          chosen={chosen}
+                          onAllocate={() => engine?.allocate(node.id)}
+                        />
+                      ))}
+                    </div>
+                  </Fragment>
+                );
+              })}
+            </div>
           </div>
         );
       })}
+
       {confirmTree && (
         <div className="modal-backdrop" onClick={() => setConfirmTree(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -100,6 +140,57 @@ export function TalentPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function TalentNodeCard({
+  node,
+  cur,
+  can,
+  chosen,
+  onAllocate,
+}: {
+  node: TalentNodeDef;
+  cur: number;
+  can: boolean;
+  chosen: string | undefined;
+  onAllocate: () => void;
+}) {
+  const isKeystone = node.type === "keystone";
+  const chosenThis = chosen === node.id;
+  const maxed = cur >= node.max;
+  const cls = [
+    "talent-node",
+    isKeystone ? "keystone" : "",
+    cur > 0 ? "has" : "",
+    maxed ? "maxed" : "",
+    can ? "can" : "",
+    !can && cur === 0 ? "unavail" : "",
+    chosenThis ? "chosen" : "",
+  ].filter(Boolean).join(" ");
+
+  return (
+    <div
+      className={cls}
+      style={{ opacity: isKeystone && !chosenThis && chosen ? 0.42 : undefined }}
+    >
+      <div className="talent-node-head">
+        <span className="talent-node-name">{isKeystone ? "✦ " : ""}{node.name}</span>
+        {chosenThis ? <span className="talent-node-chosen">已选</span> : null}
+      </div>
+      <div className="talent-node-desc">{node.desc}</div>
+      <div className="talent-node-foot">
+        <span className="talent-pts mono">{cur}/{node.max}</span>
+        <span className="talent-pips" aria-hidden="true">
+          {Array.from({ length: node.max }, (_, i) => (
+            <i key={i} className={i < cur ? "on" : ""} />
+          ))}
+        </span>
+        <button className="mini-btn talent-alloc" disabled={!can} onClick={onAllocate}>
+          {node.cost} 点
+        </button>
+      </div>
     </div>
   );
 }

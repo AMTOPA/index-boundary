@@ -12,45 +12,56 @@ export function ItemsPanel() {
   const tools = useGameSelector((s) => s.items.tools);
 
   return (
-    <div className="panel">
+    <div className="panel items-panel">
       <h3>消耗品</h3>
-      {(Object.keys(ITEM_DEFS) as ItemId[]).map((id) => {
-        const def = ITEM_DEFS[id];
-        const count = consumables[id] ?? 0;
-        return (
-          <div className="shop-row" key={id}>
-            <div>
-              <div>{def.icon} {def.name} <span className="mono" style={{ color: "var(--text-dim)" }}>×{count}</span></div>
-              <div className="desc">{def.desc}</div>
-            </div>
-            <button className="mini-btn" disabled={count <= 0} onClick={() => engine?.castConsumable(id)}>使用</button>
-          </div>
-        );
-      })}
-      <h3 style={{ marginTop: 12 }}>永久工具</h3>
-      {(Object.keys(TOOL_DEFS) as ToolId[]).map((id) => {
-        const def = TOOL_DEFS[id];
-        const owned = tools[id] === true;
-        return (
-          <div className="shop-row" key={id}>
-            <div>
-              <div>{def.icon} {def.name}</div>
-              <div className="desc">{def.desc}</div>
-            </div>
-            {owned ? (
-              <span style={{ color: "var(--green)", fontSize: 13 }}>已拥有</span>
-            ) : (
-              <button
-                className="mini-btn"
-                disabled={!engine?.canBuyTool(id)}
-                onClick={() => engine?.buyTool(id)}
-              >
-                购买 {formatNumber(engine ? toBig(engine.toolCost(id)).toNumber() : 0)}
+      <div className="items-grid">
+        {(Object.keys(ITEM_DEFS) as ItemId[]).map((id) => {
+          const def = ITEM_DEFS[id];
+          const count = consumables[id] ?? 0;
+          return (
+            <div className="item-card consumable" key={id}>
+              <div className="item-card-head">
+                <span className="item-card-icon">{def.icon}</span>
+                <span className={`item-card-count ${count > 0 ? "has" : ""}`}>×{count}</span>
+              </div>
+              <div className="item-card-name">{def.name}</div>
+              <div className="item-card-desc">{def.desc}</div>
+              <button className="mini-btn item-card-btn" disabled={count <= 0} onClick={() => engine?.castConsumable(id)}>
+                使用
               </button>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
+
+      <h3 className="section-title">永久工具</h3>
+      <div className="items-grid tools-grid">
+        {(Object.keys(TOOL_DEFS) as ToolId[]).map((id) => {
+          const def = TOOL_DEFS[id];
+          const owned = tools[id] === true;
+          return (
+            <div className={`item-card tool ${owned ? "owned" : ""}`} key={id}>
+              <div className="item-card-head">
+                <span className="item-card-icon">{def.icon}</span>
+                {owned && <span className="owned-tag">✓ 已拥有</span>}
+              </div>
+              <div className="item-card-name">{def.name}</div>
+              <div className="item-card-desc">{def.desc}</div>
+              {owned ? (
+                <span className="item-card-owned-label">已解锁</span>
+              ) : (
+                <button
+                  className="mini-btn item-card-btn buy"
+                  disabled={!engine?.canBuyTool(id)}
+                  onClick={() => engine?.buyTool(id)}
+                >
+                  购买 {formatNumber(engine ? toBig(engine.toolCost(id)).toNumber() : 0)}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
