@@ -298,7 +298,7 @@ export const CONFIG = {
     GOLD_TO_DMG_MAX_LOG: 60, // 金币转伤有界（上限 1.1^60 ≈ 304×）
     PATCHES: {
       critExp: { perLevel: 0.05, max: 6, costBase: 1, label: "暴击指数", desc: "暴击伤害指数 +0.05/级（满级 ^1.3 ≈ ×2.46，有界）" },
-      goldExp: { perLevel: 0.01, max: 6, costBase: 1, label: "金币指数", desc: "怪物金币指数 +0.01/级（0.92→0.98，有界）" },
+      goldBoost: { perLevel: 0.25, max: 6, costBase: 1, label: "金币补强", desc: "独立金币倍率 +25%/级（上限 ×2.5，有界）" },
       apsCap: { perLevel: 1, max: 4, costBase: 1, label: "攻速破限", desc: "攻速软上限 +1/级（10→14，有界）" },
       goldToDmg: { perLevel: 1, max: 1, costBase: 3, label: "金币转伤", desc: "解锁公式：持有金币每高 10 倍（≥10^12）→ 全伤害 +10%（有界）" },
     } as Record<LawId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,

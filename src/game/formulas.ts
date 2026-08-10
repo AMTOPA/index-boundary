@@ -4,7 +4,7 @@ import { CONFIG, milestoneMultFor } from "./config";
 import type { DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { leapAllStatsMult } from "./systems/leap";
-import { lawCritExp, lawGoldExp, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
+import { lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
 // ---------------- 升级 ----------------
@@ -68,8 +68,8 @@ export function enemyHp(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big
   return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(hpGrowth).pow(stage));
 }
 
-export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH, goldExp: number = CONFIG.GOLD_HP_EXPONENT): Big {
-  return enemyHp(stage, hpGrowth).pow(goldExp);
+export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
+  return enemyHp(stage, hpGrowth).pow(CONFIG.GOLD_HP_EXPONENT);
 }
 
 export function isBossStage(stage: number): boolean {
@@ -334,7 +334,6 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
 
   // ---- 法则补丁（第三层，全部有硬上限）----
   const lawCE = lawCritExp(state);
-  const goldHpExp = lawGoldExp(state);
   const apsCapAdd = lawApsCapAdd(state);
   const goldToDmgMult = lawGoldToDmgMult(state);
   // ---- 攻速 ----
@@ -385,7 +384,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // 重构倍率同时放大金币收入：重推旧进度时不会被“金币清零+重买升级”卡住（验收：重推耗时 ≤ 原 20%）
   acc.goldPool += (state.skills.passives?.greed ?? 0) * CONFIG.SKILL_PASSIVES.greed.effectPerLevel;
   let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult).mul(leapGlobalMult);
-  let goldMult = goldMultBase;
+  let goldMult = goldMultBase.mul(Big.fromNumber(lawGoldBoost(state)));
   if (goldCollapseActive) {
     const def = SKILL_DEFS.gold_collapse;
     const inst = skillMap.get("gold_collapse");
@@ -454,7 +453,6 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     hpGrowth,
     bossHpMult,
     bossGoldMult,
-    goldHpExp,
     goldToDmgMult,
     offlineEffTalent,
     skipBaseTalent,

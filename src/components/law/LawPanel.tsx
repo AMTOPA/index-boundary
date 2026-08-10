@@ -7,7 +7,7 @@ import { CONFIG } from "@/game/config";
 import type { LawId } from "@/game/types";
 import { lawShards, lawShopCostFrom } from "@/game/systems/law";
 
-const SHOP_ORDER: LawId[] = ["critExp", "goldExp", "apsCap", "goldToDmg"];
+const SHOP_ORDER: LawId[] = ["critExp", "goldBoost", "apsCap", "goldToDmg"];
 
 export function LawPanel() {
   const { engine } = useGame();

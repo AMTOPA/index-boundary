@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { GameEngine, createNewState } from "../game/engine";
 import { CONFIG } from "../game/config";
-import { lawShards, lawShopCostFrom, lawCritExp, lawGoldExp, lawApsCapAdd, lawGoldToDmgMult, canRewriteLaw } from "../game/systems/law";
-import { enemyGold, computeDerived, emptyBuffs, effectiveAps } from "../game/formulas";
+import { lawShards, lawShopCostFrom, lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult, canRewriteLaw } from "../game/systems/law";
+import { computeDerived, emptyBuffs, effectiveAps } from "../game/formulas";
 import { Big, toBig } from "../game/bignum";
 import { normalizeState } from "../game/save";
 
@@ -105,15 +105,15 @@ describe("V13 内容：法则重写（第三层）+ 法则碎片 + 公式补丁"
     expect(d.critDamage).toBeCloseTo(Math.pow(2, 1.05), 6);
   });
 
-  it("金币指数：0.92 → 0.93@Lv1，上限 0.98；enemyGold 使用生效指数", () => {
+  it("金币补强：+25%/级，独立乘区 ×2.5@满级，有界", () => {
     const st = lawReadyState(8);
-    st.laws.purchases.goldExp = 1;
-    expect(lawGoldExp(st)).toBeCloseTo(0.93, 5);
-    const g = enemyGold(10, CONFIG.HP_GROWTH, lawGoldExp(st));
-    const base = enemyGold(10, CONFIG.HP_GROWTH, 0.92);
-    expect(g.gt(base)).toBe(true);
-    st.laws.purchases.goldExp = 99;
-    expect(lawGoldExp(st)).toBeCloseTo(0.98, 5);
+    expect(lawGoldBoost(st)).toBeCloseTo(1, 5);
+    st.laws.purchases.goldBoost = 1;
+    expect(lawGoldBoost(st)).toBeCloseTo(1.25, 5);
+    st.laws.purchases.goldBoost = 6;
+    expect(lawGoldBoost(st)).toBeCloseTo(2.5, 5);
+    const d = computeDerived(st, emptyBuffs(), 0);
+    expect(d.goldMult.toNumber()).toBeGreaterThan(2.49);
   });
 
   it("攻速破限：软上限 10 → 12@Lv2，面板高于上限时有效攻速提升", () => {
@@ -160,10 +160,10 @@ describe("V13 内容：法则重写（第三层）+ 法则碎片 + 公式补丁"
     expect(norm.laws.purchases).toEqual({});
   });
 
-  it("重写后 goldHpExp 进入派生属性，供引擎金币结算使用", () => {
+  it("金币补强计入派生 goldMult（独立乘区 ×1.5@Lv2）", () => {
     const st = lawReadyState(13);
-    st.laws.purchases.goldExp = 2;
+    st.laws.purchases.goldBoost = 2;
     const d = computeDerived(st, emptyBuffs(), 0);
-    expect(d.goldHpExp).toBeCloseTo(0.94, 5);
+    expect(d.goldMult.toNumber()).toBeCloseTo(1.5, 5);
   });
 });

@@ -13,7 +13,7 @@ export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip" | "auto_prestige";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
-export type LawId = "critExp" | "goldExp" | "apsCap" | "goldToDmg";
+export type LawId = "critExp" | "goldBoost" | "apsCap" | "goldToDmg";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
@@ -259,7 +259,6 @@ export interface DerivedStats {
   hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）
   bossHpMult: Big; // Boss 生命倍率（深渊豪赌等）
   bossGoldMult: Big; // Boss 金币倍率（深渊豪赌等）
-  goldHpExp: number; // 生效的怪物金币指数（法则补丁）
   goldToDmgMult: Big; // 金币转伤（法则解锁的独立乘区）
   offlineEffTalent: number;
   skipBaseTalent: number;

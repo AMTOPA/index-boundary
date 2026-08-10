@@ -361,7 +361,7 @@ export class GameEngine {
     this.state.statistics.totalKills += 1;
 
     const kind = c.enemyKind;
-    let gold = enemyGold(stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(this.derived.goldMult);
+    let gold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
     if (isBoss) gold = gold.mul(Big.fromNumber(10)).mul(this.derived.bossGoldMult);
     else if (kind === "elite") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_GOLD_MULT));
     else if (kind === "mimic") gold = gold.mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_GOLD_MULT));
@@ -375,7 +375,7 @@ export class GameEngine {
     }
     // 溢出金币（仅首次通关，即超越历史最大关卡）
     if (overkill.gt(Big.ZERO) && stage > this.state.statistics.allTimeMaxStage) {
-      const baseGold = enemyGold(stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(this.derived.goldMult);
+      const baseGold = enemyGold(stage, this.derived.hpGrowth).mul(this.derived.goldMult);
       const hpBefore = toBig(c.enemyMaxHp);
       gold = gold.add(overflowGold(overkill.add(hpBefore), hpBefore, baseGold, this.derived.overflowEffMult));
     }
@@ -742,7 +742,7 @@ export class GameEngine {
         this.state.combat.bossTimer = Math.min(CONFIG.BOSS_TIMER_SEC, this.state.combat.bossTimer + result.action.bossFreezeSec);
       }
     } else if (result.action.kind === "data_flood") {
-      const gold = enemyGold(this.state.combat.stage, this.derived.hpGrowth, this.derived.goldHpExp).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
+      const gold = enemyGold(this.state.combat.stage, this.derived.hpGrowth).mul(Big.fromNumber(result.action.mult)).mul(this.derived.goldMult);
       this.state.player.gold = toBig(this.state.player.gold).add(gold).toTuple();
       this.state.statistics.totalGold = toBig(this.state.statistics.totalGold).add(gold).toTuple();
       this.state.daily.goldEarned = toBig(this.state.daily.goldEarned).add(gold).toTuple();
@@ -1126,12 +1126,12 @@ export class GameEngine {
       const per = killTime + (crush ? 0 : 0.3);
       if (t + per > maxSec) {
         const frac = (maxSec - t) / per;
-        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state), derived.goldHpExp).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
+        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
         t = maxSec;
         break;
       }
       t += per;
-      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state), derived.goldHpExp).mul(derived.goldMult));
+      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult));
       kills++;
       stage++;
     }

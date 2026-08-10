@@ -51,10 +51,10 @@ export function lawCritExp(state: GameState): number {
   return 1 + lv * CONFIG.LAWS.PATCHES.critExp.perLevel;
 }
 
-// 金币指数：0.92 → 0.98（有界）
-export function lawGoldExp(state: GameState): number {
-  const lv = state.laws.purchases.goldExp ?? 0;
-  return Math.min(0.98, CONFIG.GOLD_HP_EXPONENT + lv * CONFIG.LAWS.PATCHES.goldExp.perLevel);
+// 金币补强：独立金币倍率 +25%/级（有界，不做指数级膨胀）
+export function lawGoldBoost(state: GameState): number {
+  const lv = state.laws.purchases.goldBoost ?? 0;
+  return 1 + lv * CONFIG.LAWS.PATCHES.goldBoost.perLevel;
 }
 
 // 攻速软上限附加：10 → 14（有界）

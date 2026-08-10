@@ -1,8 +1,8 @@
 // V2 验收：法则重写（第三层）+ 法则碎片 + 公式补丁
 import { GameEngine, createNewState } from "../src/game/engine";
 import { CONFIG } from "../src/game/config";
-import { lawShards, lawShopCostFrom, lawCritExp, lawGoldExp, lawApsCapAdd, lawGoldToDmgMult } from "../src/game/systems/law";
-import { enemyGold, computeDerived, emptyBuffs, effectiveAps } from "../src/game/formulas";
+import { lawShards, lawShopCostFrom, lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult } from "../src/game/systems/law";
+import { computeDerived, emptyBuffs, effectiveAps } from "../src/game/formulas";
 import { normalizeState } from "../src/game/save";
 import { Big, toBig } from "../src/game/bignum";
 import type { GameState } from "../src/game/types";
@@ -53,14 +53,13 @@ check("金币转伤固定价格 3", lawShopCostFrom(0, "goldToDmg") === 3);
 // 4. 公式补丁
 const st3 = lawReady(103);
 st3.laws.purchases.critExp = 6;
-st3.laws.purchases.goldExp = 6;
+st3.laws.purchases.goldBoost = 6;
 st3.laws.purchases.apsCap = 4;
 const d = computeDerived(st3, emptyBuffs(), 0);
 check("暴击指数满级 ^1.3（2^1.3≈2.46）", Math.abs(d.critDamage - Math.pow(2, 1.3)) < 1e-9, "critDamage=" + d.critDamage.toFixed(3));
-check("金币指数上限 0.98", Math.abs(lawGoldExp(st3) - 0.98) < 1e-9);
-const gUp = enemyGold(10, CONFIG.HP_GROWTH, lawGoldExp(st3));
-const gBase = enemyGold(10, CONFIG.HP_GROWTH, CONFIG.GOLD_HP_EXPONENT);
-check("金币指数提升怪物金币", gUp.gt(gBase));
+check("金币补强 ×2.5@满级", Math.abs(lawGoldBoost(st3) - 2.5) < 1e-9);
+const dGold = computeDerived(st3, emptyBuffs(), 0);
+check("金币补强计入 goldMult", dGold.goldMult.toNumber() >= 2.49);
 check("攻速破限 +4", lawApsCapAdd(st3) === 4);
 check("攻速破限提升有效攻速", effectiveAps(30, 4) > effectiveAps(30));
 
