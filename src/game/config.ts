@@ -82,7 +82,7 @@ export const CONFIG = {
 
   // 装备
   EQUIPMENT: {
-    SLOTS: ["weapon", "core", "engine", "charm"] as const,
+    SLOTS: ["weapon", "core", "engine", "charm", "module", "beacon", "relic"] as const,
     MAX_ENHANCE: 10,
     ENHANCE_MAIN_MULT: 0.15, // 每级主属性 +15%
     RARITIES: {
@@ -91,6 +91,9 @@ export const CONFIG = {
       rare: { mainMult: 3.5, affixCount: 2, shards: 8, weight: 13, dropMinStage: 25 },
       epic: { mainMult: 6, affixCount: 3, shards: 20, weight: 4, dropMinStage: 60 },
       legendary: { mainMult: 12, affixCount: 4, shards: 50, weight: 1, dropMinStage: 120 },
+      mythic: { mainMult: 22, affixCount: 5, shards: 120, weight: 0.35, dropMinStage: 220 },
+      aberrant: { mainMult: 45, affixCount: 6, shards: 320, weight: 0.08, dropMinStage: 320 },
+      singularity: { mainMult: 90, affixCount: 7, shards: 900, weight: 0.015, dropMinStage: 450 },
     } as Record<Rarity, { mainMult: number; affixCount: number; shards: number; weight: number; dropMinStage: number }>,
     BASE_DROP_CHANCE: 0.015,
     DROP_STAGE_TIER: 25, // 每 25 关装备强度一档
@@ -98,6 +101,13 @@ export const CONFIG = {
     REFORGE_COST_BASE: 4, // 重铸费用 = base × 碎片 × (1+副词条数)
     CRAFT_COST_MULT: 10, // 制作费用 = mult × 稀有度碎片
     ENHANCE_COST_BASE: 5, // 强化费用 = base × shards × (level+1)^1.5
+    // 超频：+10 后重置强化等级，提升基础倍率并追加 1 条副词条
+    OVERCLOCK: {
+      MAX: 3,
+      MAIN_BONUS: 0.2, // 每次主属性 ×(1+0.2)
+      COST_BASE: 12, // 费用 = base × 碎片 × (1 + 当前超频次数)
+      AFFIX_CAP: 8, // 副词条上限（含超频追加）
+    },
     // 副词条数值区间（% 或 倍率；% 存小数，独立乘区存 × 值）
     AFFIX_RANGES: {
       atkPct: { min: 0.05, max: 0.4, kind: "pct" },
@@ -125,6 +135,9 @@ export const CONFIG = {
       core: ["critDmg"],
       engine: ["aspdPct"],
       charm: ["goldPct", "clickDmg"],
+      module: ["skillDmg", "critRate"],
+      beacon: ["bossDmg", "overflowEff"],
+      relic: ["goldPct", "clickDmg"],
     } as Record<string, AffixStat[]>,
     // 套装：凑齐 slots 即生效（2 件套，跨槽组合）
     SETS: [
@@ -167,6 +180,7 @@ export const CONFIG = {
     auto_breakdown: [1, 6], // 1M
     combat_recorder: [1, 7], // 10M
     auto_skill: [1, 8], // 100M
+    auto_equip: [1, 9], // 1e9
   } as Record<ToolId, BigTuple>,
 
   // 天赋

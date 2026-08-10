@@ -2,12 +2,12 @@
 import type { Big, BigTuple } from "./bignum";
 
 export type UpgradeId = "attack" | "aspd" | "critChance" | "critDamage" | "gold";
-export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary";
-export type EquipSlot = "weapon" | "core" | "engine" | "charm";
+export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary" | "mythic" | "aberrant" | "singularity";
+export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "beacon" | "relic";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon";
 export type TreeId = "destruction" | "automation" | "greed";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
-export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill";
+export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
@@ -39,6 +39,7 @@ export interface EquipInstance {
   main: { stat: AffixStat; mult: number }; // 主词条：倍率型（如攻击 ×2.2）
   affixes: { stat: AffixStat; value: number }[]; // 副词条：加池% 或 独立×
   legendary?: { label: string; mult: number }; // 传说专属独立乘区词条
+  overclock?: number; // 超频次数（+10 后重置强化并提升基础倍率）
 }
 
 export interface SkillInstance {

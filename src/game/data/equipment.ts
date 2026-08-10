@@ -7,6 +7,9 @@ export const RARITY_LABEL: Record<Rarity, string> = {
   rare: "稀有",
   epic: "史诗",
   legendary: "传说",
+  mythic: "神话",
+  aberrant: "异常",
+  singularity: "奇点",
 };
 
 export const RARITY_COLOR: Record<Rarity, string> = {
@@ -15,6 +18,9 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   rare: "#4da3ff",
   epic: "#b26bff",
   legendary: "#ffb52e",
+  mythic: "#ff6ec7",
+  aberrant: "#7aff6e",
+  singularity: "#ffffff",
 };
 
 export const SLOT_LABEL: Record<EquipSlot, string> = {
@@ -22,6 +28,9 @@ export const SLOT_LABEL: Record<EquipSlot, string> = {
   core: "核心",
   engine: "引擎",
   charm: "护符",
+  module: "模组",
+  beacon: "信标",
+  relic: "遗物",
 };
 
 export const SLOT_ICON: Record<EquipSlot, string> = {
@@ -29,6 +38,9 @@ export const SLOT_ICON: Record<EquipSlot, string> = {
   core: "💠",
   engine: "⚙️",
   charm: "🔮",
+  module: "🧩",
+  beacon: "📡",
+  relic: "🏺",
 };
 
 // 套装信息（定义在 config，这里提供 UI 展示辅助）
@@ -85,7 +97,7 @@ export const MAIN_STAT_LABEL: Record<AffixStat, string> = {
 };
 
 export function rarityOrder(r: Rarity): number {
-  return { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4 }[r];
+  return { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4, mythic: 5, aberrant: 6, singularity: 7 }[r];
 }
 
 export function betterRarity(a: Rarity, b: Rarity): Rarity {

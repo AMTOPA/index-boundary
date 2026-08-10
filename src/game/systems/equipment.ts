@@ -14,9 +14,10 @@ export function rollRarity(rng: Rng, stage: number, luckMult: number): Rarity {
   const candidates = (Object.keys(CONFIG.EQUIPMENT.RARITIES) as Rarity[]).filter(
     (r) => stage >= CONFIG.EQUIPMENT.RARITIES[r].dropMinStage
   );
+  const highRarity = new Set<Rarity>(["epic", "legendary", "mythic", "aberrant", "singularity"]);
   const weighted = candidates.map((r) => {
     const base = CONFIG.EQUIPMENT.RARITIES[r].weight;
-    const luckBoost = r === "legendary" || r === "epic" ? 1 + luckMult : 1;
+    const luckBoost = highRarity.has(r) ? 1 + luckMult : 1;
     return [r, base * luckBoost] as [Rarity, number];
   });
   return rng.weighted(weighted);
@@ -46,7 +47,7 @@ export function rollEquipment(rng: Rng, stage: number, luckMult = 0, fixedSlot?:
     main: { stat: mainStat, mult: rarityDef.mainMult },
     affixes,
   };
-  if (rarity === "legendary") {
+  if (rarity === "legendary" || rarity === "mythic" || rarity === "aberrant" || rarity === "singularity") {
     const leg = rng.pick(CONFIG.EQUIPMENT.LEGENDARY_POOL);
     item.legendary = { label: leg.label, mult: leg.mult };
   }
@@ -78,6 +79,43 @@ export function enhance(state: GameState, slot: EquipSlot): boolean {
   const cost = enhanceCost(item);
   state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
   item.level += 1;
+  return true;
+}
+
+// ---------------- 超频（+10 后重置强化、提升基础倍率、追加副词条） ----------------
+export function overclockCost(item: EquipInstance): number {
+  const shards = CONFIG.EQUIPMENT.RARITIES[item.rarity].shards;
+  const oc = item.overclock ?? 0;
+  return Math.ceil(CONFIG.EQUIPMENT.OVERCLOCK.COST_BASE * shards * (1 + oc));
+}
+
+export function canOverclock(state: GameState, slot: EquipSlot): boolean {
+  const item = state.equipment.slots[slot];
+  if (!item) return false;
+  if ((item.overclock ?? 0) >= CONFIG.EQUIPMENT.OVERCLOCK.MAX) return false;
+  if (item.level < CONFIG.EQUIPMENT.MAX_ENHANCE) return false;
+  if (item.affixes.length >= CONFIG.EQUIPMENT.OVERCLOCK.AFFIX_CAP) return false;
+  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(overclockCost(item)));
+}
+
+export function overclock(state: GameState, slot: EquipSlot, rng: Rng): boolean {
+  const item = state.equipment.slots[slot];
+  if (!item || !canOverclock(state, slot)) return false;
+  const cost = overclockCost(item);
+  state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
+  item.overclock = (item.overclock ?? 0) + 1;
+  item.main.mult = Math.round(item.main.mult * (1 + CONFIG.EQUIPMENT.OVERCLOCK.MAIN_BONUS) * 1000) / 1000;
+  item.level = 0; // 重置强化，重新培养
+  // 追加 1 条副词条（排除主词条与已有副词条）
+  const pool = (Object.keys(CONFIG.EQUIPMENT.AFFIX_RANGES) as AffixStat[]).filter(
+    (s) => s !== item.main.stat && !item.affixes.some((a) => a.stat === s)
+  );
+  if (pool.length > 0) {
+    const stat = rng.pick(pool);
+    const range = CONFIG.EQUIPMENT.AFFIX_RANGES[stat];
+    const value = rollAffixValue(stat, range.min + rng.next() * (range.max - range.min));
+    item.affixes.push({ stat, value });
+  }
   return true;
 }
 

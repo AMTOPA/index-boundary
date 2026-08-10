@@ -28,4 +28,5 @@ export const TOOL_DEFS: Record<ToolId, ToolDef> = {
   auto_breakdown: { id: "auto_breakdown", name: "自动分解器", desc: "按稀有度自动分解装备", icon: "♻️", kind: "tool" },
   combat_recorder: { id: "combat_recorder", name: "战斗记录仪", desc: "解锁完整统计面板", icon: "📊", kind: "tool" },
   auto_skill: { id: "auto_skill", name: "自动释放模块", desc: "技能冷却结束自动释放", icon: "⚙️", kind: "tool" },
+  auto_equip: { id: "auto_equip", name: "自动换装模块", desc: "掉落时自动装备评分更高的装备", icon: "🔄", kind: "tool" },
 };

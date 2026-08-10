@@ -12,7 +12,7 @@ import {
 import { CONFIG } from "@/game/config";
 import type { EquipSlot, Rarity } from "@/game/types";
 
-const SLOTS: EquipSlot[] = ["weapon", "core", "engine", "charm"];
+const SLOTS: EquipSlot[] = CONFIG.EQUIPMENT.SLOTS as unknown as EquipSlot[];
 
 export function EquipPanel() {
   const { engine } = useGame();
@@ -66,7 +66,7 @@ export function EquipPanel() {
         return (
           <div className="equip-slot" key={slot}>
             <div className="equip-head">
-              <span>{SLOT_ICON[slot]} {SLOT_LABEL[slot]} <span className="mono" style={{ color: "var(--text-dim)" }}>+{item.level}</span></span>
+              <span>{SLOT_ICON[slot]} {SLOT_LABEL[slot]} <span className="mono" style={{ color: "var(--text-dim)" }}>+{item.level}</span>{item.overclock ? <span className="mono" style={{ color: "var(--gold)" }}> ×{item.overclock}超频</span> : null}</span>
               <span className="equip-rarity" style={{ color: rc }}>{RARITY_LABEL[item.rarity]}</span>
             </div>
             <div className="equip-main" style={{ color: rc }}>
@@ -84,6 +84,16 @@ export function EquipPanel() {
                 强化 ({engine ? formatNumber(engine.enhanceCostOf(slot)) : 0} 碎片)
               </button>
               <button className="mini-btn" onClick={() => engine?.unequip(slot)}>卸下</button>
+              {item.level >= CONFIG.EQUIPMENT.MAX_ENHANCE && (
+                <button
+                  className="mini-btn"
+                  style={{ color: "var(--gold)" }}
+                  disabled={!engine?.canOverclock(slot)}
+                  onClick={() => engine?.overclock(slot)}
+                >
+                  超频 ({engine ? formatNumber(engine.overclockCostOf(slot)) : 0})
+                </button>
+              )}
               {item.affixes.length > 0 && (
                 <button
                   className="mini-btn"
