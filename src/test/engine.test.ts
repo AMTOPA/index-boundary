@@ -12,11 +12,16 @@ describe("GameEngine", () => {
   });
 
   it("点击造成伤害", () => {
-    const eng = new GameEngine();
+    // 固定高 HP，避免 5% 基础暴击随机击杀导致换关（确定性）
+    const st = createNewState(1);
+    st.combat.enemyHp = [1000, 0];
+    st.combat.enemyMaxHp = [1000, 0];
+    const eng = new GameEngine(st);
     const before = Big.fromTuple(eng.state.combat.enemyHp).toNumber();
     eng.click();
     const after = Big.fromTuple(eng.state.combat.enemyHp).toNumber();
     expect(after).toBeLessThan(before);
+    expect(after).toBeGreaterThan(0);
   });
 
   it("击杀后推进关卡，Boss 每 10 关出现", () => {
