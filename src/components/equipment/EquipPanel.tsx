@@ -6,12 +6,12 @@ import { toBig } from "@/game/bignum";
 import { formatNumber } from "@/game/format";
 import {
   RARITY_LABEL, RARITY_COLOR, SLOT_LABEL, SLOT_ICON, AFFIX_LABEL,
-  rarityOrder,
+  rarityOrder, activeSets,
 } from "@/game/data/equipment";
 import { CONFIG } from "@/game/config";
 import type { EquipSlot, Rarity } from "@/game/types";
 
-const SLOTS: EquipSlot[] = ["weapon", "core", "engine"];
+const SLOTS: EquipSlot[] = ["weapon", "core", "engine", "charm"];
 
 export function EquipPanel() {
   const { engine } = useGame();
@@ -86,6 +86,15 @@ export function EquipPanel() {
           </div>
         );
       })}
+      <div className="set-section">
+        <h3>套装</h3>
+        {activeSets(slots).map((s) => (
+          <div key={s.id} className={`set-row ${s.active ? "active" : ""}`}>
+            <span>{s.active ? "●" : "○"} {s.name}</span>
+            <span className="set-desc">{s.desc}</span>
+          </div>
+        ))}
+      </div>
       <h3 style={{ marginTop: 10 }}>背包 ({inventory.length}/{CONFIG.EQUIPMENT.INVENTORY_CAP})</h3>
       <div className="inventory">
         {inventory.length === 0 && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>暂无装备</span>}

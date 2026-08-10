@@ -1,4 +1,5 @@
 import type { AffixStat, EquipSlot, Rarity } from "../types";
+import { CONFIG } from "../config";
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   common: "普通",
@@ -20,13 +21,23 @@ export const SLOT_LABEL: Record<EquipSlot, string> = {
   weapon: "武器",
   core: "核心",
   engine: "引擎",
+  charm: "护符",
 };
 
 export const SLOT_ICON: Record<EquipSlot, string> = {
   weapon: "⚔️",
   core: "💠",
   engine: "⚙️",
+  charm: "🔮",
 };
+
+// 套装信息（定义在 config，这里提供 UI 展示辅助）
+export function activeSets(slots: Partial<Record<EquipSlot, { slot: EquipSlot }>>): { id: string; name: string; desc: string; active: boolean }[] {
+  return CONFIG.EQUIPMENT.SETS.map((set) => {
+    const complete = set.slots.every((s) => slots[s as EquipSlot]);
+    return { id: set.id, name: set.name, desc: set.desc, active: complete };
+  });
+}
 
 export const AFFIX_LABEL: Record<AffixStat, string> = {
   atkPct: "攻击加成",

@@ -1,5 +1,13 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, Rarity } from "./types";
+import type { AffixStat, Rarity, SetBonusKind } from "./types";
+
+export interface SetDef {
+  id: string;
+  name: string;
+  slots: string[];
+  bonus: { kind: SetBonusKind; value: number };
+  desc: string;
+}
 
 export const CONFIG = {
   // 存档
@@ -59,7 +67,7 @@ export const CONFIG = {
 
   // 装备
   EQUIPMENT: {
-    SLOTS: ["weapon", "core", "engine"] as const,
+    SLOTS: ["weapon", "core", "engine", "charm"] as const,
     MAX_ENHANCE: 10,
     ENHANCE_MAIN_MULT: 0.15, // 每级主属性 +15%
     RARITIES: {
@@ -99,7 +107,15 @@ export const CONFIG = {
       weapon: ["atkPct"],
       core: ["critDmg"],
       engine: ["aspdPct"],
+      charm: ["goldPct", "clickDmg"],
     } as Record<string, AffixStat[]>,
+    // 套装：凑齐 slots 即生效（2 件套，跨槽组合）
+    SETS: [
+      { id: "overclock_set", name: "超频协议", slots: ["weapon", "engine"], bonus: { kind: "aspdMult", value: 0.25 }, desc: "攻速独立 ×1.25" },
+      { id: "crit_set", name: "临界法则", slots: ["core", "charm"], bonus: { kind: "critDmgAdd", value: 0.5 }, desc: "暴击伤害 +50%" },
+      { id: "gold_set", name: "数据洪流", slots: ["engine", "charm"], bonus: { kind: "goldPool", value: 0.5 }, desc: "金币 +50%" },
+      { id: "boss_set", name: "猎杀协议", slots: ["weapon", "core"], bonus: { kind: "bossDmgMult", value: 0.5 }, desc: "Boss 伤害独立 ×1.5" },
+    ] as SetDef[],
   },
 
   // 技能

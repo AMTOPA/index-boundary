@@ -14,6 +14,8 @@ import { ItemsPanel } from "@/components/items/ItemsPanel";
 import { AuthPanel } from "@/components/auth/AuthPanel";
 import { LeaderboardPanel } from "@/components/leaderboard/LeaderboardPanel";
 import { exportSave, importSave } from "@/game/save";
+import { Starfield } from "@/components/combat/Starfield";
+import { worldForStage } from "@/game/data/worlds";
 import { getCloud, subscribeCloud } from "@/game/cloud";
 import { formatNumber } from "@/game/format";
 import type { GameState } from "@/game/types";
@@ -43,8 +45,11 @@ function Shell() {
   const [tab, setTab] = useState<PanelTab>("equip");
   const [mobileView, setMobileView] = useState<MobileView>("combat");
   const selectTab = (t: PanelTab) => { setTab(t); setMobileView("panel"); };
+  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage).color);
   return (
-    <div className="app">
+    <>
+      <Starfield tint={worldTint} />
+      <div className="app">
       <TopBar />
       <div className="main-grid">
         <aside className="side-left">
@@ -77,7 +82,8 @@ function Shell() {
           </button>
         ))}
       </nav>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -138,29 +144,33 @@ function TopBar() {
 
   return (
     <header className="topbar">
+      <div className="game-title">
+        <span className="cn">指数边界</span>
+        <span className="en">Boundless Exponent</span>
+      </div>
       <div className="resources">
         <div className="resource">
-          <span className="label">金币</span>
+          <span className="label">🪙 金币</span>
           <NumberDisplay className="value gold" value={state.player.gold} />
         </div>
         <div className="resource">
-          <span className="label">碎片</span>
+          <span className="label">💠 碎片</span>
           <NumberDisplay className="value frag" value={state.equipment.fragments} />
         </div>
         <div className="resource">
-          <span className="label">技能核心</span>
+          <span className="label">🔷 技能核心</span>
           <NumberDisplay className="value core" value={state.skills.cores} />
         </div>
         <div className="resource">
-          <span className="label">奇点能量</span>
+          <span className="label">🌌 奇点能量</span>
           <span className="value energy mono">{formatNumber(state.prestige.energy)}</span>
         </div>
         <div className="resource">
-          <span className="label">关卡</span>
+          <span className="label">🏰 关卡</span>
           <span className="value mono">{state.combat.stage}</span>
         </div>
         <div className="resource">
-          <span className="label">DPS</span>
+          <span className="label">⚡ DPS</span>
           <NumberDisplay className="value" value={derived.dps} />
         </div>
       </div>

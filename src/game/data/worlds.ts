@@ -26,6 +26,22 @@ export const WORLDS: WorldDef[] = [
     enemyStyle: "金属方块",
     bossPool: ["armor", "regen", "antiCrit", "rage"],
   },
+  {
+    id: "star_factory",
+    name: "恒星工厂",
+    stageRange: [501, 2000],
+    color: "#ff8c42",
+    enemyStyle: "橙红多边形",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect"],
+  },
+  {
+    id: "black_hole",
+    name: "黑洞边界",
+    stageRange: [2001, 10000],
+    color: "#b26bff",
+    enemyStyle: "深紫引力扭曲体",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect"],
+  },
 ];
 
 export function worldForStage(stage: number): WorldDef {
@@ -41,6 +57,8 @@ export const BOSS_AFFIX_LABEL: Record<BossAffix, string> = {
   regen: "再生",
   antiCrit: "反暴击",
   rage: "狂暴",
+  harden: "硬化",
+  deflect: "偏斜",
 };
 
 export const BOSS_AFFIX_DESC: Record<BossAffix, string> = {
@@ -48,6 +66,8 @@ export const BOSS_AFFIX_DESC: Record<BossAffix, string> = {
   regen: "每秒回复 3% 最大生命",
   antiCrit: "暴击倍率 -50%",
   rage: "每秒防御 +2%（上限 60%）",
+  harden: "每 6 秒获得 1 层硬化，每层减伤 8%（上限 40%）",
+  deflect: "非暴击伤害 -70%（暴击不受影响）",
 };
 
 export const BOSS_AFFIX_ICON: Record<BossAffix, string> = {
@@ -55,4 +75,6 @@ export const BOSS_AFFIX_ICON: Record<BossAffix, string> = {
   regen: "💚",
   antiCrit: "🌀",
   rage: "🔥",
+  harden: "🧱",
+  deflect: "🪞",
 };

@@ -3,14 +3,15 @@ import type { Big, BigTuple } from "./bignum";
 
 export type UpgradeId = "attack" | "aspd" | "critChance" | "critDamage" | "gold";
 export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary";
-export type EquipSlot = "weapon" | "core" | "engine";
+export type EquipSlot = "weapon" | "core" | "engine" | "charm";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon";
 export type TreeId = "destruction" | "automation";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
-export type BossAffix = "armor" | "regen" | "antiCrit" | "rage";
-export type WorldId = "data_wastes" | "mech_city";
+export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect";
+export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
+export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole";
 export type ScoreSubmitKind = "stage" | "mag" | "prestige";
 
 // 词条属性（加池型用 % 表达，独立乘区用 × 表达）

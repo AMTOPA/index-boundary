@@ -220,6 +220,12 @@ export class GameEngine {
       for (const affix of c.bossAffixes) {
         if (affix === "armor") damage = damage.mul(Big.fromNumber(0.5));
         else if (affix === "antiCrit" && crit) damage = damage.mul(Big.fromNumber(0.5));
+        else if (affix === "deflect" && !crit) damage = damage.mul(Big.fromNumber(0.3));
+        else if (affix === "harden") {
+          const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
+          const stacks = Math.min(5, Math.floor(Math.max(0, elapsed) / 6));
+          damage = damage.mul(Big.fromNumber(1 - stacks * 0.08));
+        }
         else if (affix === "rage") {
           const elapsed = CONFIG.BOSS_TIMER_SEC - c.bossTimer;
           const def = 1 + Math.min(0.6, Math.max(0, elapsed) * 0.02);

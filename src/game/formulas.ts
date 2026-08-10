@@ -1,7 +1,7 @@
 // 纯数学层：无副作用，全部输入输出可测
 import { Big, toBig } from "./bignum";
 import { CONFIG, milestoneMultFor } from "./config";
-import type { DerivedStats, GameState, UpgradeId } from "./types";
+import type { DerivedStats, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
@@ -224,6 +224,16 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     for (const af of eq.affixes) applyAffix(af.stat, af.value, acc);
     // 传奇词条（独立乘区）
     if (eq.legendary) acc.globalMult = acc.globalMult.mul(Big.fromNumber(eq.legendary.mult));
+  }
+
+  // ---- 套装（凑齐槽位即生效） ----
+  for (const set of CONFIG.EQUIPMENT.SETS) {
+    if (!set.slots.every((s) => equipment.slots[s as EquipSlot])) continue;
+    const b = set.bonus;
+    if (b.kind === "aspdMult") acc.aspdMult *= 1 + b.value;
+    else if (b.kind === "critDmgAdd") acc.critDmgAdd += b.value;
+    else if (b.kind === "goldPool") acc.goldPool += b.value;
+    else if (b.kind === "bossDmgMult") acc.bossDmgMult = acc.bossDmgMult.mul(Big.fromNumber(1 + b.value));
   }
 
   // ---- 天赋 ----
