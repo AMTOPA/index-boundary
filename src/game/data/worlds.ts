@@ -7,6 +7,7 @@ export interface WorldDef {
   color: string;
   enemyStyle: string;
   bossPool: BossAffix[];
+  requiresNexus?: boolean; // 第 4 维度：进入「法则彼岸」后开放
   requiresLeap?: number; // 需要的「新世界」升级等级（0/缺省=基础世界）
 }
 
@@ -61,12 +62,22 @@ export const WORLDS: WorldDef[] = [
     bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
     requiresLeap: 2,
   },
+  {
+    id: "nexus_frontier",
+    name: "法则彼岸",
+    stageRange: [100001, 500000],
+    color: "#c07dff",
+    enemyStyle: "棱镜法则体",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
+    requiresNexus: true,
+  },
 ];
 
-export function worldForStage(stage: number, newWorldLevel = 0): WorldDef {
+export function worldForStage(stage: number, newWorldLevel = 0, nexusEntered = false): WorldDef {
   let w = WORLDS[0];
   for (const world of WORLDS) {
     const need = world.requiresLeap ?? 0;
+    if (world.requiresNexus && !nexusEntered) continue;
     if (stage >= world.stageRange[0] && newWorldLevel >= need) w = world;
   }
   return w;

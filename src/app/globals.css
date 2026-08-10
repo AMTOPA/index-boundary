@@ -93,8 +93,33 @@ input { font-family: inherit; }
   opacity: 0.9;
 }
 .panel h3 { font-size: 13px; letter-spacing: 0.06em; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; }
-.panel-title { display: flex; justify-content: space-between; align-items: center; }
+.panel-title { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
 .panel-title .hint { font-size: 11px; color: var(--text-dim); }
+
+/* ---------- 文字换行：禁止逐字竖排 ---------- */
+.upgrade-name, .shop-row > div:first-child > div:first-child, .panel h3, .preset-name,
+.talent-tree-name, .ach-name, .stat-item .k, .stat-item .v,
+.skill-btn span, .bottom-nav span, .nav-label, .game-title .cn, .game-title .en {
+  white-space: nowrap;
+}
+/* 长文本容器：允许优雅换行，而不是逐字竖排 */
+.prestige-info, .preset-info .desc, .shop-row .desc, .upgrade-effect,
+.talent-node-desc, .item-card-desc, .equip-affix {
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+}
+/* 面板内 flex 行：允许优雅换行，避免文字被压到 1-2 字宽 */
+.panel .equip-head, .panel .inventory-head, .panel .preset-row, .panel .set-row,
+.panel .talent-node-foot, .panel .talent-node-head, .panel .craft-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.panel .equip-head > *, .panel .inventory-head > *, .panel .preset-row > *,
+.panel .set-row > *, .panel .talent-node-foot > *, .panel .talent-node-head > *,
+.panel .craft-row > * {
+  min-width: 0;
+}
 
 /* ---------- 战斗区 ---------- */
 .combat { position: relative; min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; user-select: none; overflow: hidden; isolation: isolate; }
@@ -172,11 +197,11 @@ input { font-family: inherit; }
 
 /* ---------- 升级面板 ---------- */
 .upgrade-row {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
   padding: 8px; border: 1px solid var(--panel-border); border-radius: 8px; margin-bottom: 8px;
   background: rgba(255,255,255,0.02);
 }
-.upgrade-info { flex: 1; min-width: 0; }
+.upgrade-info { flex: 1 1 160px; min-width: 0; }
 .upgrade-name { font-size: 14px; font-weight: 700; }
 .upgrade-effect { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 .upgrade-cost { font-size: 12px; color: var(--gold); margin-top: 2px; }
@@ -204,17 +229,21 @@ input { font-family: inherit; }
 .btn.primary { background: linear-gradient(180deg, #1b6ea8, #124d7a); border-color: #2a8fd0; }
 .btn.danger { border-color: rgba(255,107,107,0.5); color: #ff9a9a; }
 .btn.small { padding: 5px 10px; font-size: 12px; }
+.btn, .mini-btn, .buy-btn { white-space: nowrap; }
 
 /* ---------- Tab ---------- */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   background: rgba(8, 13, 26, 0.95); border-top: 1px solid var(--panel-border);
-  display: flex; justify-content: center; gap: 4px; padding: 6px;
+  display: flex; justify-content: flex-start; gap: 2px; padding: 6px 4px;
+  overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
 }
+.bottom-nav::-webkit-scrollbar { display: none; }
 .bottom-nav button {
   background: transparent; border: 1px solid transparent; color: var(--text-dim);
-  border-radius: 10px; padding: 8px 16px; font-size: 13px; font-weight: 700;
+  border-radius: 10px; padding: 6px 10px; font-size: 12px; font-weight: 700;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex-shrink: 0;
 }
 .bottom-nav button.active { color: var(--accent); border-color: rgba(53,198,240,0.35); background: rgba(53,198,240,0.08); }
 .bottom-nav .nav-label { font-size: 10px; }
@@ -277,13 +306,28 @@ input { font-family: inherit; }
 /* ---------- 重构 ---------- */
 .prestige-info { font-size: 13px; line-height: 1.6; }
 .prestige-energy { color: var(--super); font-size: 18px; font-weight: 800; }
-.shop-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--panel-border); border-radius: 8px; margin-bottom: 6px; }
+.shop-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--panel-border); border-radius: 8px; margin-bottom: 6px; }
+.shop-row > div:first-child { flex: 1 1 160px; min-width: 0; }
+.shop-row > *:last-child { flex-shrink: 0; }
 .shop-row .desc { font-size: 12px; color: var(--text-dim); }
 
 /* ---------- 模态 ---------- */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
-.modal { background: var(--bg2); border: 1px solid var(--panel-border); border-radius: 14px; padding: 20px; max-width: 460px; width: 100%; max-height: 84vh; overflow-y: auto; }
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 16px;
+  animation: modalBackdropIn 0.2s ease-out;
+}
+.modal {
+  background: var(--bg2); border: 1px solid var(--panel-border); border-radius: 14px; padding: 20px;
+  max-width: 460px; width: 100%; max-height: 84vh; overflow-y: auto;
+  animation: modalIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
 .modal h2 { font-size: 18px; margin-bottom: 10px; }
+@keyframes modalBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* ---------- Toast ---------- */
 .toast-wrap { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -298,7 +342,14 @@ input { font-family: inherit; }
   pointer-events: none;
 }
 .unlock-inner { text-align: center; }
-.unlock-inner .big { font-size: 42px; font-weight: 900; color: var(--accent); text-shadow: 0 0 24px rgba(53,198,240,0.8); }
+.unlock-inner .big {
+  font-size: 42px; font-weight: 900; color: var(--accent); text-shadow: 0 0 24px rgba(53,198,240,0.8);
+  animation: unlockGlow 2.2s ease-in-out infinite;
+}
+@keyframes unlockGlow {
+  0%, 100% { text-shadow: 0 0 14px rgba(53,198,240,0.55); }
+  50% { text-shadow: 0 0 42px rgba(53,198,240,1); }
+}
 .unlock-inner .sub { margin-top: 8px; color: var(--text); font-size: 18px; }
 @keyframes unlockFade { 0% { opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 
@@ -309,7 +360,14 @@ input { font-family: inherit; }
   animation: unlockFade 2.6s ease forwards;
 }
 .milestone-inner { text-align: center; }
-.milestone-inner .mag { font-size: 64px; font-weight: 900; color: var(--gold); text-shadow: 0 0 40px rgba(255,217,61,0.9); }
+.milestone-inner .mag {
+  font-size: 64px; font-weight: 900; color: var(--gold); text-shadow: 0 0 40px rgba(255,217,61,0.9);
+  animation: magPulse 1.5s ease-in-out infinite;
+}
+@keyframes magPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
 .milestone-inner .sub { color: var(--text); margin-top: 6px; }
 
 /* ---------- 统计 ---------- */
@@ -498,43 +556,96 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   .click-hint { margin-top: 14px; }
 }
 
-/* ---------- 世界跃迁 ---------- */
-.leap-flash {
-  position: fixed; inset: 0; z-index: 170; display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(720px 520px at 50% 50%, rgba(255,94,138,0.16), rgba(0,0,0,0.82));
+/* ---------- 重要节点大动画：世界跃迁 / 法则重写 / 重构 / 法则彼岸 ---------- */
+.leap-flash, .law-flash, .prestige-flash, .nexus-flash {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
   pointer-events: none;
   overflow: hidden;
   animation: leapFade 2.8s ease forwards;
+}
+.leap-flash {
+  z-index: 170;
+  background:
+    radial-gradient(760px 560px at 50% 44%, rgba(255,94,138,0.22), transparent 64%),
+    radial-gradient(520px 380px at 50% 56%, rgba(126,232,255,0.10), transparent 72%),
+    rgba(2,4,10,0.88);
+}
+.law-flash {
+  z-index: 171;
+  background:
+    radial-gradient(760px 560px at 50% 44%, rgba(255,217,61,0.20), transparent 64%),
+    radial-gradient(520px 380px at 50% 56%, rgba(126,232,255,0.10), transparent 72%),
+    rgba(2,4,10,0.88);
+}
+.prestige-flash {
+  z-index: 170;
+  background:
+    radial-gradient(760px 560px at 50% 44%, rgba(178,107,255,0.24), transparent 64%),
+    radial-gradient(520px 380px at 50% 56%, rgba(255,110,199,0.12), transparent 72%),
+    rgba(2,4,10,0.9);
+}
+.nexus-flash {
+  z-index: 172;
+  background:
+    radial-gradient(760px 560px at 50% 44%, rgba(192,125,255,0.24), transparent 64%),
+    radial-gradient(520px 380px at 50% 56%, rgba(126,232,255,0.12), transparent 72%),
+    rgba(2,4,10,0.9);
+  animation: leapFade 3s ease forwards;
 }
 .leap-rings { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .leap-rings span {
   position: absolute; width: 110px; height: 110px; border-radius: 50%;
   border: 2px solid rgba(255,94,138,0.7);
   box-shadow: 0 0 30px rgba(255,94,138,0.5), inset 0 0 30px rgba(126,232,255,0.28);
-  animation: leapRing 2.8s cubic-bezier(0.16,1,0.3,1) forwards;
+  animation: flashRing 2.8s cubic-bezier(0.16,1,0.3,1) forwards;
 }
-.leap-rings span:nth-child(2) { animation-delay: 0.28s; border-color: rgba(178,107,255,0.75); }
-.leap-rings span:nth-child(3) { animation-delay: 0.56s; border-color: rgba(126,232,255,0.8); }
-@keyframes leapRing {
-  0% { transform: scale(0.2) rotate(0deg); opacity: 0; }
-  16% { opacity: 1; }
-  100% { transform: scale(10) rotate(40deg); opacity: 0; }
+.leap-rings span:nth-child(2) { animation-delay: 0.15s; border-color: rgba(178,107,255,0.75); box-shadow: 0 0 30px rgba(178,107,255,0.5), inset 0 0 30px rgba(126,232,255,0.28); }
+.leap-rings span:nth-child(3) { animation-delay: 0.3s; border-color: rgba(126,232,255,0.8); box-shadow: 0 0 30px rgba(126,232,255,0.5), inset 0 0 30px rgba(126,232,255,0.3); }
+.law-flash .leap-rings span { border-color: rgba(255,217,61,0.7); box-shadow: 0 0 30px rgba(255,217,61,0.5), inset 0 0 30px rgba(126,232,255,0.25); }
+.law-flash .leap-rings span:nth-child(2) { border-color: rgba(126,232,255,0.75); box-shadow: 0 0 30px rgba(126,232,255,0.45), inset 0 0 30px rgba(126,232,255,0.25); }
+.law-flash .leap-rings span:nth-child(3) { border-color: rgba(53,198,240,0.8); box-shadow: 0 0 30px rgba(53,198,240,0.45), inset 0 0 30px rgba(126,232,255,0.28); }
+.prestige-flash .leap-rings span { border-color: rgba(178,107,255,0.75); box-shadow: 0 0 30px rgba(178,107,255,0.5), inset 0 0 30px rgba(255,110,199,0.3); }
+.prestige-flash .leap-rings span:nth-child(2) { border-color: rgba(255,110,199,0.8); box-shadow: 0 0 30px rgba(255,110,199,0.5), inset 0 0 30px rgba(126,232,255,0.28); }
+.prestige-flash .leap-rings span:nth-child(3) { border-color: rgba(126,232,255,0.85); box-shadow: 0 0 30px rgba(126,232,255,0.5), inset 0 0 30px rgba(255,110,199,0.3); }
+.nexus-flash .leap-rings span { border-color: rgba(192,125,255,0.8); box-shadow: 0 0 30px rgba(192,125,255,0.55), inset 0 0 30px rgba(126,232,255,0.32); }
+.nexus-flash .leap-rings span:nth-child(2) { border-color: rgba(126,232,255,0.85); box-shadow: 0 0 30px rgba(126,232,255,0.5), inset 0 0 30px rgba(192,125,255,0.3); }
+.nexus-flash .leap-rings span:nth-child(3) { border-color: rgba(178,107,255,0.85); box-shadow: 0 0 30px rgba(178,107,255,0.5), inset 0 0 30px rgba(126,232,255,0.3); }
+@keyframes flashRing {
+  0% { transform: scale(0.12) rotate(0deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: scale(11) rotate(48deg); opacity: 0; }
 }
 .leap-inner { text-align: center; z-index: 1; padding: 0 16px; }
-.leap-title {
+.leap-title, .law-title, .prestige-title, .nexus-title {
+  --glow: rgba(178,107,255,0.8);
   font-size: 44px; font-weight: 900; letter-spacing: 0.3em; padding-left: 0.3em;
-  background: linear-gradient(120deg, #ff5e8a, #b26bff 45%, #7ee8ff);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 26px rgba(178,107,255,0.75));
-  animation: leapShimmer 2.8s ease forwards;
+  animation: titlePop 0.72s cubic-bezier(0.16,1,0.3,1) both, glowPulse 1.7s ease-in-out 0.85s infinite;
 }
-.leap-sub { margin-top: 10px; color: var(--text); font-size: 15px; letter-spacing: 0.14em; opacity: 0.92; }
-.leap-cores { margin-top: 14px; font-size: 22px; color: var(--gold); text-shadow: 0 0 18px rgba(255,217,61,0.8); }
-@keyframes leapShimmer {
-  0% { opacity: 0; transform: scale(0.92); }
-  14% { opacity: 1; }
-  82% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.04); }
+.leap-title { background: linear-gradient(120deg, #ff5e8a, #b26bff 45%, #7ee8ff); --glow: rgba(178,107,255,0.85); }
+.law-title { background: linear-gradient(120deg, #ffd93d, #35c6f0 45%, #7ee8ff); --glow: rgba(255,217,61,0.85); }
+.prestige-title { background: linear-gradient(120deg, #b26bff, #ff6ec7 45%, #7ee8ff); --glow: rgba(178,107,255,0.9); }
+.nexus-title { background: linear-gradient(120deg, #c07dff, #b26bff 45%, #7ee8ff); --glow: rgba(192,125,255,0.9); }
+@keyframes titlePop {
+  0% { opacity: 0; transform: scale(0.35); }
+  55% { opacity: 1; transform: scale(1.14); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 14px var(--glow, rgba(178,107,255,0.6))) brightness(1); }
+  50% { filter: drop-shadow(0 0 42px var(--glow, rgba(178,107,255,1))) brightness(1.28); }
+}
+.leap-sub {
+  margin-top: 10px; color: var(--text); font-size: 15px; letter-spacing: 0.14em; opacity: 0.92;
+  animation: coresUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.35s both;
+}
+.leap-cores {
+  margin-top: 14px; font-size: 22px; color: var(--gold); text-shadow: 0 0 18px rgba(255,217,61,0.8);
+  animation: coresUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.5s both;
+}
+@keyframes coresUp {
+  0% { opacity: 0; transform: translateY(24px) scale(0.92); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes leapFade {
   0% { opacity: 0; }
@@ -547,30 +658,17 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   0%, 100% { box-shadow: 0 0 0 0 rgba(178,107,255,0), 0 0 12px rgba(178,107,255,0.25); }
   50% { box-shadow: 0 0 0 7px rgba(178,107,255,0), 0 0 26px rgba(178,107,255,0.6); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .leap-flash, .leap-rings span, .leap-title, .leap-ready { animation: none !important; }
-}
-
-/* ---------- 法则重写 ---------- */
-.law-flash {
-  position: fixed; inset: 0; z-index: 171; display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(720px 520px at 50% 50%, rgba(255,217,61,0.15), rgba(0,0,0,0.84));
-  pointer-events: none;
-  overflow: hidden;
-  animation: leapFade 2.8s ease forwards;
-}
-.law-flash .leap-rings span { border-color: rgba(255,217,61,0.7); box-shadow: 0 0 30px rgba(255,217,61,0.5), inset 0 0 30px rgba(126,232,255,0.25); }
-.law-flash .leap-rings span:nth-child(2) { border-color: rgba(126,232,255,0.75); }
-.law-flash .leap-rings span:nth-child(3) { border-color: rgba(53,198,240,0.8); }
-.law-title {
-  font-size: 44px; font-weight: 900; letter-spacing: 0.3em; padding-left: 0.3em;
-  background: linear-gradient(120deg, #ffd93d, #35c6f0 45%, #7ee8ff);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 26px rgba(255,217,61,0.7));
-  animation: leapShimmer 2.8s ease forwards;
+@media (max-width: 560px) {
+  .leap-title, .law-title, .prestige-title, .nexus-title { font-size: 30px; letter-spacing: 0.18em; padding-left: 0.18em; }
+  .leap-cores { font-size: 18px; }
+  .leap-sub { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .law-flash { animation: none !important; }
+  .leap-flash, .law-flash, .prestige-flash, .nexus-flash,
+  .leap-rings span, .leap-title, .law-title, .prestige-title, .nexus-title,
+  .leap-sub, .leap-cores, .leap-ready {
+    animation: none !important;
+  }
 }
 
 
@@ -585,6 +683,8 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   align-items: center;
   gap: 8px;
   padding: 4px 12px 4px 7px;
+  flex-shrink: 0;
+  min-width: max-content;
   border-radius: 999px;
   border: 1px solid rgba(53,198,240,0.28);
   background: linear-gradient(145deg, rgba(18,34,60,0.92), rgba(8,14,28,0.92));
@@ -916,8 +1016,9 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   background: rgba(255,255,255,0.04);
 }
 .item-card-count.has { color: var(--gold); border-color: rgba(255,217,61,0.4); box-shadow: 0 0 8px rgba(255,217,61,0.15); }
+.item-card > * { min-width: 0; max-width: 100%; }
 .item-card-name { font-size: 13px; font-weight: 800; }
-.item-card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.45; min-height: 32px; flex: 1; }
+.item-card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.45; min-height: 32px; flex: 1; overflow-wrap: anywhere; }
 .item-card-btn { margin-top: 2px; }
 .item-card-btn.buy { color: var(--gold); }
 .item-card.owned { border-color: rgba(61,220,132,0.4); background: linear-gradient(165deg, rgba(20,48,38,0.45), rgba(9,15,29,0.55)); }
@@ -1027,7 +1128,12 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
   border: 1px dashed var(--panel-border); border-radius: 6px; padding: 5px 8px; white-space: nowrap;
   flex-shrink: 0;
 }
-.upgrade-buy { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-left: 8px; }
+.stage-cap-tag {
+  color: var(--gold);
+  border-color: rgba(255,217,61,0.42);
+  background: rgba(255,217,61,0.06);
+}
+.upgrade-buy { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-left: 8px; flex-shrink: 0; }
 
 /* ---- toast：碎片 ---- */
 .toast.frag { border-color: rgba(127,209,192,0.5); color: #9fe8d8; }
@@ -1075,4 +1181,11 @@ canvas.chart { width: 100%; height: 220px; background: #081020; border: 1px soli
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
   .buy-btn.afford { animation: none !important; }
+}
+/* ---- 重要节点动画：动效减弱 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .leap-flash, .law-flash, .prestige-flash, .nexus-flash,
+  .leap-rings span, .leap-title, .law-title, .prestige-title, .nexus-title,
+  .leap-sub, .leap-cores, .unlock-inner .big, .milestone-inner .mag,
+  .modal-backdrop, .modal { animation: none !important; }
 }

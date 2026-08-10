@@ -2,7 +2,7 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
+  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, NexusUpgradeId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -19,14 +19,15 @@ import {
   overclock as sysOverclock, overclockCost, canOverclock as sysCanOverclock, shardsForRarity,
 } from "./systems/equipment";
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
+import { canEnterNexus as sysCanEnterNexus, enterNexus as sysEnterNexus, buyNexusUpgrade as sysBuyNexusUpgrade, nexusShopCost as sysNexusShopCost, canBuyNexus as sysCanBuyNexus } from "./systems/nexus";
 import { dailyGoldMag, ensureDaily } from "./systems/daily";
-import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate } from "./systems/talents";
-import { talentNodeById } from "./data/talents";
+import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate, canConvertOverflow as sysCanConvertOverflow, convertOverflow as sysConvertOverflow } from "./systems/talents";
+import { talentNodeById, TALENT_TREES } from "./data/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
 import { applyLeap, canLeap as sysCanLeap, leapCores, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
 import { applyLawRewrite, canRewriteLaw as sysCanRewriteLaw, lawShards, buyLawPatch as sysBuyLawPatch, lawShopCost as sysLawShopCost, canBuyLaw as sysCanBuyLaw } from "./systems/law";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
-import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
+import { SKILL_DEFS, SKILL_IDS, skillCoreCost, passiveCoreCost, PASSIVE_IDS, skillEffect } from "./data/skills";
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
 import { equipScore } from "./data/equipment";
 import { ITEM_DEFS, TOOL_DEFS } from "./data/items";
@@ -70,7 +71,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     equipment: { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null },
     skills: { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] },
     talents: {
-      points: 0, allocations: {}, keystones: {},
+      points: 0, allocations: {}, keystones: {}, residue: 0,
       presets: [
         { name: "", talents: {}, keystones: {} },
         { name: "", talents: {}, keystones: {} },
@@ -80,6 +81,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
     leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
     laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
+    nexus: { unlocked: false, entered: false, dimension: 0, purchases: {}, bossAutoAttack: false },
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
@@ -119,6 +121,8 @@ export class GameEngine {
   private dailyTimer = 0;
   private autoPrestigeTimer = 0;
   private autoUpgradeTimer = 0;
+  private talentOverflowTimer = 0;
+  private nexusCheckTimer = 0;
   // 自动分解统计（供 UI 节流 emit 提示）
   private autoBreakdownCount = 0;
   private autoBreakdownShards = 0;
@@ -155,14 +159,16 @@ export class GameEngine {
     this.tickCombo(dt);
     this.tickBoss(dt);
     this.tickConsumables(dt);
-    if (this.isUnlocked("auto_attack") && !this.state.combat.isBoss) {
+    // 自动攻击：Boss 战默认不自动攻击，进入第 4 维度「法则彼岸」后可自动攻击（或用碎片提前购买）
+    if (this.isUnlocked("auto_attack") && (!this.state.combat.isBoss || this.state.nexus?.bossAutoAttack)) {
       this.autoAttack(dt);
     }
     if (this.state.items.tools.auto_upgrade) {
       this.autoUpgradeTimer -= dt;
       if (this.autoUpgradeTimer <= 0) {
         this.autoUpgradeTimer = 0.5;
-        this.smartBuy();
+        // 自动升级：金币不足时用技能核心升级主动/被动技能
+        if (!this.smartBuy()) this.smartBuySkill();
       }
     }
     // 自动释放技能：冷却结束且未在持续中的技能立即释放
@@ -569,7 +575,7 @@ export class GameEngine {
   }
 
   private rollBossAffixes(): BossAffix[] {
-    const pool = worldForStage(this.state.combat.stage, this.state.leap?.purchases?.newWorld ?? 0).bossPool;
+    const pool = worldForStage(this.state.combat.stage, this.state.leap?.purchases?.newWorld ?? 0, this.state.nexus?.entered ?? false).bossPool;
     const count = this.state.combat.stage >= 200 && this.rng.chance(0.5) ? 2 : 1;
     return this.rng.shuffle(pool).slice(0, count);
   }
@@ -643,9 +649,18 @@ export class GameEngine {
     return true;
   }
 
+  // 升级等级上限：攻速/暴击按关卡数限制，攻击/金币不设限
+  upgradeMaxLevel(id: UpgradeId): number | null {
+    if (!CONFIG.UPGRADE_STAGE_CAP) return null;
+    if ((CONFIG.UPGRADE_UNCAPPED as readonly string[]).includes(id)) return null;
+    return Math.max(1, this.state.combat.stage);
+  }
+
   buyUpgrade(id: UpgradeId): boolean {
     if (!this.upgradeUnlocked(id)) return false;
     const lv = this.state.player.upgrades[id];
+    const cap = this.upgradeMaxLevel(id);
+    if (cap !== null && lv >= cap) return false;
     const cost = upgradeCost(id, lv);
     if (toBig(this.state.player.gold).lt(cost)) return false;
     this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
@@ -693,6 +708,8 @@ export class GameEngine {
     let best: { id: UpgradeId; score: number } | null = null;
     for (const id of candidates) {
       if (!this.upgradeUnlocked(id)) continue;
+      const cap = this.upgradeMaxLevel(id);
+      if (cap !== null && this.state.player.upgrades[id] >= cap) continue;
       const cost = upgradeCost(id, this.state.player.upgrades[id]);
       if (toBig(this.state.player.gold).lt(cost)) continue;
       const score = this.estimateGainLog(id);
@@ -700,6 +717,45 @@ export class GameEngine {
     }
     if (!best) return false;
     return this.buyUpgrade(best.id);
+  }
+
+  // Smart Buy 买不起基础升级时，用技能核心升级主动/被动技能（收益/成本比选最优）
+  private smartBuySkill(): boolean {
+    const cores = toBig(this.state.skills.cores);
+    if (cores.lte(Big.ZERO)) return false;
+    const s = this.state;
+    type Cand =
+      | { kind: "active"; id: SkillId; score: number }
+      | { kind: "passive"; id: PassiveId; score: number };
+    let best: Cand | null = null;
+    for (const inst of s.skills.actives) {
+      const def = SKILL_DEFS[inst.id];
+      const cost = skillCoreCost(inst.level);
+      if (cores.lt(Big.fromNumber(cost))) continue;
+      const cur = Math.max(1, skillEffect(def, inst.level));
+      const next = Math.max(1, skillEffect(def, inst.level + 1));
+      const gain = Math.log10(next / cur);
+      const score = gain / Math.log10(cost + 1);
+      if (!best || score > best.score) best = { kind: "active", id: inst.id, score };
+    }
+    for (const pid of PASSIVE_IDS) {
+      const def = CONFIG.SKILL_PASSIVES[pid];
+      const lv = s.skills.passives[pid] ?? 0;
+      const cost = passiveCoreCost(lv);
+      if (cores.lt(Big.fromNumber(cost))) continue;
+      // 技能升级收益按 (1+effectPerLevel) 的对数估算
+      const gain = Math.log10(1 + def.effectPerLevel);
+      const score = gain / Math.log10(cost + 1);
+      if (!best || score > best.score) best = { kind: "passive", id: pid, score };
+    }
+    if (!best) return false;
+    if (best.kind === "active") {
+      if (!sysUpgradeSkill(s, best.id)) return false;
+    } else {
+      if (!sysUpgradePassive(s, best.id)) return false;
+    }
+    this.recomputeDerived();
+    return true;
   }
 
   private estimateGainLog(id: UpgradeId): number {
@@ -882,6 +938,16 @@ export class GameEngine {
     if (ok) this.recomputeDerived();
     return ok;
   }
+  // ---------------- 天赋溢出转化 ----------------
+  canConvertTalentOverflow(): boolean {
+    return sysCanConvertOverflow(this.state);
+  }
+  convertTalentOverflow(): number {
+    const n = sysConvertOverflow(this.state);
+    if (n > 0) this.recomputeDerived();
+    return n;
+  }
+
   resetTree(tree: Parameters<typeof sysResetTree>[1]): void {
     sysResetTree(this.state, tree);
     this.recomputeDerived();
@@ -921,7 +987,7 @@ export class GameEngine {
   loadBuild(slot: number): boolean {
     const preset = this.state.talents.presets[slot];
     if (!preset || !preset.name || !this.canLoadBuild(slot)) return false;
-    for (const tree of ["destruction", "automation", "greed"] as const) {
+    for (const tree of Object.keys(TALENT_TREES) as TreeId[]) {
       sysResetTree(this.state, tree);
     }
     for (const [nodeId, pts] of Object.entries(preset.talents)) {
@@ -935,6 +1001,8 @@ export class GameEngine {
     for (const [tree, nodeId] of Object.entries(preset.keystones)) {
       if (nodeId) this.state.talents.keystones[tree as TreeId] = nodeId;
     }
+    // 防御：保证可用点数不为负
+    if (this.state.talents.points < 0) this.state.talents.points = 0;
     this.recomputeDerived();
     return true;
   }
@@ -1020,6 +1088,60 @@ export class GameEngine {
   }
   canBuyLaw(id: Parameters<typeof sysBuyLawPatch>[1]): boolean {
     return sysCanBuyLaw(this.state, id);
+  }
+
+  // ---------------- 法则彼岸（第 4 维度）----------------
+  private checkNexusUnlock(): void {
+    if (this.state.nexus.unlocked) return;
+    if ((this.state.leap?.purchases?.newWorld ?? 0) >= CONFIG.NEXUS.REQUIRED_NEW_WORLD
+        && toBig(this.state.laws.shards).gte(Big.fromNumber(CONFIG.NEXUS.ENTRY_SHARDS))) {
+      this.state.nexus.unlocked = true;
+      this.emit({ type: "unlock", key: "nexus", label: "法则彼岸（第 4 维度）" });
+    }
+  }
+  canEnterNexus(): boolean {
+    return sysCanEnterNexus(this.state);
+  }
+  enterNexus(): { dimension: number } | null {
+    if (!this.canEnterNexus()) return null;
+    if (!sysEnterNexus(this.state)) return null;
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.resetRunForNexus();
+    this.spawnEnemy();
+    this.recomputeDerived();
+    this.emit({ type: "nexusEnter", dimension: this.state.nexus.dimension });
+    return { dimension: this.state.nexus.dimension };
+  }
+  buyNexusUpgrade(id: NexusUpgradeId): boolean {
+    const ok = sysBuyNexusUpgrade(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  nexusShopCost(id: NexusUpgradeId): number {
+    return sysNexusShopCost(this.state, id);
+  }
+  canBuyNexus(id: NexusUpgradeId): boolean {
+    return sysCanBuyNexus(this.state, id);
+  }
+  // 跨入彼岸：重置第三层以下的一切（关卡/金币/升级/装备/技能/天赋/重构），
+  // 保留：统计/成就/世界核心已购升级/法则补丁/法则碎片（货币）/工具/彼岸状态
+  private resetRunForNexus(): void {
+    const state = this.state;
+    state.combat = {
+      stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
+      bossTimer: -1, combo: 0, comboTimer: 0, crushStreak: 0, skipMode: false,
+      lastHitWasCrit: false, lastHitWasSuper: false, lastHitWasCrush: false,
+      enemyKind: "normal", bossShieldHits: 0, bossVoidTarget: null,
+    };
+    state.player.gold = [0, 0];
+    state.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+    state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
+    state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
+    state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+    state.statistics.runDamage = [0, 0];
   }
 
   // ---------------- 挑战模式 ----------------

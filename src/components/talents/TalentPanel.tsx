@@ -3,8 +3,10 @@ import { Fragment, useMemo, useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
 import { TALENT_NODES, TALENT_TREES, treePoints } from "@/game/data/talents";
+import { CONFIG } from "@/game/config";
 import type { TreeId } from "@/game/types";
 import type { TalentNodeDef } from "@/game/data/talents";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 const TREE_ICON: Record<TreeId, string> = {
   destruction: "🔥",
@@ -17,6 +19,7 @@ export function TalentPanel() {
   const { engine } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("talents"));
   const points = useGameSelector((s) => s.talents.points);
+  const residue = useGameSelector((s) => s.talents.residue ?? 0);
   const allocations = useGameSelector((s) => s.talents.allocations);
   const keystones = useGameSelector((s) => s.talents.keystones);
   const presets = useGameSelector((s) => s.talents.presets);
@@ -34,11 +37,32 @@ export function TalentPanel() {
     );
   }
 
+  const canConvertOverflow = engine?.canConvertTalentOverflow() ?? false;
+
   return (
     <div className="panel talent-panel">
       <div className="panel-title">
         <h3>天赋</h3>
-        <span className="points-chip"><span className="pc-icon">⚡</span><span>可用点数</span><span className="mono pc-val">{points}</span></span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span className="points-chip"><span className="pc-icon">⚡</span><span>可用点数</span><span className="mono pc-val">{points}</span></span>
+          <span
+            className="points-chip"
+            style={{ borderColor: "rgba(53,198,240,0.35)", background: "rgba(53,198,240,0.07)" }}
+            title="天赋残辉：溢出天赋点转化所得，每点 = 全局倍率 ×1.1（永久）"
+          >
+            <span className="pc-icon">✨</span><span>残辉</span>
+            <span className="mono pc-val" style={{ color: "var(--accent)", textShadow: "0 0 10px rgba(53,198,240,0.5)" }}>{residue}</span>
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8, flexWrap: "wrap" }}>
+        <button className="mini-btn" disabled={!canConvertOverflow} onClick={() => engine?.convertTalentOverflow()}>
+          转化溢出
+        </button>
+        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+          天赋全满后可转化（每 {CONFIG.TALENT_OVERFLOW.CHUNK} 点 → +1 残辉）
+        </span>
       </div>
 
       <div className="presets">
@@ -129,16 +153,15 @@ export function TalentPanel() {
       })}
 
       {confirmTree && (
-        <div className="modal-backdrop" onClick={() => setConfirmTree(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>重置「{TALENT_TREES[confirmTree].name}」树？</h2>
-            <p style={{ fontSize: 13, color: "var(--text-dim)" }}>将返还全部已投入天赋点。</p>
-            <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn" onClick={() => setConfirmTree(null)}>取消</button>
-              <button className="btn danger" onClick={() => { engine?.resetTree(confirmTree); setConfirmTree(null); }}>确认重置</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title={`重置「${TALENT_TREES[confirmTree].name}」树？`}
+          onCancel={() => setConfirmTree(null)}
+          onConfirm={() => { engine?.resetTree(confirmTree); setConfirmTree(null); }}
+          confirmText="确认重置"
+          danger
+        >
+          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>将返还全部已投入天赋点。</p>
+        </ConfirmModal>
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { Big, toBig } from "../bignum";
 import { CONFIG } from "../config";
 import type { GameState, LawId } from "../types";
 import { fib } from "./leap";
+import { nexusShardGainMult } from "./nexus";
 
 // 重写获得碎片：floor(maxStage/10000) - 2（30000 → 1，50000 → 3，100000 → 8）
 // 本次最大关卡 ≥ 上次 ×2 → 碎片翻倍
@@ -11,7 +12,9 @@ export function lawShards(state: GameState): number {
   const base = Math.max(1, Math.floor(maxStage / CONFIG.LAWS.SHARD_DIVISOR) - CONFIG.LAWS.SHARD_BASE_OFFSET);
   const last = state.laws.lastRewriteMaxStage || 1;
   const doubled = maxStage >= last * CONFIG.LAWS.DOUBLE_MULT;
-  return doubled ? base * CONFIG.LAWS.DOUBLE_MULT : base;
+  const raw = doubled ? base * CONFIG.LAWS.DOUBLE_MULT : base;
+  // ??????????????????? 4 ?????
+  return Math.floor(raw * nexusShardGainMult(state));
 }
 
 export function canRewriteLaw(state: GameState): boolean {

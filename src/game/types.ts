@@ -16,11 +16,12 @@ export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_r
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
 export type LawId = "critExp" | "goldBoost" | "apsCap" | "goldToDmg";
+export type NexusUpgradeId = "nexusDmg" | "nexusGold" | "nexusShardGain" | "nexusBossAuto" | "nexusOverflow";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
 export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
-export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus";
+export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus" | "nexus_frontier";
 export type ScoreSubmitKind = "stage" | "mag" | "prestige" | "season";
 
 // 词条属性（加池型用 % 表达，独立乘区用 × 表达）
@@ -108,6 +109,7 @@ export interface TalentState {
   allocations: Record<string, number>; // nodeId -> 已投点数
   keystones: Partial<Record<TreeId, string>>; // treeId -> keystone nodeId
   presets: BuildPreset[]; // 构筑预设槽（3 个）
+  residue: number; // 天赋残辉：溢出天赋点转化所得，每点 = 全局倍率 ×1.1（永久，不随重置清零）
 }
 
 export interface DailyQuest {
@@ -160,6 +162,14 @@ export interface LawState {
   purchases: Partial<Record<LawId, number>>;
 }
 
+export interface NexusState {
+  unlocked: boolean; // 是否已解锁彼岸（新世界 Lv2 + 法则碎片达标）
+  entered: boolean; // 是否已进入第四维度「法则彼岸」
+  dimension: number; // 0=未进入 1=法则彼岸 2+=更高维度（预留）
+  purchases: Partial<Record<NexusUpgradeId, number>>; // 彼岸商店已购升级
+  bossAutoAttack: boolean; // 进入彼岸后 Boss 自动攻击（也可用碎片提前购买）
+}
+
 export interface ItemState {
   consumables: Partial<Record<ItemId, number>>;
   tools: Partial<Record<ToolId, boolean>>;
@@ -209,6 +219,7 @@ export interface GameState {
   prestige: PrestigeState;
   leap: LeapState;
   laws: LawState;
+  nexus: NexusState;
   items: ItemState;
   statistics: StatisticsState;
   daily: DailyState;
@@ -233,6 +244,8 @@ export type GameEvent =
   | { type: "prestige"; energyGained: number }
   | { type: "leap"; cores: number }
   | { type: "lawRewrite"; shards: number }
+  | { type: "nexusEnter"; dimension: number }
+  | { type: "talentOverflow"; residue: number }
   | { type: "drop"; rarity: Rarity; slot: EquipSlot }
   | { type: "autoBreakdown"; count: number; shards: number }
   | { type: "achievement"; id: string }
@@ -268,8 +281,11 @@ export interface DerivedStats {
   overflowEffMult: Big;
   dropMult: Big;
   talentMult: Big;
+  talentResidueMult: Big; // 天赋残辉全局倍率
   prestigeMult: Big;
   globalMult: Big;
+  nexusMult: Big; // 第 4 维度「法则彼岸」独立伤害倍率
+  nexusGoldMult: Big; // 第 4 维度「法则彼岸」独立金币倍率
   critLayersExtra: number;
   leapGlobalMult: Big; // 世界核心全属性全局倍率
   hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）

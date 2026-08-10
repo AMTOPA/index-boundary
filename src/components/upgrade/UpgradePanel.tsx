@@ -88,7 +88,10 @@ export function UpgradePanel() {
         const cost = upgradeCost(def.id, level);
         const afford = goldBig.gte(cost);
         const gated = def.gate !== null && !unlocks.includes(def.gate);
-        const nearCap = !gated && isNearCap(def.id, level);
+        // 关卡等级上限：攻速/暴击率/暴伤 上限 = 当前关卡数（推关解锁）；攻击/金币不设限
+        const stageCap = engine?.upgradeMaxLevel(def.id) ?? null;
+        const capped = stageCap !== null && level >= stageCap;
+        const nearCap = !gated && !capped && isNearCap(def.id, level);
         return (
           <div className="upgrade-row" key={def.id} style={gated ? { opacity: 0.4 } : undefined}>
             <div className="upgrade-info">
@@ -96,7 +99,7 @@ export function UpgradePanel() {
               <div className="upgrade-effect">{def.effect(level)}{def.gate === null || unlocks.includes(def.gate!) ? ` → ${def.nextEffect(level)}` : "（未解锁）"}</div>
               <div className="upgrade-cost">费用 <NumberDisplay value={cost} /></div>
             </div>
-            {!gated && !nearCap && (
+            {!gated && !capped && !nearCap && (
               <div className="upgrade-buy">
                 <button className={`buy-btn ${afford ? "afford" : ""}`} disabled={!afford} onClick={() => engine?.buyUpgrade(def.id)}>购买</button>
                 <div className="buy-counts">
@@ -107,7 +110,10 @@ export function UpgradePanel() {
                 </div>
               </div>
             )}
-            {!gated && nearCap && (
+            {!gated && capped && (
+              <span className="near-cap-tag stage-cap-tag">已达关卡上限 Lv{stageCap}（推关解锁）</span>
+            )}
+            {!gated && !capped && nearCap && (
               <span className="near-cap-tag">{def.id === "aspd" ? "已达攻速软上限" : "已近上限"}</span>
             )}
           </div>

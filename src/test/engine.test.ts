@@ -160,3 +160,43 @@ describe("GameEngine", () => {
     expect(g2).toBeGreaterThan(g1 * 1e5); // 无软上限：500 级远高于 50 级（1.03^450≈6e5）
   });
 });
+  it("天赋：点数不足时不能分配（可用点数不会变负）", () => {
+    const st = createNewState(5);
+    st.meta.unlocks = ["talents"];
+    st.talents.points = 1;
+    const eng = new GameEngine(st);
+    // sing_law 为 cost=2 的 1 级节点（无前置）
+    expect(eng.canAllocate("sing_law")).toBe(false);
+    expect(eng.allocate("sing_law")).toBe(false);
+    expect(eng.state.talents.points).toBe(1);
+    // 0 点同样安全
+    st.talents.points = 0;
+    expect(eng.allocate("sing_law")).toBe(false);
+    expect(eng.state.talents.points).toBe(0);
+  });
+
+  it("天赋：加载预设时重置全部 4 棵树，可用点数不为负", () => {
+    const st = createNewState(6);
+    st.meta.unlocks = ["talents"];
+    // 仅第三层（奇点）树有投入，主三棵树为空
+    st.talents.points = 0;
+    st.talents.allocations = {
+      sing_law: 3, sing_cap: 3, sing_skill_cd: 3, sing_overflow: 3, sing_keystone_boss: 1,
+    };
+    st.talents.keystones = { singularity: "sing_keystone_boss" };
+    st.talents.presets = [
+      { name: "", talents: {}, keystones: {} },
+      {
+        name: "主树流",
+        talents: { dest_sharp: 5, dest_crit: 3, dest_super: 3, dest_hunter: 1, dest_keystone_absolute: 1 },
+        keystones: { destruction: "dest_keystone_absolute" },
+      },
+      { name: "", talents: {}, keystones: {} },
+    ];
+    const eng = new GameEngine(st);
+    expect(eng.canLoadBuild(1)).toBe(true);
+    expect(eng.loadBuild(1)).toBe(true);
+    expect(eng.state.talents.points).toBeGreaterThanOrEqual(0);
+    // 重新分配后应该正好等于 9（28 返还 - 19 消耗）
+    expect(eng.state.talents.points).toBe(9);
+  });

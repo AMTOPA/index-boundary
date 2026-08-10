@@ -34,6 +34,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [milestoneFlash, setMilestoneFlash] = useState<number | null>(null);
   const [leapFlash, setLeapFlash] = useState<number | null>(null);
   const [lawFlash, setLawFlash] = useState<number | null>(null);
+  const [prestigeFlash, setPrestigeFlash] = useState<number | null>(null);
+  const [nexusFlash, setNexusFlash] = useState<number | null>(null);
   const [offline, setOffline] = useState<OfflineResult | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -113,6 +115,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
         case "prestige":
           playSfx("prestige");
           pushToast(`重构完成！获得 ${ev.energyGained} 奇点能量`, "energy");
+          setPrestigeFlash(ev.energyGained);
+          window.setTimeout(() => setPrestigeFlash((v) => (v === ev.energyGained ? null : v)), 2800);
+          break;
+        case "nexusEnter":
+          playSfx("unlock");
+          setNexusFlash(ev.dimension);
+          window.setTimeout(() => setNexusFlash((v) => (v === ev.dimension ? null : v)), 3000);
+          break;
+        case "talentOverflow":
+          pushToast("天赋残辉 +1（溢出天赋点自动转化），全局倍率提升", "energy");
           break;
         case "achievement":
           pushToast(`成就达成：${ev.id}`, "achievement");
@@ -248,6 +260,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
             <div className="law-title">法则重写</div>
             <div className="leap-sub">法典重铸 · 公式被改写</div>
             <div className="leap-cores mono">+{lawFlash} 法则碎片</div>
+          </div>
+        </div>
+      )}
+      {prestigeFlash !== null && (
+        <div className="prestige-flash">
+          <div className="leap-rings"><span /><span /><span /></div>
+          <div className="leap-inner">
+            <div className="prestige-title">宇宙坍缩·重构</div>
+            <div className="leap-sub">新的奇点能量展开</div>
+            <div className="leap-cores mono">+{prestigeFlash} 能量</div>
+          </div>
+        </div>
+      )}
+      {nexusFlash !== null && (
+        <div className="nexus-flash">
+          <div className="leap-rings"><span /><span /><span /></div>
+          <div className="leap-inner">
+            <div className="nexus-title">法则彼岸</div>
+            <div className="leap-sub">第 4 维度 · 新的法则货币：法则碎片</div>
+            <div className="leap-cores">Boss 自动攻击 已激活</div>
           </div>
         </div>
       )}

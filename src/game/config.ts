@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, LawId, LeapUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -13,7 +13,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 3,
+  SAVE_VERSION: 4,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -52,6 +52,9 @@ export const CONFIG = {
   BASE_APS: 1,
   APS_SOFT_CAP: 10,
   UPGRADE_NEAR_CAP_RATIO: 0.005, // 升级下一级有效收益 < 0.5% 视为近上限（隐藏购买按钮）
+  // 关卡等级上限：攻速/暴击率/暴伤 上限 = 当前关卡数（100 关最高 100 级）；攻击/金币不设限
+  UPGRADE_STAGE_CAP: true,
+  UPGRADE_UNCAPPED: ["attack", "gold"] as const,
 
   // 连击
   COMBO_WINDOW_SEC: 3,
@@ -283,6 +286,12 @@ export const CONFIG = {
   // 天赋
   TALENT_POINTS_FROM_BOSS_FIRST_KILL: 1,
   TALENT_POINTS_FROM_ACHIEVEMENT: 1,
+  // 天赋溢出转化：天赋全满后，每 CHUNK 点溢出天赋点自动转化为 1 点天赋残辉（永久全局 ×1.1）
+  TALENT_OVERFLOW: {
+    CHUNK: 5,
+    GLOBAL_MULT: 0.1,
+    AUTO_CHECK_SEC: 3,
+  },
 
   // 道具
   CONSUMABLE_DURATION_SEC: 300, // 超频芯片/黄金协议 5 分钟
@@ -333,6 +342,22 @@ export const CONFIG = {
       apsCap: { perLevel: 1, max: 4, costBase: 1, label: "攻速破限", desc: "攻速软上限 +1/级（10→14，有界）" },
       goldToDmg: { perLevel: 1, max: 1, costBase: 3, label: "金币转伤", desc: "解锁公式：持有金币每高 10 倍（≥10^12）→ 全伤害 +10%（有界）" },
     } as Record<LawId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
+  },
+
+  // 第 4 维度：法则彼岸（三层跃迁全部完成后的下一个阶段，货币 = 法则碎片）
+  NEXUS: {
+    REQUIRED_NEW_WORLD: 2, // 需要 新世界 Lv2（法则终境）——即三层跃迁全部完成
+    ENTRY_SHARDS: 30, // 进入门槛：当前持有法则碎片 >= 30（不看关卡）
+    ENTRY_COST: 20, // 进入消耗的法则碎片（跨入彼岸）
+    BOSS_AUTO_COST: 5, // 提前解锁 Boss 自动攻击的碎片价格（进入后自动免费获得）
+    STAGE_START: 100000, // 彼岸世界主题起始关卡
+    SHOP: {
+      nexusDmg: { perLevel: 0.5, max: 10, costBase: 1, label: "彼岸增幅", desc: "全局伤害 ×1.5/级（独立乘区，上限 ×57.7）" },
+      nexusGold: { perLevel: 0.5, max: 10, costBase: 1, label: "彼岸金流", desc: "金币收益 ×1.5/级（独立乘区，上限 ×57.7）" },
+      nexusShardGain: { perLevel: 0.25, max: 8, costBase: 1, label: "碎片洪流", desc: "法则碎片获取 ×1.25/级（上限 ×5.96）" },
+      nexusBossAuto: { perLevel: 1, max: 1, costBase: 5, label: "Boss 自动攻击", desc: "进入彼岸自动获得；也可提前用少量碎片购买" },
+      nexusOverflow: { perLevel: 0.5, max: 6, costBase: 1, label: "溢出洪流", desc: "溢出收益 ×1.5/级（上限 ×11.4）" },
+    } as Record<NexusUpgradeId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
   },
 
   // 解锁节奏（关卡）

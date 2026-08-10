@@ -6,6 +6,7 @@ import { formatNumber } from "@/game/format";
 import { CONFIG } from "@/game/config";
 import type { LawId } from "@/game/types";
 import { lawShards, lawShopCostFrom } from "@/game/systems/law";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 const SHOP_ORDER: LawId[] = ["critExp", "goldBoost", "apsCap", "goldToDmg"];
 
@@ -72,20 +73,19 @@ export function LawPanel() {
       })}
 
       {confirm && (
-        <div className="modal-backdrop" onClick={() => setConfirm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>确认重写法典？</h2>
-            <p style={{ fontSize: 13, lineHeight: 1.7 }}>
-              将获得 <span className="mono" style={{ color: "var(--gold)" }}>{preview}</span> 法则碎片。
-              <br />
-              第三层以下（含世界核心已购升级）将被重置；法则补丁、成就与统计保留。
-            </p>
-            <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn" onClick={() => setConfirm(false)}>取消</button>
-              <button className="btn danger" onClick={() => { engine?.rewriteLaw(); setConfirm(false); }}>确认重写</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title="确认重写法典？"
+          onCancel={() => setConfirm(false)}
+          onConfirm={() => { engine?.rewriteLaw(); setConfirm(false); }}
+          confirmText="确认重写"
+          danger
+        >
+          <p style={{ fontSize: 13, lineHeight: 1.7 }}>
+            将获得 <span className="mono" style={{ color: "var(--gold)" }}>{preview}</span> 法则碎片。
+            <br />
+            第三层以下（含世界核心已购升级）将被重置；法则补丁、成就与统计保留。
+          </p>
+        </ConfirmModal>
       )}
     </div>
   );

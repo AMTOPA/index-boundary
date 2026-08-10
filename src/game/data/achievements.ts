@@ -91,7 +91,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "prestige_50", name: "奇点循环者", desc: "完成 50 次重构", check: { type: "prestiges", n: 50 }, hidden: true },
   { id: "combo_200", name: "连击风暴", desc: "连击达到 200", check: { type: "combo", n: 200 } },
   { id: "combo_500", name: "无限连击", desc: "连击达到 500", check: { type: "combo", n: 500 } },
-  { id: "stage_10000", name: "世界线边界", desc: "到达第 10000 关，触碰世界跃迁门槛", check: { type: "maxStage", n: 10000 } },
+  { id: "stage_10000_world", name: "世界线边界", desc: "到达第 10000 关，触碰世界跃迁门槛", check: { type: "maxStage", n: 10000 } },
   { id: "leap_1", name: "首次跃迁", desc: "完成第一次世界跃迁", check: { type: "firstLeap" } },
   { id: "leap_5", name: "跨线旅者", desc: "完成 5 次世界跃迁", check: { type: "leaps", n: 5 } },
   { id: "leap_20", name: "法则编织者", desc: "完成 20 次世界跃迁", check: { type: "leaps", n: 20 }, hidden: true },

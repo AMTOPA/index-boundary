@@ -1,6 +1,7 @@
 // 天赋系统：分配 / 重置 / Keystone 互斥
 import type { GameState, TreeId } from "../types";
 import { TALENT_NODES, keystoneOptionsFor, talentNodeById } from "../data/talents";
+import { CONFIG } from "../config";
 
 export function allocatedPoints(state: GameState, nodeId: string): number {
   return state.talents.allocations[nodeId] ?? 0;
@@ -9,7 +10,7 @@ export function allocatedPoints(state: GameState, nodeId: string): number {
 export function canAllocate(state: GameState, nodeId: string): { ok: boolean; reason?: string } {
   const def = talentNodeById(nodeId);
   if (!def) return { ok: false, reason: "未知节点" };
-  if (state.talents.points <= 0) return { ok: false, reason: "天赋点不足" };
+  if (state.talents.points < def.cost) return { ok: false, reason: "天赋点不足" };
   const cur = allocatedPoints(state, nodeId);
   if (cur >= def.max) return { ok: false, reason: "已满级" };
 
@@ -66,4 +67,21 @@ export function keystoneOf(state: GameState, tree: TreeId): string | undefined {
 
 export function keystoneOptions(tree: TreeId): string[] {
   return keystoneOptionsFor(tree).map((n) => n.id);
+}
+
+export function canConvertOverflow(state: GameState): boolean {
+  if (state.talents.points < CONFIG.TALENT_OVERFLOW.CHUNK) return false;
+  // 只要还有任意节点可分配，就不算溢出（避免玩家在可加点时误转化）
+  for (const def of TALENT_NODES) {
+    if (canAllocate(state, def.id).ok) return false;
+  }
+  return true;
+}
+
+// 转化一个 CHUNK，返回新增残辉数（0 表示不可转化）
+export function convertOverflow(state: GameState): number {
+  if (!canConvertOverflow(state)) return 0;
+  state.talents.points -= CONFIG.TALENT_OVERFLOW.CHUNK;
+  state.talents.residue = (state.talents.residue ?? 0) + 1;
+  return 1;
 }

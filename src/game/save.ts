@@ -102,6 +102,8 @@ export function normalizeState(raw: unknown): GameState {
   state.talents.allocations = { ...(r.talents?.allocations ?? {}) };
   state.talents.keystones = { ...(r.talents?.keystones ?? {}) };
   state.talents.presets = Array.isArray(r.talents?.presets) ? [...r.talents.presets] : [];
+  // 自愈：历史坏档可能出现负数可用点数（旧版本 cost 校验缺失）
+  if (state.talents.points < 0) state.talents.points = 0;
   while (state.talents.presets.length < 3) {
     state.talents.presets.push({ name: "", talents: {}, keystones: {} });
   }
@@ -111,6 +113,8 @@ export function normalizeState(raw: unknown): GameState {
   state.leap.purchases = { ...(r.leap?.purchases ?? {}) };
   state.laws = { ...base.laws, ...(r.laws ?? {}) };
   state.laws.purchases = { ...(r.laws?.purchases ?? {}) };
+  state.nexus = { ...base.nexus, ...(r.nexus ?? {}) };
+  state.nexus.purchases = { ...(r.nexus?.purchases ?? {}) };
   state.items = { ...base.items, ...(r.items ?? {}) };
   state.items.consumables = { ...(r.items?.consumables ?? {}) };
   state.items.tools = { ...(r.items?.tools ?? {}) };

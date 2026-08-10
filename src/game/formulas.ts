@@ -5,6 +5,7 @@ import type { ChallengeId, ChallengePermKind, DerivedStats, EnemyKind, EquipSlot
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { leapAllStatsMult } from "./systems/leap";
 import { lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
+import { nexusDmgMult, nexusGoldMult, nexusOverflowMult } from "./systems/nexus";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
 
 // ---------------- 挑战修饰符 / 试炼赛季 ----------------
@@ -486,11 +487,17 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // ---- 全局倍率（重构/里程碑）----
   const prestigeMult = inChallenge && CONFIG.CHALLENGE_DISABLE_PRESTIGE ? Big.ONE : prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
   const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
+  // 天赋残辉：溢出天赋点转化，永久全局倍率（伤害与金币同时生效）
+  const talentResidueMult = Big.fromNumber(Math.pow(1 + CONFIG.TALENT_OVERFLOW.GLOBAL_MULT, state.talents?.residue ?? 0));
+  // 彼岸增幅（第 4 维度商店，独立乘区）
+  const nexusMult = nexusDmgMult(state);
+  const nexusGoldMultVal = nexusGoldMult(state);
+  const nexusOverflowMultVal = nexusOverflowMult(state);
 
   // ---- 金币 ----
   // 重构倍率同时放大金币收入：重推旧进度时不会被“金币清零+重买升级”卡住（验收：重推耗时 ≤ 原 20%）
   acc.goldPool += (state.skills.passives?.greed ?? 0) * CONFIG.SKILL_PASSIVES.greed.effectPerLevel;
-  let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult).mul(leapGlobalMult);
+  let goldMultBase = Big.fromNumber(Math.max(0.0001, 1 + acc.goldPool)).mul(prestigeMult).mul(leapGlobalMult).mul(talentResidueMult).mul(nexusGoldMultVal);
   let goldMult = goldMultBase.mul(Big.fromNumber(lawGoldBoost(state)));
   if (goldCollapseActive) {
     const def = SKILL_DEFS.gold_collapse;
@@ -505,7 +512,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   goldMult = goldMult.mul(Big.fromNumber(challengePermMult(state, "gold")));
 
   // ---- 全局倍率 ----
-  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult);
+  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult).mul(talentResidueMult).mul(nexusMult);
 
   // ---- 单次伤害（非暴击） ----
   const base = baseAttack(player.upgrades.attack).mul(weaponAtkMult);
@@ -554,10 +561,13 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     skillDmgMult: acc.skillDmgMult.mul(Big.fromNumber(challengePermMult(state, "skill"))),
     skillCdMult: Math.max(0.5, (1 - acc.skillCdPool) * (mods.includes("skill_slow") ? 2 : 1)),
     skillDurationMult: 1 + acc.skillDurationPool,
-    overflowEffMult: acc.overflowEffMult,
+    overflowEffMult: acc.overflowEffMult.mul(nexusOverflowMultVal),
     dropMult: Big.fromNumber(Math.max(1, 1 + dropRateTalent)),
     talentMult: talentGlobal,
+    talentResidueMult,
     prestigeMult,
+    nexusMult,
+    nexusGoldMult: nexusGoldMultVal,
     globalMult,
     critLayersExtra,
     leapGlobalMult,

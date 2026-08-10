@@ -6,6 +6,7 @@ import { formatNumber, formatBigPrecise } from "@/game/format";
 import { CONFIG } from "@/game/config";
 import type { LeapUpgradeId } from "@/game/types";
 import { leapShopCostFrom, leapCores, leapAllStatsMult } from "@/game/systems/leap";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 const SHOP_ORDER: LeapUpgradeId[] = ["lawExponent", "startStage", "allStats", "newWorld", "autoLeap"];
 
@@ -79,20 +80,19 @@ export function LeapPanel() {
       })}
 
       {confirm && (
-        <div className="modal-backdrop" onClick={() => setConfirm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>确认跨越世界线？</h2>
-            <p style={{ fontSize: 13, lineHeight: 1.7 }}>
-              将获得 <span className="mono" style={{ color: "var(--super)" }}>{previewCores}</span> 世界核心。
-              <br />
-              本世界线的升级、装备、技能、天赋、重构将被完全重置，保留成就/统计与已购世界核心升级。
-            </p>
-            <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn" onClick={() => setConfirm(false)}>取消</button>
-              <button className="btn danger" onClick={() => { engine?.leap(); setConfirm(false); }}>确认跃迁</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          title="确认跨越世界线？"
+          onCancel={() => setConfirm(false)}
+          onConfirm={() => { engine?.leap(); setConfirm(false); }}
+          confirmText="确认跃迁"
+          danger
+        >
+          <p style={{ fontSize: 13, lineHeight: 1.7 }}>
+            将获得 <span className="mono" style={{ color: "var(--super)" }}>{previewCores}</span> 世界核心。
+            <br />
+            本世界线的升级、装备、技能、天赋、重构将被完全重置，保留成就/统计与已购世界核心升级。
+          </p>
+        </ConfirmModal>
       )}
     </div>
   );

@@ -25,6 +25,7 @@ export function CombatArea() {
   const combo = useGameSelector((s) => s.combat.combo);
   const skipMode = useGameSelector((s) => s.combat.skipMode);
   const autoAttack = useGameSelector((s) => s.meta.unlocks.includes("auto_attack"));
+  const nexusEntered = useGameSelector((s) => s.nexus?.entered ?? false);
   const derived = useDerived();
   const [shake, setShake] = useState(false);
   const [impact, setImpact] = useState<"crush" | "boss">("crush");
@@ -49,7 +50,7 @@ export function CombatArea() {
   const hp = toBig(enemyHp);
   const maxHp = toBig(enemyMaxHp);
   const pct = maxHp.isZero() ? 0 : Math.min(100, Math.max(0, hp.div(maxHp).toNumber() * 100));
-  const world = worldForStage(stage);
+  const world = worldForStage(stage, 0, nexusEntered);
   const worldIndex = WORLDS.findIndex((w) => w.id === world.id);
   const bossPct = isBoss && bossTimer > 0 ? Math.min(100, Math.max(0, (bossTimer / CONFIG.BOSS_TIMER_SEC) * 100)) : 100;
   const shieldMax = CONFIG.BOSS_SHIELD_HITS;

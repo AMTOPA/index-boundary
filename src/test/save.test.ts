@@ -76,3 +76,10 @@ describe("存档系统", () => {
     setStorage(null);
   });
 });
+  it("normalizeState 自愈负数天赋点（旧版本 bug 存档）", () => {
+    const s = normalizeState({ talents: { points: -3 } });
+    expect(s.talents.points).toBe(0);
+    // 正常正数不受影响
+    const ok = normalizeState({ talents: { points: 7 } });
+    expect(ok.talents.points).toBe(7);
+  });
