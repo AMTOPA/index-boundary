@@ -26,9 +26,11 @@ export function CombatParticles() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     let W = 0, H = 0;
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      W = rect.width; H = rect.height;
-      canvas.width = W * dpr; canvas.height = H * dpr;
+      // 以父容器尺寸为准，并固定 canvas 的 CSS 尺寸，避免自身固有尺寸反馈放大
+      const rect = (canvas.parentElement ?? canvas).getBoundingClientRect();
+      W = Math.max(1, rect.width); H = Math.max(1, rect.height);
+      canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
