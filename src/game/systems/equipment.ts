@@ -85,10 +85,10 @@ export function shardsForRarity(rarity: Rarity): number {
   return CONFIG.EQUIPMENT.RARITIES[rarity].shards;
 }
 
-export function breakdown(state: GameState, uid: string): boolean {
+export function breakdown(state: GameState, uid: string, shardMult = 1): boolean {
   const target = findEquip(state, uid);
   if (!target) return false;
-  const shards = shardsForRarity(target.rarity);
+  const shards = Math.ceil(shardsForRarity(target.rarity) * shardMult);
   state.equipment.fragments = Big.fromTuple(state.equipment.fragments).add(Big.fromNumber(shards)).toTuple();
   removeEquip(state, uid);
   return true;
@@ -157,22 +157,22 @@ export function itemPowerTier(stage: number): number {
   return Math.floor(stage / CONFIG.EQUIPMENT.DROP_STAGE_TIER);
 }
 // ---------------- 重铸 / 制作 ----------------
-export function reforgeCost(item: EquipInstance): number {
+export function reforgeCost(item: EquipInstance, mult = 1): number {
   const shards = CONFIG.EQUIPMENT.RARITIES[item.rarity].shards;
-  return Math.ceil(CONFIG.EQUIPMENT.REFORGE_COST_BASE * shards * (1 + item.affixes.length));
+  return Math.max(1, Math.ceil(CONFIG.EQUIPMENT.REFORGE_COST_BASE * shards * (1 + item.affixes.length) * mult));
 }
 
-export function canReforge(state: GameState, uid: string): boolean {
+export function canReforge(state: GameState, uid: string, mult = 1): boolean {
   const item = findEquip(state, uid);
   if (!item || item.affixes.length === 0) return false;
-  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(reforgeCost(item)));
+  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(reforgeCost(item, mult)));
 }
 
 // 重铸：花费碎片重抛全部副词条（稀有度/主属性/传奇词条保留）
-export function reforge(state: GameState, uid: string, rng: Rng): boolean {
+export function reforge(state: GameState, uid: string, rng: Rng, mult = 1): boolean {
   const item = findEquip(state, uid);
   if (!item || item.affixes.length === 0) return false;
-  const cost = reforgeCost(item);
+  const cost = reforgeCost(item, mult);
   if (Big.fromTuple(state.equipment.fragments).lt(Big.fromNumber(cost))) return false;
   state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
   const rarityDef = CONFIG.EQUIPMENT.RARITIES[item.rarity];
@@ -186,22 +186,22 @@ export function reforge(state: GameState, uid: string, rng: Rng): boolean {
   return true;
 }
 
-export function craftCost(slot: EquipSlot, rarity: Rarity): number {
+export function craftCost(slot: EquipSlot, rarity: Rarity, mult = 1): number {
   const shards = CONFIG.EQUIPMENT.RARITIES[rarity].shards;
-  return Math.ceil(CONFIG.EQUIPMENT.CRAFT_COST_MULT * shards);
+  return Math.max(1, Math.ceil(CONFIG.EQUIPMENT.CRAFT_COST_MULT * shards * mult));
 }
 
 // 制作门槛：稀有度需达到掉落门槛关卡，背包不满
-export function canCraft(state: GameState, slot: EquipSlot, rarity: Rarity): boolean {
+export function canCraft(state: GameState, slot: EquipSlot, rarity: Rarity, mult = 1): boolean {
   const stage = state.combat.stage;
   if (stage < CONFIG.EQUIPMENT.RARITIES[rarity].dropMinStage) return false;
   if (state.equipment.inventory.length >= CONFIG.EQUIPMENT.INVENTORY_CAP) return false;
-  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(craftCost(slot, rarity)));
+  return Big.fromTuple(state.equipment.fragments).gte(Big.fromNumber(craftCost(slot, rarity, mult)));
 }
 
-export function craft(state: GameState, slot: EquipSlot, rarity: Rarity, rng: Rng): boolean {
-  if (!canCraft(state, slot, rarity)) return false;
-  const cost = craftCost(slot, rarity);
+export function craft(state: GameState, slot: EquipSlot, rarity: Rarity, rng: Rng, mult = 1): boolean {
+  if (!canCraft(state, slot, rarity, mult)) return false;
+  const cost = craftCost(slot, rarity, mult);
   state.equipment.fragments = Big.fromTuple(state.equipment.fragments).sub(Big.fromNumber(cost)).toTuple();
   const item = rollEquipment(rng, state.combat.stage, 0, slot, rarity);
   // 制作产物直接进背包，不受自动分解规则影响（canCraft 已限制背包不满）

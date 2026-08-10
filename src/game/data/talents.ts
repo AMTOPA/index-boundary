@@ -6,7 +6,9 @@ export type KeystoneKey =
   | "aspdOverflowDmg"
   | "perpetualProtocol"
   | "offlineLord"
-  | "smartBuy";
+  | "smartBuy"
+  | "compoundInterest"
+  | "preciseCraft";
 
 export type TalentEffect =
   | { kind: "addPool"; stat: "atkPct" | "goldPct"; perPoint: number }
@@ -15,6 +17,11 @@ export type TalentEffect =
   | { kind: "aspdPct"; perPoint: number }
   | { kind: "offlineEff"; perPoint: number }
   | { kind: "skipBase"; perPoint: number }
+  | { kind: "dropRate"; perPoint: number }
+  | { kind: "overflowEff"; perPoint: number }
+  | { kind: "shardGain"; perPoint: number }
+  | { kind: "reforgeCostMult"; perPoint: number }
+  | { kind: "craftCostMult"; perPoint: number }
   | { kind: "unlock"; key: string }
   | { kind: "keystone"; key: KeystoneKey };
 
@@ -35,6 +42,7 @@ export interface TalentNodeDef {
 export const TALENT_TREES: Record<TreeId, { name: string; desc: string }> = {
   destruction: { name: "毁灭", desc: "极限伤害" },
   automation: { name: "自动化", desc: "放置与效率" },
+  greed: { name: "贪婪", desc: "财富与资源" },
 };
 
 export const TALENT_NODES: TalentNodeDef[] = [
@@ -55,6 +63,14 @@ export const TALENT_NODES: TalentNodeDef[] = [
   { id: "auto_keystone_perpetual", tree: "automation", name: "永动协议", desc: "每 1 有效攻速 → 独立伤害 ×1.02", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "perpetualProtocol" } },
   { id: "auto_keystone_offline", tree: "automation", name: "离线霸主", desc: "离线效率 100% + 上限 24 小时", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "offlineLord" } },
   { id: "auto_keystone_smart", tree: "automation", name: "智能购买", desc: "解锁 Smart Buy 自动购买", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "smartBuy" } },
+
+  // ===== 贪婪树 =====
+  { id: "greed_loot", tree: "greed", name: "掠夺", desc: "金币 +25%/点", max: 4, cost: 1, type: "additive", tier: 1, effect: { kind: "addPool", stat: "goldPct", perPoint: 0.25 } },
+  { id: "greed_luck", tree: "greed", name: "幸运", desc: "装备掉率 +10%/点", max: 4, cost: 1, type: "additive", tier: 1, effect: { kind: "dropRate", perPoint: 0.1 } },
+  { id: "greed_pan", tree: "greed", name: "淘金", desc: "溢出效率 +20%/点", max: 3, cost: 2, type: "mult", tier: 2, requires: ["greed_loot"], effect: { kind: "overflowEff", perPoint: 0.2 } },
+  { id: "greed_refine", tree: "greed", name: "精炼", desc: "分解碎片 +25%/点", max: 3, cost: 2, type: "additive", tier: 2, requires: ["greed_luck"], effect: { kind: "shardGain", perPoint: 0.25 } },
+  { id: "greed_keystone_compound", tree: "greed", name: "指数复利", desc: "累计金币每高 10 倍 → 伤害 +5%", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["greed_pan", "greed_refine"], exclusiveGroup: "greed_keystone", effect: { kind: "keystone", key: "compoundInterest" } },
+  { id: "greed_keystone_craft", tree: "greed", name: "精密制造", desc: "重铸 -50% 与制作 -30% 费用", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["greed_pan", "greed_refine"], exclusiveGroup: "greed_keystone", effect: { kind: "keystone", key: "preciseCraft" } },
 ];
 
 export function talentNodeById(id: string): TalentNodeDef | undefined {

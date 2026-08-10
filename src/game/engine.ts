@@ -342,7 +342,7 @@ export class GameEngine {
         this.state.skills.cores = toBig(this.state.skills.cores).add(Big.ONE).toTuple();
       }
     } else {
-      if (this.rng.chance(dropChance(stage, 0))) {
+      if (this.rng.chance(dropChance(stage, this.derived.dropMult.toNumber() - 1))) {
         const item = rollEquipment(this.rng, stage, 0);
         addDrop(this.state, item);
         this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
@@ -567,7 +567,7 @@ export class GameEngine {
     return ok;
   }
   breakdown(uid: string): boolean {
-    return sysBreakdown(this.state, uid);
+    return sysBreakdown(this.state, uid, this.derived.shardGainMult);
   }
   setAutoBreakdown(rarity: Rarity | null): boolean {
     if (rarity && !this.state.items.tools.auto_breakdown) return false;
@@ -575,27 +575,27 @@ export class GameEngine {
     return true;
   }
   reforge(uid: string): boolean {
-    const ok = sysReforge(this.state, uid, this.rng);
+    const ok = sysReforge(this.state, uid, this.rng, this.derived.reforgeCostMult);
     if (ok) this.recomputeDerived();
     return ok;
   }
   reforgeCostOf(uid: string): number {
     const item = this.state.equipment.slots[uid as EquipSlot] ?? this.state.equipment.inventory.find((e) => e.uid === uid);
-    return item ? reforgeCost(item) : 0;
+    return item ? reforgeCost(item, this.derived.reforgeCostMult) : 0;
   }
   canReforge(uid: string): boolean {
-    return sysCanReforge(this.state, uid);
+    return sysCanReforge(this.state, uid, this.derived.reforgeCostMult);
   }
   craft(slot: EquipSlot, rarity: Rarity): boolean {
-    const ok = sysCraft(this.state, slot, rarity, this.rng);
+    const ok = sysCraft(this.state, slot, rarity, this.rng, this.derived.craftCostMult);
     if (ok) this.recomputeDerived();
     return ok;
   }
   craftCostOf(slot: EquipSlot, rarity: Rarity): number {
-    return craftCost(slot, rarity);
+    return craftCost(slot, rarity, this.derived.craftCostMult);
   }
   canCraft(slot: EquipSlot, rarity: Rarity): boolean {
-    return sysCanCraft(this.state, slot, rarity);
+    return sysCanCraft(this.state, slot, rarity, this.derived.craftCostMult);
   }
   enhanceCostOf(slot: Parameters<typeof sysEnhance>[1]): number {
     const item = this.state.equipment.slots[slot];
@@ -798,7 +798,7 @@ export class GameEngine {
       stage++;
     }
     gold = gold.mul(Big.fromNumber(eff));
-    const expectedDrops = kills * dropChance(Math.max(1, stage), 0);
+    const expectedDrops = kills * dropChance(Math.max(1, stage), derived.dropMult.toNumber() - 1);
     const drops = Math.min(CONFIG.OFFLINE.MAX_DROPS, Math.floor(expectedDrops));
     return {
       goldGained: gold,

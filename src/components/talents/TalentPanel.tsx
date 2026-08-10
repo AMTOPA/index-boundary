@@ -13,7 +13,7 @@ export function TalentPanel() {
   const keystones = useGameSelector((s) => s.talents.keystones);
   const [confirmTree, setConfirmTree] = useState<TreeId | null>(null);
 
-  const trees = useMemo(() => (["destruction", "automation"] as TreeId[]), []);
+  const trees = useMemo(() => Object.keys(TALENT_TREES) as TreeId[], []);
 
   if (!unlocked) {
     return (

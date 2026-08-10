@@ -256,6 +256,11 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   let aspdTalentMult = 1;
   let offlineEffTalent = 0;
   let skipBaseTalent = 0;
+  let dropRateTalent = 0;
+  let shardGainTalent = 0;
+  let reforgeCostTalent = 0;
+  let craftCostTalent = 0;
+  let goldKeystoneMult = Big.ONE;
   const hasKeystone = new Set<KeystoneKey>();
 
   for (const [nodeId, pts] of Object.entries(talents.allocations)) {
@@ -277,6 +282,11 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
       case "aspdPct": aspdTalentMult *= Math.pow(1 + eff.perPoint, pts); break;
       case "offlineEff": offlineEffTalent += eff.perPoint * pts; break;
       case "skipBase": skipBaseTalent += eff.perPoint * pts; break;
+      case "dropRate": dropRateTalent += eff.perPoint * pts; break;
+      case "overflowEff": acc.overflowEffMult = acc.overflowEffMult.mul(Big.fromNumber(1 + eff.perPoint).pow(pts)); break;
+      case "shardGain": shardGainTalent += eff.perPoint * pts; break;
+      case "reforgeCostMult": reforgeCostTalent += eff.perPoint * pts; break;
+      case "craftCostMult": craftCostTalent += eff.perPoint * pts; break;
       case "keystone": hasKeystone.add(eff.key); break;
     }
   }
@@ -284,6 +294,16 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // Keystone 效果
   if (hasKeystone.has("absoluteDestruction")) talentGlobal = talentGlobal.mul(Big.fromNumber(1.5));
   if (hasKeystone.has("critAgain")) critLayersExtra += 1;
+  // 贪婪树 Keystone：指数复利（累计金币 → 伤害）
+  if (hasKeystone.has("compoundInterest")) {
+    const goldSteps = Math.max(0, Math.floor(toBig(statistics.totalGold).log10()));
+    goldKeystoneMult = Big.fromNumber(1.05).pow(goldSteps);
+  }
+  // 贪婪树 Keystone：精密制造（重铸/制作费用减免）
+  if (hasKeystone.has("preciseCraft")) {
+    reforgeCostTalent -= 0.5;
+    craftCostTalent -= 0.3;
+  }
 
   // ---- 攻速 ----
   let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult;
@@ -323,7 +343,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   // ---- 全局倍率 ----
   const prestigeMult = prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
   const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
-  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult);
+  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult);
 
   // ---- 单次伤害（非暴击） ----
   const base = baseAttack(player.upgrades.attack).mul(weaponAtkMult);
@@ -350,13 +370,16 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     bossDmgMult: acc.bossDmgMult,
     skillDmgMult: acc.skillDmgMult,
     overflowEffMult: acc.overflowEffMult,
-    dropMult: Big.ONE,
+    dropMult: Big.fromNumber(Math.max(1, 1 + dropRateTalent)),
     talentMult: talentGlobal,
     prestigeMult,
     globalMult,
     critLayersExtra,
     offlineEffTalent,
     skipBaseTalent,
+    shardGainMult: Math.max(1, 1 + shardGainTalent),
+    reforgeCostMult: Math.max(0.25, 1 + reforgeCostTalent),
+    craftCostMult: Math.max(0.25, 1 + craftCostTalent),
     hasKeystone: Array.from(hasKeystone),
     everyNAttack: acc.everyNAttack,
     comboCapAdd: acc.comboCapAdd,

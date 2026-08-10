@@ -39,6 +39,8 @@ export interface SimResult {
 const TALENT_PRIORITY: string[] = [
   "dest_sharp", "dest_crit", "auto_beat", "dest_super", "dest_hunter",
   "auto_offline", "auto_break", "auto_skip", "dest_keystone_absolute",
+  // 贪婪树：剩余天赋点投入资源流
+  "greed_loot", "greed_luck", "greed_pan", "greed_refine", "greed_keystone_compound",
 ];
 
 function itemScore(item: EquipInstance): number {

@@ -5,7 +5,7 @@ export type UpgradeId = "attack" | "aspd" | "critChance" | "critDamage" | "gold"
 export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary";
 export type EquipSlot = "weapon" | "core" | "engine" | "charm";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon";
-export type TreeId = "destruction" | "automation";
+export type TreeId = "destruction" | "automation" | "greed";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill";
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
@@ -193,6 +193,9 @@ export interface DerivedStats {
   critLayersExtra: number;
   offlineEffTalent: number;
   skipBaseTalent: number;
+  shardGainMult: number;
+  reforgeCostMult: number;
+  craftCostMult: number;
   hasKeystone: string[];
   everyNAttack: number;
   comboCapAdd: number;
