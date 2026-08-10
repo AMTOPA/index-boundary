@@ -6,7 +6,8 @@ export type Rarity = "common" | "fine" | "rare" | "epic" | "legendary" | "mythic
 export type EquipSlot = "weapon" | "core" | "engine" | "charm" | "module" | "beacon" | "relic";
 export type SkillId = "overclock" | "critical_strike" | "gold_collapse" | "singularity_cannon" | "emp_burst" | "time_freeze" | "overload_combo" | "data_flood" | "charged_hit" | "split_matrix" | "quantum_replay" | "final_protocol";
 export type PassiveId = "rhythm" | "focus" | "greed";
-export type ChallengeId = "no_crit" | "slow_universe" | "poverty";
+export type ChallengeId = "no_crit" | "slow_universe" | "poverty" | "durable" | "skill_slow";
+export type SeasonTierId = "bronze" | "silver" | "gold";
 export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "stageReach";
 export type TreeId = "destruction" | "automation" | "greed" | "singularity";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
@@ -19,7 +20,7 @@ export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
 export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
 export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus";
-export type ScoreSubmitKind = "stage" | "mag" | "prestige";
+export type ScoreSubmitKind = "stage" | "mag" | "prestige" | "season";
 
 // 词条属性（加池型用 % 表达，独立乘区用 × 表达）
 export type AffixStat =
@@ -128,6 +129,14 @@ export interface ChallengeProgress {
   claimed: boolean; // 通关奖励是否已领取
 }
 
+export interface SeasonState {
+  unlocked: boolean; // 试炼赛季是否已解锁（通关全部基础挑战）
+  bestScore: number; // 历史最高赛季分
+  bestStage: number; // 历史最高赛季关
+  claimedTiers: SeasonTierId[]; // 已领取的档位
+  lastModifiers: ChallengeId[]; // 上次赛季使用的修饰符组合（UI 记忆）
+}
+
 export interface PrestigeState {
   energy: number;
   totalEnergyEarned: number;
@@ -185,7 +194,8 @@ export interface MetaState {
   settings: { sound: boolean; reduceMotion: boolean };
   lastScoreSubmit: Record<ScoreSubmitKind, { runId: string; at: number } | undefined>;
   cloudSyncedAt: number;
-  activeChallenge: ChallengeId | null; // 当前生效的挑战修饰符
+  activeChallenge: ChallengeId | null; // 当前生效的单挑战修饰符
+  activeModifiers: ChallengeId[]; // 试炼赛季当前生效的修饰符组合（互斥于 activeChallenge）
 }
 
 export interface GameState {
@@ -202,6 +212,7 @@ export interface GameState {
   statistics: StatisticsState;
   daily: DailyState;
   challenges: Record<ChallengeId, ChallengeProgress>;
+  season: SeasonState;
   // 运行期（不持久化）的瞬时数据放 engine 层，不入存档
 }
 
@@ -228,6 +239,8 @@ export type GameEvent =
   | { type: "offline"; seconds: number; gold: BigTuple }
   | { type: "challengeStart"; id: ChallengeId }
   | { type: "challengeClaim"; id: ChallengeId }
+  | { type: "seasonStart"; modifiers: ChallengeId[] }
+  | { type: "seasonClaim"; tier: SeasonTierId }
   | { type: "dailyClaim"; id: string };
 
 export type GameEventListener = (event: GameEvent) => void;
@@ -258,6 +271,7 @@ export interface DerivedStats {
   leapGlobalMult: Big; // 世界核心全属性全局倍率
   hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）
   bossHpMult: Big; // Boss 生命倍率（深渊豪赌等）
+  enemyHpMult: number; // 挑战修饰符：敌人生命倍率（顽石外壳 ×2）
   bossGoldMult: Big; // Boss 金币倍率（深渊豪赌等）
   goldToDmgMult: Big; // 金币转伤（法则解锁的独立乘区）
   offlineEffTalent: number;

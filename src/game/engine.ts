@@ -2,13 +2,13 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
+  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
   computeDerived, emptyBuffs, type RuntimeBuffs,
   enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
-  overflowGold, crushGold, upgradeCost, prestigeEnergy, pickSpecialEnemy,
+  overflowGold, crushGold, upgradeCost, prestigeEnergy, pickSpecialEnemy, seasonScore,
 } from "./formulas";
 import {
   rollEquipment, addDrop, dropChance, equipItem as sysEquip, unequip as sysUnequip,
@@ -50,9 +50,10 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       achievements: [],
       milestonesSeen: [],
       settings: { sound: true, reduceMotion: false },
-      lastScoreSubmit: { stage: undefined, mag: undefined, prestige: undefined },
+      lastScoreSubmit: { stage: undefined, mag: undefined, prestige: undefined, season: undefined },
       cloudSyncedAt: 0,
       activeChallenge: null,
+      activeModifiers: [],
     },
     player: {
       upgrades: { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 },
@@ -90,6 +91,15 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       no_crit: { best: 0, claimed: false },
       slow_universe: { best: 0, claimed: false },
       poverty: { best: 0, claimed: false },
+      durable: { best: 0, claimed: false },
+      skill_slow: { best: 0, claimed: false },
+    },
+    season: {
+      unlocked: false,
+      bestScore: 0,
+      bestStage: 0,
+      claimedTiers: [],
+      lastModifiers: [],
     },
   };
 }
@@ -449,11 +459,22 @@ export class GameEngine {
     }
     c.stage = next;
     if (next > this.state.statistics.allTimeMaxStage) this.state.statistics.allTimeMaxStage = next;
-    // 挑战 / 每日任务进度
+    // 挑战 / 试炼赛季 / 每日任务进度
     const chId = this.state.meta.activeChallenge;
     if (chId) {
       const prog = this.state.challenges[chId];
       if (next > prog.best) prog.best = next;
+    }
+    if (this.state.meta.activeModifiers.length > 0) {
+      const mods = this.state.meta.activeModifiers;
+      for (const m of mods) {
+        const prog = this.state.challenges[m];
+        if (next > prog.best) prog.best = next;
+      }
+      const s = this.state.season;
+      if (next > s.bestStage) s.bestStage = next;
+      const sc = seasonScore(next, mods);
+      if (sc > s.bestScore) s.bestScore = sc;
     }
     if (next > this.state.daily.bestStage) this.state.daily.bestStage = next;
     this.updateDailyQuest("stageReach", next);
@@ -466,7 +487,7 @@ export class GameEngine {
     if (isBossStage(c.stage)) {
       c.isBoss = true;
       c.enemyKind = "normal";
-      c.enemyMaxHp = bossHp(c.stage, this.derived.hpGrowth).mul(this.derived.bossHpMult).toTuple();
+      c.enemyMaxHp = bossHp(c.stage, this.derived.hpGrowth).mul(this.derived.bossHpMult).mul(Big.fromNumber(this.derived.enemyHpMult)).toTuple();
       c.enemyHp = c.enemyMaxHp;
       c.bossTimer = CONFIG.BOSS_TIMER_SEC;
       c.bossAffixes = this.rollBossAffixes();
@@ -485,16 +506,16 @@ export class GameEngine {
       );
       c.enemyKind = kind;
       if (kind === "elite") {
-        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_HP_MULT)).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.ELITE_HP_MULT)).mul(Big.fromNumber(this.derived.enemyHpMult)).toTuple();
         c.enemyHp = c.enemyMaxHp;
         c.bossAffixes = this.rollEliteAffixes();
         this.emit({ type: "eliteSpawn", affixes: c.bossAffixes });
       } else if (kind === "mimic") {
-        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_HP_MULT)).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(CONFIG.SPECIAL_ENEMIES.MIMIC_HP_MULT)).mul(Big.fromNumber(this.derived.enemyHpMult)).toTuple();
         c.enemyHp = c.enemyMaxHp;
         this.emit({ type: "mimicSpawn" });
       } else {
-        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).toTuple();
+        c.enemyMaxHp = enemyHp(c.stage, this.derived.hpGrowth).mul(Big.fromNumber(this.derived.enemyHpMult)).toTuple();
         c.enemyHp = c.enemyMaxHp;
       }
     }
@@ -931,6 +952,7 @@ export class GameEngine {
   // ---------------- 挑战模式 ----------------
   startChallenge(id: ChallengeId): boolean {
     if (this.state.meta.activeChallenge === id) return false;
+    if (this.state.meta.activeModifiers.length > 0) this.state.meta.activeModifiers = [];
     this.resetRunForChallenge();
     this.state.meta.activeChallenge = id;
     const prog = this.state.challenges[id];
@@ -943,6 +965,53 @@ export class GameEngine {
     if (!this.state.meta.activeChallenge) return;
     this.state.meta.activeChallenge = null;
     this.recomputeDerived();
+  }
+  // ---------------- 试炼赛季（Roguelite 挑战赛季） ----------------
+  isSeasonUnlocked(): boolean {
+    return CONFIG.SEASON.UNLOCK_CHALLENGES.every((id) => this.state.challenges[id]?.claimed);
+  }
+  isSeasonRun(): boolean {
+    return this.state.meta.activeModifiers.length > 0;
+  }
+  startSeason(mods: ChallengeId[]): boolean {
+    const unique = new Set(mods);
+    const valid =
+      mods.length >= 1 &&
+      mods.length <= CONFIG.SEASON.MAX_MODIFIERS &&
+      unique.size === mods.length &&
+      mods.every((m) => CONFIG.CHALLENGES[m]);
+    if (!valid || !this.isSeasonUnlocked()) return false;
+    if (this.state.meta.activeChallenge) this.state.meta.activeChallenge = null;
+    this.state.meta.activeModifiers = [...mods];
+    this.state.season.unlocked = true;
+    this.state.season.lastModifiers = [...mods];
+    this.recomputeDerived(); // 让 enemyHpMult 等修饰符先生效
+    this.resetRunForChallenge();
+    this.emit({ type: "seasonStart", modifiers: mods });
+    return true;
+  }
+  stopSeason(): void {
+    if (this.state.meta.activeModifiers.length === 0) return;
+    this.state.meta.activeModifiers = [];
+    this.recomputeDerived();
+  }
+  seasonScoreOf(stage: number, mods: ChallengeId[] = this.state.meta.activeModifiers): number {
+    return seasonScore(stage, mods);
+  }
+  canClaimSeasonTier(tier: SeasonTierId): boolean {
+    const def = CONFIG.SEASON.TIERS[tier];
+    return this.state.season.bestScore >= def.threshold && !this.state.season.claimedTiers.includes(tier);
+  }
+  claimSeasonTier(tier: SeasonTierId): boolean {
+    if (!this.canClaimSeasonTier(tier)) return false;
+    const def = CONFIG.SEASON.TIERS[tier];
+    this.state.season.claimedTiers.push(tier);
+    this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(def.rewardCores)).toTuple();
+    this.state.talents.points += def.rewardTalent;
+    this.state.laws.shards += def.rewardShards;
+    this.state.laws.totalShardsEarned += def.rewardShards;
+    this.emit({ type: "seasonClaim", tier });
+    return true;
   }
   challengeBest(id: ChallengeId): number {
     return this.state.challenges[id]?.best ?? 0;

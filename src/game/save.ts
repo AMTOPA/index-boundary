@@ -60,6 +60,15 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     }
     return s;
   },
+  // v2 → v3：试炼赛季状态（缺省由 normalizeState 兜底）
+  2: (s) => {
+    const meta = (s.meta ?? {}) as Record<string, unknown>;
+    if (!Array.isArray(meta.activeModifiers)) meta.activeModifiers = [];
+    if (!s.season) {
+      s.season = { unlocked: false, bestScore: 0, bestStage: 0, claimedTiers: [], lastModifiers: [] };
+    }
+    return s;
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>, fromVersion: number): Record<string, unknown> {
@@ -110,10 +119,19 @@ export function normalizeState(raw: unknown): GameState {
   state.daily.quests = Array.isArray(r.daily?.quests) ? r.daily.quests : [];
   state.daily.goldEarned = Array.isArray(r.daily?.goldEarned) ? r.daily.goldEarned : [0, 0];
   state.challenges = { ...base.challenges, ...(r.challenges ?? {}) };
+  state.season = { ...base.season, ...(r.season ?? {}) };
+  state.season.claimedTiers = Array.isArray(state.season.claimedTiers) ? state.season.claimedTiers : [];
+  state.season.lastModifiers = Array.isArray(state.season.lastModifiers) ? state.season.lastModifiers : [];
+  state.meta.activeModifiers = Array.isArray(state.meta.activeModifiers) ? state.meta.activeModifiers : [];
   state.meta.unlocks = Array.isArray(state.meta.unlocks) ? state.meta.unlocks : [];
   state.meta.achievements = Array.isArray(state.meta.achievements) ? state.meta.achievements : [];
   state.meta.milestonesSeen = Array.isArray(state.meta.milestonesSeen) ? state.meta.milestonesSeen : [];
-  state.meta.lastScoreSubmit = { ...(state.meta.lastScoreSubmit ?? {}) };
+  state.meta.lastScoreSubmit = {
+    stage: state.meta.lastScoreSubmit?.stage,
+    mag: state.meta.lastScoreSubmit?.mag,
+    prestige: state.meta.lastScoreSubmit?.prestige,
+    season: state.meta.lastScoreSubmit?.season,
+  };
   return state;
 }
 

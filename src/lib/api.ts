@@ -4,7 +4,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
 const api = (p: string) => `${API_BASE}${p}`;
 
 export type AuthUser = { id: number; username: string };
-export type ScoreKind = "stage" | "mag" | "prestige";
+export type ScoreKind = "stage" | "mag" | "prestige" | "season";
 export type LeaderboardRow = {
   rank: number;
   username: string;

@@ -117,7 +117,7 @@ export async function submitScore(
 }
 
 // 排行榜指标提取
-export function leaderboardMetrics(state: GameState): { mag: number; stage: number; prestige: number } {
+export function leaderboardMetrics(state: GameState): { mag: number; stage: number; prestige: number; season: number } {
   const totalDamage = state.statistics.totalDamage;
   const mag = totalDamage && Array.isArray(totalDamage)
     ? Math.floor((totalDamage[1] ?? 0) + Math.log10(Math.max(1e-300, totalDamage[0] ?? 1)))
@@ -126,5 +126,6 @@ export function leaderboardMetrics(state: GameState): { mag: number; stage: numb
     mag,
     stage: state.statistics.allTimeMaxStage,
     prestige: state.statistics.totalPrestiges,
+    season: state.season.bestScore,
   };
 }

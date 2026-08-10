@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-export const SCORE_KINDS = ["stage", "mag", "prestige"] as const;
+export const SCORE_KINDS = ["stage", "mag", "prestige", "season"] as const;
 export type ScoreKind = (typeof SCORE_KINDS)[number];
 
 let db: DatabaseSync | null = null;

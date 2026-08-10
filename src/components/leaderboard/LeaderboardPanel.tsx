@@ -7,6 +7,7 @@ const KINDS: { id: ScoreKind; label: string }[] = [
   { id: "stage", label: "最大关卡" },
   { id: "mag", label: "总伤数量级" },
   { id: "prestige", label: "重构次数" },
+  { id: "season", label: "试炼赛季分" },
 ];
 
 export function LeaderboardPanel() {

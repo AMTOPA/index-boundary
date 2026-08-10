@@ -164,6 +164,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         await submitScore(eng.state, "stage", m.stage, m.stage);
         await submitScore(eng.state, "mag", m.mag, m.stage);
         await submitScore(eng.state, "prestige", m.prestige, m.stage);
+        if (m.season > 0) await submitScore(eng.state, "season", m.season, m.stage);
       })();
     }, 60000);
     cleanupRef.current.push(() => window.clearInterval(lbIv));

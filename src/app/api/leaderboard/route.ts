@@ -12,7 +12,7 @@ import {
 const RUN_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const RATE_WINDOW_MS = 3_600_000;
 const RATE_MAX = 20;
-const MAX_VALUE: Record<ScoreKind, number> = { stage: 1_000_000, mag: 100_000, prestige: 100_000 };
+const MAX_VALUE: Record<ScoreKind, number> = { stage: 1_000_000, mag: 100_000, prestige: 100_000, season: 1_000_000 };
 const MAX_DEPTH = 1_000_000;
 
 export async function GET(req: NextRequest) {

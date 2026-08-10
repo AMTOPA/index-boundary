@@ -6,13 +6,14 @@ import { formatNumber, formatBigPrecise } from "@/game/format";
 import { toBig } from "@/game/bignum";
 import { prestigeEnergy, prestigeGlobalMult as pm } from "@/game/formulas";
 import { CONFIG } from "@/game/config";
-import type { ChallengeId, PrestigeUpgradeId } from "@/game/types";
+import type { ChallengeId, PrestigeUpgradeId, SeasonTierId } from "@/game/types";
 import { shopCostFrom, canBuyFrom } from "@/game/systems/prestige";
 import { LeapPanel } from "@/components/leap/LeapPanel";
 import { LawPanel } from "@/components/law/LawPanel";
 
 const SHOP_ORDER: PrestigeUpgradeId[] = ["startPower", "goldKeep", "fastSkip", "startSkill", "singularityAmp"];
-const CHALLENGE_ORDER: ChallengeId[] = ["no_crit", "slow_universe", "poverty"];
+const CHALLENGE_ORDER: ChallengeId[] = ["no_crit", "slow_universe", "poverty", "durable", "skill_slow"];
+const SEASON_TIER_ORDER: SeasonTierId[] = ["bronze", "silver", "gold"];
 
 export function PrestigePanel() {
   const { engine } = useGame();
@@ -21,8 +22,19 @@ export function PrestigePanel() {
   const purchases = useGameSelector((s) => s.prestige.purchases);
   const runDamage = useGameSelector((s) => s.statistics.runDamage);
   const activeChallenge = useGameSelector((s) => s.meta.activeChallenge);
+  const activeModifiers = useGameSelector((s) => s.meta.activeModifiers);
   const challenges = useGameSelector((s) => s.challenges);
+  const season = useGameSelector((s) => s.season);
   const [confirm, setConfirm] = useState(false);
+  const [picked, setPicked] = useState<ChallengeId[]>(() => [...(season?.lastModifiers ?? [])].slice(0, CONFIG.SEASON.MAX_MODIFIERS));
+
+  const toggleMod = (id: ChallengeId) => {
+    setPicked((prev) => {
+      if (prev.includes(id)) return prev.filter((m) => m !== id);
+      if (prev.length >= CONFIG.SEASON.MAX_MODIFIERS) return prev;
+      return [...prev, id];
+    });
+  };
 
   if (!unlocked) {
     return (
@@ -109,6 +121,84 @@ export function PrestigePanel() {
           </div>
         );
       })}
+      <h3 style={{ marginTop: 14 }}>试炼赛季（Roguelite）</h3>
+      {!engine?.isSeasonUnlocked() ? (
+        <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>
+          通关全部基础挑战后解锁试炼赛季：自选 1~3 个修饰符叠加冲分，按赛季分领取铜 / 银 / 金档奖励。
+          <br />
+          当前进度：{CONFIG.SEASON.UNLOCK_CHALLENGES.filter((id) => challenges[id]?.claimed).length} / {CONFIG.SEASON.UNLOCK_CHALLENGES.length}
+        </p>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.7 }}>
+            自选 {CONFIG.SEASON.MAX_MODIFIERS} 个以内修饰符叠加开始赛季（重置本局，保留装备 / 技能 / 天赋 / 永久升级）。
+            得分 = 关卡 ×（1 + 0.5 × 修饰符数），赛季中的进度同时计入对应基础挑战。
+          </p>
+          {activeModifiers.length > 0 && (
+            <div style={{ fontSize: 13, color: "var(--green)", marginBottom: 8 }}>
+              赛季进行中：{activeModifiers.map((m) => CONFIG.CHALLENGES[m].icon).join(" ")}
+              <span className="mono"> 当前得分 ≈ {engine ? engine.seasonScoreOf(engine.state.combat.stage) : 0}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {CHALLENGE_ORDER.map((id) => {
+              const def = CONFIG.CHALLENGES[id];
+              const on = picked.includes(id);
+              const disabled = activeModifiers.length > 0 || (!on && picked.length >= CONFIG.SEASON.MAX_MODIFIERS);
+              return (
+                <button key={id} className={`mini-btn ${on ? "buy-btn afford" : ""}`} disabled={disabled} onClick={() => toggleMod(id)}>
+                  {def.icon} {def.name}{on ? " ✓" : ""}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              得分倍率 ×{formatNumber(1 + picked.length * CONFIG.SEASON.WEIGHT_PER_MODIFIER)}
+            </span>
+            <span style={{ marginLeft: "auto" }} className="mono">
+              赛季最高分 {formatNumber(season.bestScore)} · 最高 {season.bestStage} 关
+            </span>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            {activeModifiers.length > 0 ? (
+              <button className="mini-btn" onClick={() => engine?.stopSeason()}>停止赛季</button>
+            ) : (
+              <button
+                className="btn primary"
+                disabled={picked.length < 1}
+                onClick={() => { engine?.startSeason(picked); }}
+              >
+                {picked.length >= 1 ? `开始赛季（${picked.length} 修饰符）` : "选择至少 1 个修饰符"}
+              </button>
+            )}
+          </div>
+          {SEASON_TIER_ORDER.map((tier) => {
+            const def = CONFIG.SEASON.TIERS[tier];
+            const claimed = season.claimedTiers.includes(tier);
+            const can = engine?.canClaimSeasonTier(tier) ?? false;
+            return (
+              <div className="shop-row" key={tier}>
+                <div>
+                  <div>{def.name}档 <span className="mono" style={{ color: "var(--text-dim)" }}>{def.threshold} 分</span></div>
+                  <div className="desc">
+                    奖励：{def.rewardCores} 技能核心 + {def.rewardTalent} 天赋点{def.rewardShards > 0 ? ` + ${def.rewardShards} 法则碎片` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  {claimed ? (
+                    <span style={{ color: "var(--green)", fontSize: 12 }}>✓ 已领取</span>
+                  ) : (
+                    <button className="mini-btn" disabled={!can} onClick={() => engine?.claimSeasonTier(tier)}>
+                      {season.bestScore >= def.threshold ? "领取奖励" : `未达到 ${def.threshold} 分`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
       <div style={{ marginTop: 18 }}><LeapPanel /></div>
       <div style={{ marginTop: 18 }}><LawPanel /></div>
 

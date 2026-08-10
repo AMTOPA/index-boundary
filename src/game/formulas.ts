@@ -1,11 +1,25 @@
 // 纯数学层：无副作用，全部输入输出可测
 import { Big, toBig } from "./bignum";
 import { CONFIG, milestoneMultFor } from "./config";
-import type { DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
+import type { ChallengeId, DerivedStats, EnemyKind, EquipSlot, GameState, UpgradeId } from "./types";
 import { talentNodeById, type KeystoneKey } from "./data/talents";
 import { leapAllStatsMult } from "./systems/leap";
 import { lawCritExp, lawGoldBoost, lawApsCapAdd, lawGoldToDmgMult } from "./systems/law";
 import { SKILL_DEFS, skillEffect } from "./data/skills";
+
+// ---------------- 挑战修饰符 / 试炼赛季 ----------------
+
+export function activeMods(state: GameState): ChallengeId[] {
+  if (state.meta.activeModifiers.length > 0) return state.meta.activeModifiers;
+  if (state.meta.activeChallenge) return [state.meta.activeChallenge];
+  return [];
+}
+
+// 赛季分 = 关卡 × (1 + 每个修饰符权重之和)；取整
+export function seasonScore(stage: number, mods: ChallengeId[]): number {
+  const mult = 1 + mods.length * CONFIG.SEASON.WEIGHT_PER_MODIFIER;
+  return Math.floor(stage * mult);
+}
 
 // ---------------- 升级 ----------------
 
@@ -351,8 +365,9 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   if (finalProtocolActive) aspdMult *= SKILL_DEFS.final_protocol.aspdMultWhileActive ?? 1;
   let panelAps = panelApsFromLevel(player.upgrades.aspd) * aspdMult;
-  // 挑战：慢速宇宙——攻速减半
-  if (state.meta.activeChallenge === "slow_universe") panelAps *= 0.5;
+  const mods = activeMods(state);
+  // 挑战修饰符：慢速宇宙——攻速减半
+  if (mods.includes("slow_universe")) panelAps *= 0.5;
   const effAps = effectiveAps(panelAps + apsCapTalent, apsCapAdd);
 
   // 攻速溢转（Keystone）：溢出攻速 → 独立伤害
@@ -368,8 +383,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
 
   // ---- 暴击 ----
   let critChance = critChanceFromLevel(player.upgrades.critChance) + acc.critRateAdd + (state.skills.passives?.focus ?? 0) * CONFIG.SKILL_PASSIVES.focus.effectPerLevel;
-  // 挑战：无暴击——暴击率恒为 0
-  if (state.meta.activeChallenge === "no_crit") critChance = 0;
+  // 挑战修饰符：无暴击——暴击率恒为 0
+  if (mods.includes("no_crit")) critChance = 0;
   const critDamage = Big.fromNumber(critDamageFromLevel(player.upgrades.critDamage) + acc.critDmgAdd).mul(critDmgEquipMult).pow(lawCE);
 
   // ---- 世界核心（第二层）----
@@ -392,8 +407,8 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   }
   if (buffs.goldProtocolActive) goldMult = goldMult.mul(Big.fromNumber(5));
   if (finalProtocolActive) goldMult = goldMult.mul(Big.fromNumber(SKILL_DEFS.final_protocol.goldMultWhileActive ?? 1));
-  // 挑战：贫困——金币减半
-  if (state.meta.activeChallenge === "poverty") goldMult = goldMult.mul(Big.fromNumber(0.5));
+  // 挑战修饰符：贫困——金币减半
+  if (mods.includes("poverty")) goldMult = goldMult.mul(Big.fromNumber(0.5));
 
   // ---- 全局倍率 ----
   const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult);
@@ -441,7 +456,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     dps,
     bossDmgMult: acc.bossDmgMult,
     skillDmgMult: acc.skillDmgMult,
-    skillCdMult: Math.max(0.5, 1 - acc.skillCdPool),
+    skillCdMult: Math.max(0.5, (1 - acc.skillCdPool) * (mods.includes("skill_slow") ? 2 : 1)),
     skillDurationMult: 1 + acc.skillDurationPool,
     overflowEffMult: acc.overflowEffMult,
     dropMult: Big.fromNumber(Math.max(1, 1 + dropRateTalent)),
@@ -452,6 +467,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     leapGlobalMult,
     hpGrowth,
     bossHpMult,
+    enemyHpMult: mods.includes("durable") ? 2 : 1,
     bossGoldMult,
     goldToDmgMult,
     offlineEffTalent,

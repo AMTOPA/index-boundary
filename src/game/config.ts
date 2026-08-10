@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, DailyQuestType, LawId, LeapUpgradeId, Rarity, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, ChallengeId, DailyQuestType, LawId, LeapUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -13,7 +13,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 2,
+  SAVE_VERSION: 3,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -226,7 +226,21 @@ export const CONFIG = {
     no_crit: { name: "无暴击", desc: "暴击率恒为 0——攻速 / 连击 / 技能流的主场", icon: "🚫", target: 200, rewardCores: 5, rewardTalent: 1 },
     slow_universe: { name: "慢速宇宙", desc: "攻速 ×0.5——考验单发伤害与爆发窗口", icon: "🐢", target: 200, rewardCores: 5, rewardTalent: 1 },
     poverty: { name: "贫困", desc: "金币 ×0.5——考验资源效率与跳关能力", icon: "🪙", target: 150, rewardCores: 5, rewardTalent: 1 },
-  } as Record<string, { name: string; desc: string; icon: string; target: number; rewardCores: number; rewardTalent: number }>,
+    durable: { name: "顽石外壳", desc: "敌人生命 ×2——考验单发伤害与持续输出上限", icon: "🛡️", target: 200, rewardCores: 5, rewardTalent: 1 },
+    skill_slow: { name: "技能迟滞", desc: "主动技能冷却 ×2——考验技能释放节奏与被动构筑", icon: "⏳", target: 200, rewardCores: 5, rewardTalent: 1 },
+  } as Record<ChallengeId, { name: string; desc: string; icon: string; target: number; rewardCores: number; rewardTalent: number }>,
+
+  // 试炼赛季（Roguelite 挑战赛季：自选 1~3 个修饰符叠加冲分）
+  SEASON: {
+    UNLOCK_CHALLENGES: ["no_crit", "slow_universe", "poverty"] as ChallengeId[], // 通关全部基础挑战解锁
+    MAX_MODIFIERS: 3,
+    WEIGHT_PER_MODIFIER: 0.5, // 每个修饰符 +50% 赛季分（得分 = 关卡 × (1 + 0.5×修饰符数)）
+    TIERS: {
+      bronze: { name: "铜", threshold: 200, rewardCores: 10, rewardTalent: 1, rewardShards: 0 },
+      silver: { name: "银", threshold: 500, rewardCores: 20, rewardTalent: 2, rewardShards: 0 },
+      gold: { name: "金", threshold: 1000, rewardCores: 40, rewardTalent: 3, rewardShards: 2 },
+    } as Record<SeasonTierId, { name: string; threshold: number; rewardCores: number; rewardTalent: number; rewardShards: number }>,
+  } as const,
 
   // 每日任务（轻量：3 个 / 天，跨天重置，仅在线进度）
   DAILY: {
