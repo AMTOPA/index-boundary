@@ -27,4 +27,5 @@ export const TOOL_DEFS: Record<ToolId, ToolDef> = {
   auto_boss: { id: "auto_boss", name: "Boss 自动挑战器", desc: "Boss 战失败后自动重试", icon: "🎯", kind: "tool" },
   auto_breakdown: { id: "auto_breakdown", name: "自动分解器", desc: "按稀有度自动分解装备", icon: "♻️", kind: "tool" },
   combat_recorder: { id: "combat_recorder", name: "战斗记录仪", desc: "解锁完整统计面板", icon: "📊", kind: "tool" },
+  auto_skill: { id: "auto_skill", name: "自动释放模块", desc: "技能冷却结束自动释放", icon: "⚙️", kind: "tool" },
 };

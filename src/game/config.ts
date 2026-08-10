@@ -1,5 +1,6 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, Rarity, SetBonusKind } from "./types";
+import type { AffixStat, Rarity, SetBonusKind, ToolId } from "./types";
+import type { BigTuple } from "./bignum";
 
 export interface SetDef {
   id: string;
@@ -159,6 +160,14 @@ export const CONFIG = {
   } as Record<string, { name: string; desc: string; cooldown: number; duration: number; levelEffect: { multPerLevel: number; multCap?: number; cdReducePerLevel: number } }>,
   SKILL_CORE_COSTS: [1, 2, 3, 5, 8, 13, 21, 34], // 升级到下一级所需核心（累计）
   SKILL_PASSIVE_PER_LEVEL: 0.05, // 节律协议：每级 +5% 自动攻速（独立）
+  // 永久工具（金币购买，金币沉淀口）
+  TOOLS: {
+    auto_upgrade: [1, 3], // 1000
+    auto_boss: [1, 5], // 100k
+    auto_breakdown: [1, 6], // 1M
+    combat_recorder: [1, 7], // 10M
+    auto_skill: [1, 8], // 100M
+  } as Record<ToolId, BigTuple>,
 
   // 天赋
   TALENT_POINTS_FROM_BOSS_FIRST_KILL: 1,

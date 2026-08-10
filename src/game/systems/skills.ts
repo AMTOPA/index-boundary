@@ -28,9 +28,13 @@ export function castSkill(state: GameState, id: SkillId, timeSec: number): { ok:
   return { ok: true, action: { kind: "none" } };
 }
 
-export function tickSkills(state: GameState, dt: number): void {
+export function tickSkills(state: GameState, dt: number, timeSec: number): void {
   for (const inst of state.skills.actives) {
     if (inst.cdRemaining > 0) inst.cdRemaining = Math.max(0, inst.cdRemaining - dt);
+    // 持续技能到期：复位 active 标志（buff 状态以 activeUntil 为准）
+    if (inst.active && inst.activeUntil > 0 && inst.activeUntil <= timeSec) {
+      inst.active = false;
+    }
   }
 }
 

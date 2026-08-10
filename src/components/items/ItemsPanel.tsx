@@ -2,6 +2,8 @@
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
 import { ITEM_DEFS, TOOL_DEFS } from "@/game/data/items";
+import { toBig } from "@/game/bignum";
+import { formatNumber } from "@/game/format";
 import type { ItemId, ToolId } from "@/game/types";
 
 export function ItemsPanel() {
@@ -35,7 +37,17 @@ export function ItemsPanel() {
               <div>{def.icon} {def.name}</div>
               <div className="desc">{def.desc}</div>
             </div>
-            <span style={{ color: owned ? "var(--green)" : "var(--text-dim)", fontSize: 13 }}>{owned ? "已拥有" : "未获得"}</span>
+            {owned ? (
+              <span style={{ color: "var(--green)", fontSize: 13 }}>已拥有</span>
+            ) : (
+              <button
+                className="mini-btn"
+                disabled={!engine?.canBuyTool(id)}
+                onClick={() => engine?.buyTool(id)}
+              >
+                购买 {formatNumber(engine ? toBig(engine.toolCost(id)).toNumber() : 0)}
+              </button>
+            )}
           </div>
         );
       })}

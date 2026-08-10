@@ -1,8 +1,8 @@
 // 游戏引擎：纯逻辑，不依赖 React/DOM，可 headless 运行（测试与模拟器共用）
-import { Big, toBig } from "./bignum";
+import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, UpgradeId, VoidTarget,
+  BossAffix, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, Rarity, SkillId, ToolId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -22,7 +22,7 @@ import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./sy
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS } from "./data/skills";
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
-import { ITEM_DEFS } from "./data/items";
+import { ITEM_DEFS, TOOL_DEFS } from "./data/items";
 
 export interface OfflineResult {
   goldGained: Big;
@@ -111,7 +111,7 @@ export class GameEngine {
   // ---------------- 主循环 ----------------
   tick(dt: number): void {
     this.timeSec += dt;
-    tickSkills(this.state, dt);
+    tickSkills(this.state, dt, this.timeSec);
     this.tickCombo(dt);
     this.tickBoss(dt);
     this.tickConsumables(dt);
@@ -123,6 +123,15 @@ export class GameEngine {
       if (this.autoUpgradeTimer <= 0) {
         this.autoUpgradeTimer = 0.5;
         this.smartBuy();
+      }
+    }
+    // 自动释放技能：冷却结束且未在持续中的技能立即释放
+    if (this.state.items.tools.auto_skill && this.state.skills.actives.length > 0) {
+      for (const inst of [...this.state.skills.actives]) {
+        const def = SKILL_DEFS[inst.id];
+        if (inst.cdRemaining <= 0 && (def.duration === 0 || !inst.active)) {
+          this.cast(inst.id);
+        }
       }
     }
     // 周期检查
@@ -434,6 +443,11 @@ export class GameEngine {
     const c = this.state.combat;
     const stage = c.stage;
     this.emit({ type: "bossFail", stage });
+    if (this.state.items.tools.auto_boss) {
+      // 自动挑战器：同关重试
+      this.spawnEnemy();
+      return;
+    }
     // 退回前一关刷资源
     c.stage = stage - 1;
     this.spawnEnemy();
@@ -555,8 +569,10 @@ export class GameEngine {
   breakdown(uid: string): boolean {
     return sysBreakdown(this.state, uid);
   }
-  setAutoBreakdown(rarity: Rarity | null): void {
+  setAutoBreakdown(rarity: Rarity | null): boolean {
+    if (rarity && !this.state.items.tools.auto_breakdown) return false;
     this.state.equipment.autoBreakdown = rarity;
+    return true;
   }
   reforge(uid: string): boolean {
     const ok = sysReforge(this.state, uid, this.rng);
@@ -682,6 +698,28 @@ export class GameEngine {
       this.buffs.goldProtocolActive = false;
       this.recomputeDerived();
     }
+  }
+
+  // 永久工具：金币购买
+  toolCost(id: ToolId): BigTuple {
+    return CONFIG.TOOLS[id];
+  }
+  toolOwned(id: ToolId): boolean {
+    return this.state.items.tools[id] === true;
+  }
+  canBuyTool(id: ToolId): boolean {
+    if (this.toolOwned(id)) return false;
+    const cost = Big.fromTuple(CONFIG.TOOLS[id]);
+    return toBig(this.state.player.gold).gte(cost);
+  }
+  buyTool(id: ToolId): boolean {
+    if (this.toolOwned(id)) return false;
+    const cost = Big.fromTuple(CONFIG.TOOLS[id]);
+    if (toBig(this.state.player.gold).lt(cost)) return false;
+    this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
+    this.state.items.tools[id] = true;
+    this.emit({ type: "unlock", key: id, label: TOOL_DEFS[id].name });
+    return true;
   }
 
   // ---------------- 解锁 / 成就 / 里程碑 ----------------
