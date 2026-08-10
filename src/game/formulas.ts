@@ -137,16 +137,18 @@ export function critDamageFromLevel(level: number): number {
     }
     const rep = def.milestoneRepeatEvery ?? 0;
     if (rep > 0 && level >= rep) {
-      const repeats = Math.floor(level / rep);
+      const repeats = Math.min(1000, Math.floor(level / rep)); // 循环上限防护：repeats>1000 时结果必然>1e300 被截断
       for (let r = 2; r <= repeats; r++) cd *= 5;
     }
   }
-  return cd;
+  // 防御性截断：避免 Number 在 1e308 后变 Infinity 导致 Big 崩溃（实际游戏远低于此）
+  return Math.min(cd, 1e300);
 }
 
 export function goldMultFromLevel(level: number): number {
   // 指数增长：每级 ×(1+perLevel)，无上限、不衰减（与攻击同构）
-  return Math.pow(1 + CONFIG.UPGRADES.gold.perLevel, level);
+  // 防御性截断（同 panelApsFromLevel）：避免 Number 在 1e308 后变 Infinity，实际游戏远低于此
+  return Math.min(1e300, Math.pow(1 + CONFIG.UPGRADES.gold.perLevel, level));
 }
 
 // ---------------- 怪物 ----------------

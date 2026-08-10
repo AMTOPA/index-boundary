@@ -3,7 +3,7 @@ import { GameEngine, createNewState } from "../game/engine";
 import { Big } from "../game/bignum";
 import { CONFIG } from "../game/config";
 import { SKILL_IDS } from "../game/data/skills";
-import { upgradeCost, upgradeTotalCost, goldMultFromLevel } from "../game/formulas";
+import { upgradeCost, upgradeTotalCost, goldMultFromLevel, critDamageFromLevel } from "../game/formulas";
 
 describe("GameEngine", () => {
   it("新存档生成敌人", () => {
@@ -147,6 +147,11 @@ describe("GameEngine", () => {
     expect(n2).toBe(0);
   });
 
+  it("防御性截断：超高等级金币/暴伤不产生 Infinity（防 1e308 崩溃）", () => {
+    expect(goldMultFromLevel(100000)).toBe(1e300);
+    expect(goldMultFromLevel(1000000)).toBe(1e300);
+    expect(critDamageFromLevel(1000000)).toBe(1e300);
+  });
   it("金币升级指数无上限：等级越高倍率越高且持续增长", () => {
     
     expect(goldMultFromLevel(0)).toBe(1);
