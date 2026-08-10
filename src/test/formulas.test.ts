@@ -3,7 +3,7 @@ import { Big } from "../game/bignum";
 import {
   enemyHp, enemyGold, isBossStage, bossHp, upgradeCost, prestigeEnergy,
   rollCrit, expectedCritMult, prestigeGlobalMult,
-  critChanceFromLevel, computeDerived, emptyBuffs,
+  critChanceFromLevel, computeDerived, emptyBuffs, depthHpGrowth,
 } from "../game/formulas";
 import { createNewState } from "../game/engine";
 import { CONFIG } from "../game/config";
@@ -96,6 +96,23 @@ describe("重构", () => {
   });
 });
 
+describe("深度软化（1000 关后 HP 指数有界逼近 1.05）", () => {
+  it("1000 关前无变化，之后有界逼近下限", () => {
+    expect(depthHpGrowth(500, 1.18)).toBeCloseTo(1.18, 10);
+    expect(depthHpGrowth(1000, 1.18)).toBeCloseTo(1.18, 10);
+    const g1700 = depthHpGrowth(1700, 1.18);
+    expect(g1700).toBeGreaterThan(1.05);
+    expect(g1700).toBeLessThan(1.18);
+    const g5000 = depthHpGrowth(5000, 1.18);
+    expect(g5000).toBeGreaterThanOrEqual(1.05);
+    expect(g5000).toBeLessThan(1.07);
+    expect(g1700).toBeGreaterThan(g5000);
+    // 早期敌人 HP 完全不变（关键：不破坏 1h/10h 曲线）
+    const hp500 = enemyHp(500, 1.18);
+    const hp500Raw = Big.fromNumber(10).mul(Big.fromNumber(1.18).pow(500));
+    expect(hp500.toNumber()).toBeCloseTo(hp500Raw.toNumber(), 6);
+  });
+});
 describe("暴击率封顶与溢出转化（平衡修复）", () => {
   it("升级暴击率渐近软上限，永不超 100%", () => {
     const asymptote = CONFIG.BASE_CRIT_CHANCE + CONFIG.CRIT_CHANCE_UPGRADE_CAP;

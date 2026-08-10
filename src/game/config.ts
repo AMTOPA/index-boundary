@@ -20,7 +20,10 @@ export const CONFIG = {
 
   // 怪物与关卡
   HP_BASE: 10,
-  HP_GROWTH: 1.18, // 可调 1.15~1.22
+  HP_GROWTH: 1.18,
+  HP_SOFT_START: 1000, // 深度软化起点：1000 关后怪物 HP 指数有界逼近下限（防止深推无限墙）
+  HP_SOFT_FLOOR: 1.05, // 软化下限（与 hpGrowth 全局下限一致）
+  HP_SOFT_DECAY: 700, // 软化速度：每 +700 关向 1.05 逼近一半 // 可调 1.15~1.22
   GOLD_HP_EXPONENT: 0.92,
   BOSS_EVERY: 10,
   BOSS_HP_MULT: 20,

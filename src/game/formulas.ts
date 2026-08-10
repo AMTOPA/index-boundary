@@ -95,8 +95,17 @@ export function goldMultFromLevel(level: number): number {
 
 // ---------------- 怪物 ----------------
 
+// 深度软化：1000 关后每关 HP 指数从 hpGrowth 有界逼近 HP_SOFT_FLOOR（只软化后期，不影响早期曲线）
+export function depthHpGrowth(stage: number, base: number): number {
+  if (stage <= CONFIG.HP_SOFT_START) return base;
+  const floor = Math.max(CONFIG.HP_SOFT_FLOOR, 1.0001);
+  if (base <= floor) return base;
+  const t = Math.exp(-(stage - CONFIG.HP_SOFT_START) / CONFIG.HP_SOFT_DECAY);
+  return floor + (base - floor) * t;
+}
+
 export function enemyHp(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
-  return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(hpGrowth).pow(stage));
+  return Big.fromNumber(CONFIG.HP_BASE).mul(Big.fromNumber(depthHpGrowth(stage, hpGrowth)).pow(stage));
 }
 
 export function enemyGold(stage: number, hpGrowth: number = CONFIG.HP_GROWTH): Big {
