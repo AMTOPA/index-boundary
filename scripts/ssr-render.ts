@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const PORT = process.env.SSR_PORT ? Number(process.env.SSR_PORT) : 8374;
+const PORT = process.env.SSR_PORT ? Number(process.env.SSR_PORT) : 3100;
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const ROOT = process.cwd();
 

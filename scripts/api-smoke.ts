@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-const PORT = Number(process.env.API_PORT ?? 8381);
+const PORT = Number(process.env.API_PORT ?? 3189);
 const ROOT = process.cwd();
 const BASE = `http://127.0.0.1:${PORT}`;
 

@@ -1,8 +1,8 @@
 # 生产部署编排：指数边界（Index Boundary）
-# 用法（在服务器上）：docker compose up -d --build
-# 端口 8373 仅绑定本机回环地址（127.0.0.1），对外由站点反向代理：
-#   反向代理目标 http://127.0.0.1:8373 ，路径前缀 /index-boundary
-# 数据卷 index-boundary-data 持久化数据库（data/game.db）
+# 用法：APP_PORT=<宿主机端口> docker compose up -d --build
+# 宿主机端口通过环境变量注入（不写入仓库），仅绑定本机回环地址。
+# 对外访问由站点管理面板统一配置反向代理；路径前缀 /index-boundary（basePath），原样转发、不要剥路径。
+# 数据卷 index-boundary-data 持久化数据库（data/game.db）。
 services:
   index-boundary:
     build:
@@ -13,7 +13,7 @@ services:
     container_name: index-boundary
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8373:3000"
+      - "127.0.0.1:${APP_PORT}:3000"
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_BASE_PATH=/index-boundary
