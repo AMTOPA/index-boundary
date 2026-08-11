@@ -31,7 +31,8 @@ export function nexusOverflowMult(state: GameState): Big {
 
 // 是否已具备进入彼岸的条件（三层跃迁完成 + 持有足够法则碎片）
 export function nexusReady(state: GameState): boolean {
-  return (state.leap?.purchases?.newWorld ?? 0) >= CONFIG.NEXUS.REQUIRED_NEW_WORLD
+  return state.combat.stage >= CONFIG.NEXUS.ENTRY_STAGE
+    && (state.leap?.purchases?.newWorld ?? 0) >= CONFIG.NEXUS.REQUIRED_NEW_WORLD
     && toBig(state.laws.shards).gte(Big.fromNumber(CONFIG.NEXUS.ENTRY_SHARDS));
 }
 
@@ -39,14 +40,14 @@ export function canEnterNexus(state: GameState): boolean {
   return !state.nexus?.entered && nexusReady(state);
 }
 
-// 跨入彼岸：消耗碎片，进入第 4 维度，自动获得 Boss 自动攻击
+// 跨入彼岸：消耗碎片，进入第 4 维度
 export function enterNexus(state: GameState): boolean {
   if (!canEnterNexus(state)) return false;
   state.laws.shards = toBig(state.laws.shards).sub(Big.fromNumber(CONFIG.NEXUS.ENTRY_COST)).toNumber();
   state.nexus.unlocked = true;
   state.nexus.entered = true;
   state.nexus.dimension = 1;
-  state.nexus.bossAutoAttack = true; // 免费自动获得
+  state.nexus.bossAutoAttack = true; // 旧存档兼容；实际自动攻击由 auto_attack 统一控制
   return true;
 }
 
@@ -61,14 +62,10 @@ export function nexusShopCost(state: GameState, id: NexusUpgradeId): number {
 }
 
 export function canBuyNexus(state: GameState, id: NexusUpgradeId): boolean {
+  if (!state.nexus.entered) return false;
   const def = CONFIG.NEXUS.SHOP[id];
   const cur = state.nexus.purchases[id] ?? 0;
   if (cur >= def.max) return false;
-  // Boss 自动攻击：进入彼岸后已自动获得，无需再买；未进入时可提前购买
-  if (id === "nexusBossAuto") {
-    if (state.nexus.bossAutoAttack) return false;
-    if (state.nexus.entered) return false;
-  }
   return state.laws.shards >= nexusShopCost(state, id);
 }
 
@@ -77,6 +74,5 @@ export function buyNexusUpgrade(state: GameState, id: NexusUpgradeId): boolean {
   const cost = nexusShopCost(state, id);
   state.laws.shards -= cost;
   state.nexus.purchases[id] = (state.nexus.purchases[id] ?? 0) + 1;
-  if (id === "nexusBossAuto") state.nexus.bossAutoAttack = true;
   return true;
 }

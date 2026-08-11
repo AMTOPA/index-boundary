@@ -118,8 +118,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       const duration = event.crush ? 330 : event.superCrit ? 250 : 170;
       impact.current = { until: now + duration, strength, duration };
       if (reducedMotion && visible) {
-        const emphasized = event.isClick || event.crit || event.superCrit || event.crush;
-        if (!emphasized) return;
+        // Reduced-motion keeps the enemy stationary, but every hit still receives a throttled brightness pulse.
         window.clearTimeout(reducedRenderTimer);
         const delay = Math.max(0, 1_000 / 12 - (now - lastReducedRender));
         reducedRenderTimer = window.setTimeout(() => {

@@ -392,7 +392,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             <div className="event-eyebrow">DIMENSION UNLOCKED</div>
             <div className="nexus-title">法则彼岸</div>
             <div className="leap-sub">第 4 维度 · 新的法则货币：法则碎片</div>
-            <div className="leap-cores">Boss 自动攻击 已激活</div>
+            <div className="leap-cores">彼岸增幅协议 已开启</div>
           </div>
         </div>
       )}

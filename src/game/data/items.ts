@@ -23,11 +23,11 @@ export const ITEM_DEFS: Record<ItemId, ItemDef> = {
 };
 
 export const TOOL_DEFS: Record<ToolId, ToolDef> = {
-  auto_upgrade: { id: "auto_upgrade", name: "自动升级模块", desc: "自动购买收益最高的升级", icon: "🤖", kind: "tool" },
-  auto_boss: { id: "auto_boss", name: "Boss 自动挑战器", desc: "Boss 战失败后自动重试", icon: "🎯", kind: "tool" },
-  auto_breakdown: { id: "auto_breakdown", name: "自动分解器", desc: "按稀有度自动分解装备", icon: "♻️", kind: "tool" },
-  combat_recorder: { id: "combat_recorder", name: "战斗记录仪", desc: "解锁完整统计面板", icon: "📊", kind: "tool" },
-  auto_skill: { id: "auto_skill", name: "自动释放模块", desc: "技能冷却结束自动释放", icon: "⚙️", kind: "tool" },
-  auto_equip: { id: "auto_equip", name: "自动换装模块", desc: "掉落时自动装备评分更高的装备", icon: "🔄", kind: "tool" },
-  auto_prestige: { id: "auto_prestige", name: "自动重构模块", desc: "卡墙且可重构时自动执行重构", icon: "🌀", kind: "tool" },
+  auto_upgrade: { id: "auto_upgrade", name: "自动升级模块", desc: "分三级提升自动升级速度：0.5 秒、0.1 秒与每逻辑帧并行批量升级", icon: "🤖", kind: "tool" },
+  auto_boss: { id: "auto_boss", name: "Boss 自动挑战器", desc: "Boss 超时后自动重新挑战；Boss 攻击与普通关卡自动攻击一致", icon: "🎯", kind: "tool" },
+  auto_breakdown: { id: "auto_breakdown", name: "自动分解器", desc: "获得购买权限后，可按设定稀有度自动分解装备", icon: "♻️", kind: "tool" },
+  combat_recorder: { id: "combat_recorder", name: "战斗记录仪", desc: "永久显示详细战斗统计", icon: "📊", kind: "tool" },
+  auto_skill: { id: "auto_skill", name: "自动释放模块", desc: "主动技能冷却完成后自动释放", icon: "⚙️", kind: "tool" },
+  auto_equip: { id: "auto_equip", name: "自动换装模块", desc: "获得更优装备时自动比较并换装", icon: "🔄", kind: "tool" },
+  auto_prestige: { id: "auto_prestige", name: "自动重构模块", desc: "分基础与策略两级；高级可配置关卡、能量或倍率比阈值", icon: "🌀", kind: "tool" },
 };

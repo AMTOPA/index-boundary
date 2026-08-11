@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import PwaRegistrar from "@/components/common/PwaRegistrar";
 import "./globals.css";
+import "./cinematic.css";
 
 // 子路径部署（例如 /index-boundary）由构建期环境变量注入。
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";

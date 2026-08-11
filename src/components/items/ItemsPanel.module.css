@@ -62,9 +62,125 @@
   font-family: var(--font-mono);
 }
 
-.ownedTag {
+.ownedTag,
+.levelTag {
   white-space: nowrap;
 }
+
+.levelTag {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.tierPreview {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border: 1px solid rgb(100 232 255 / 14%);
+  border-radius: 8px;
+  background: rgb(100 232 255 / 5%);
+}
+
+.tierPreview strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.tierPreview span {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.requirements {
+  display: grid;
+  gap: 3px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--danger);
+  font-size: 10px;
+  list-style: none;
+}
+
+.requirements li::before {
+  content: "•";
+  margin-right: 5px;
+  color: rgb(255 139 114 / 80%);
+}
+
+.rulePanel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.5fr);
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgb(255 120 178 / 22%);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgb(255 120 178 / 8%), rgb(100 232 255 / 4%));
+}
+
+.rulePanel strong {
+  color: rgb(255 215 235);
+}
+
+.rulePanel p {
+  margin: 5px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.ruleToggle {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.ruleToggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ruleToggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: rgb(255 120 178);
+}
+
+.ruleControls {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.ruleControls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ruleControls label > span {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.ruleControls select,
+.ruleControls input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgb(169 190 211 / 22%);
+  border-radius: 8px;
+  padding: 0 9px;
+  color: var(--text);
+  background: rgb(7 15 31 / 92%);
+}
+
 
 .ownedStatus {
   display: flex;
@@ -109,5 +225,19 @@
   .ownedStatus {
     min-height: 44px;
     font-size: 13px;
+  }
+
+  .rulePanel {
+    grid-template-columns: 1fr;
+  }
+
+  .ruleControls {
+    grid-template-columns: 1fr 0.6fr 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .ruleControls {
+    grid-template-columns: 1fr;
   }
 }

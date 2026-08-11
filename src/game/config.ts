@@ -2,6 +2,23 @@
 import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, EchoUpgradeId, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
+export interface ToolTierConfig {
+  gold: BigTuple;
+  energy?: number;
+  minStage?: number;
+  minPrestiges?: number;
+  requiredTalent?: string;
+  requiredUnlock?: string;
+  label: string;
+  desc: string;
+}
+
+export interface AutoUpgradeTierConfig {
+  intervalSec: number;
+  reevaluations: number;
+  maxBatch: number;
+}
+
 export interface SetDef {
   id: string;
   name: string;
@@ -13,7 +30,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 5,
+  SAVE_VERSION: 6,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -56,7 +73,8 @@ export const CONFIG = {
   // 连击
   COMBO_WINDOW_SEC: 3,
   COMBO_BONUS_PER_HIT: 0.0025,
-  COMBO_CAP: 100,
+  COMBO_DAMAGE_CAP: 100, // Preserve the original damage balance while the visible streak can grow higher.
+  COMBO_CAP: 400, // Equipment and Overload Combo can extend this ceiling beyond 500.
   COMBO_AUTO_FACTOR: 0.5, // 自动攻击连击效率折半
 
   // 碾压 / 溢出 / 跳关
@@ -270,17 +288,41 @@ export const CONFIG = {
       { id: "stage", type: "stageReach", label: "推进关卡到", targets: [150, 300, 600], rewardCores: 2 },
     ] as { id: string; type: DailyQuestType; label: string; targets: number[]; rewardCores: number }[],
   },  // 永久工具（金币购买，金币沉淀口）
-  TOOLS: {
-    auto_upgrade: [1, 5], // 1e5
-    auto_boss: [1, 7], // 1e7
-    auto_breakdown: [1, 8], // 1e8
-    combat_recorder: [1, 10], // 1e10
-    auto_skill: [1, 12], // 1e12
-    auto_equip: [1, 14], // 1e14
-    auto_prestige: [1, 24], // 1e24
-  } as Record<ToolId, BigTuple>,
 
-  // 天赋
+  // Permanent tools: accessible conveniences first, late-game automation as gold sinks.
+  TOOLS: {
+    auto_upgrade: [
+      { gold: [1, 8], minStage: 100, label: "基础自动升级", desc: "每 0.5 秒评估 1 次，每批最多购买 10 级" },
+      { gold: [1, 30], minPrestiges: 1, label: "智能自动升级", desc: "每 0.1 秒评估 5 次，每批最多购买 500 级" },
+      { gold: [1, 33], minPrestiges: 3, label: "并行升级核心", desc: "每逻辑帧并行评估 8 次，每批最多购买 6250 级" },
+    ],
+    auto_boss: [
+      { gold: [1, 10], minStage: 50, label: "Boss 自动挑战器", desc: "Boss 超时后自动重新挑战" },
+    ],
+    auto_breakdown: [
+      { gold: [1, 18], minStage: 150, requiredTalent: "auto_break", label: "自动分解器", desc: "按设定稀有度自动分解装备；需先取得购买权限" },
+    ],
+    combat_recorder: [
+      { gold: [1, 12], minStage: 100, label: "战斗记录仪", desc: "永久显示详细战斗统计" },
+    ],
+    auto_skill: [
+      { gold: [1, 21], minStage: 150, requiredUnlock: "skills", label: "自动释放模块", desc: "主动技能冷却完成后自动释放" },
+    ],
+    auto_equip: [
+      { gold: [1, 27], minStage: 250, requiredUnlock: "equipment", label: "自动换装模块", desc: "获得更优装备时自动比较并换装" },
+    ],
+    auto_prestige: [
+      { gold: [1, 24], minPrestiges: 1, label: "基础自动重构", desc: "达到本次重构门槛且卡墙超过 5 秒时自动重构" },
+      { gold: [1, 36], energy: 100, minPrestiges: 3, label: "策略自动重构", desc: "按关卡、预计能量或重构倍率比设置自动重构阈值" },
+    ],
+  } as Record<ToolId, ToolTierConfig[]>,
+  AUTO_UPGRADE_TIERS: [
+    { intervalSec: 0.5, reevaluations: 1, maxBatch: 10 },
+    { intervalSec: 0.1, reevaluations: 5, maxBatch: 500 },
+    { intervalSec: 0.05, reevaluations: 8, maxBatch: 6250 },
+  ] as readonly AutoUpgradeTierConfig[],
+
+  // Talents
   TALENT_POINTS_FROM_BOSS_FIRST_KILL: 1,
   TALENT_POINTS_FROM_ACHIEVEMENT: 1,
   // 天赋溢出转化：天赋全满后，每 CHUNK 点溢出天赋点自动转化为 1 点天赋残辉（永久全局 ×1.1）
@@ -296,6 +338,12 @@ export const CONFIG = {
 
   // 重构（第一层重置）
   PRESTIGE: {
+    BASE_STAGE: 500,
+    STAGE_PER_PRESTIGE: 100,
+    MAX_STAGE_REQUIREMENT: 10000,
+    FIRST_RUN_RESONANCE_START: 350,
+    FIRST_RUN_RESONANCE_STEP: 10,
+    FIRST_RUN_RESONANCE_MULT: 1.75,
     THRESHOLD: 20, // log10(总伤) 阈值
     ENERGY_EXP: 2,
     GLOBAL_EXP: 2, // (1+E)^2
@@ -343,22 +391,22 @@ export const CONFIG = {
 
   // 第 4 维度：法则彼岸（三层跃迁全部完成后的下一个阶段，货币 = 法则碎片）
   NEXUS: {
+    ENTRY_STAGE: 30000,
     REQUIRED_NEW_WORLD: 2, // 需要 新世界 Lv2（法则终境）——即三层跃迁全部完成
     ENTRY_SHARDS: 30, // 进入门槛：当前持有法则碎片 >= 30（不看关卡）
     ENTRY_COST: 20, // 进入消耗的法则碎片（跨入彼岸）
-    BOSS_AUTO_COST: 5, // 提前解锁 Boss 自动攻击的碎片价格（进入后自动免费获得）
     STAGE_START: 100000, // 彼岸世界主题起始关卡
     SHOP: {
       nexusDmg: { perLevel: 0.5, max: 10, costBase: 1, label: "彼岸增幅", desc: "全局伤害 ×1.5/级（独立乘区，上限 ×57.7）" },
       nexusGold: { perLevel: 0.5, max: 10, costBase: 1, label: "彼岸金流", desc: "金币收益 ×1.5/级（独立乘区，上限 ×57.7）" },
       nexusShardGain: { perLevel: 0.25, max: 8, costBase: 1, label: "碎片洪流", desc: "法则碎片获取 ×1.25/级（上限 ×5.96）" },
-      nexusBossAuto: { perLevel: 1, max: 1, costBase: 5, label: "Boss 自动攻击", desc: "进入彼岸自动获得；也可提前用少量碎片购买" },
       nexusOverflow: { perLevel: 0.5, max: 6, costBase: 1, label: "溢出洪流", desc: "溢出收益 ×1.5/级（上限 ×11.4）" },
     } as Record<NexusUpgradeId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
   },
 
   // 第 5 维度「超维回响」：进入彼岸后，收集足够回响印记解锁（不看关卡）
   ECHO: {
+    ENTRY_STAGE: 100000,
     ENTRY_SEALS: 120, // 解锁门槛：累计回响印记 >= 120（不看关卡）
     ENTRY_COST: 60, // 进入消耗的回响印记
     SEAL_MIN_STAGE: 100000, // 彼岸世界从此关卡起，击杀 Boss/精英掉落回响印记
@@ -383,7 +431,7 @@ export const CONFIG = {
     { key: "equipment", stage: 50, label: "装备系统" },
     { key: "skills", stage: 100, label: "技能系统" },
     { key: "talents", stage: 150, label: "天赋系统" },
-    { key: "prestige", stage: 350, label: "重构" },
+    { key: "prestige", stage: 500, label: "重构" },
     { key: "leap", stage: 10000, label: "世界跃迁" },
     { key: "lawRewrite", stage: 30000, label: "法则重写" },
     { key: "achievements", stage: 30, label: "成就" },

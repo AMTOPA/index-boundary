@@ -64,11 +64,11 @@ export const TALENT_NODES: TalentNodeDef[] = [
   // ===== 自动化树 =====
   { id: "auto_beat", tree: "automation", name: "机械节拍", desc: "自动攻速 +10%/点", max: 2, cost: 1, type: "mult", tier: 1, effect: { kind: "aspdPct", perPoint: 0.1 } },
   { id: "auto_offline", tree: "automation", name: "后台运算", desc: "离线效率 +15%/点（上限 100%）", max: 3, cost: 1, type: "additive", tier: 1, effect: { kind: "offlineEff", perPoint: 0.15 } },
-  { id: "auto_break", tree: "automation", name: "自动分解", desc: "解锁自动分解装备", max: 1, cost: 1, type: "additive", tier: 2, requires: ["auto_beat"], effect: { kind: "unlock", key: "auto_breakdown" } },
+  { id: "auto_break", tree: "automation", name: "自动分解许可", desc: "获得自动分解器购买权限；仍需前往道具页支付金币购买", max: 1, cost: 1, type: "additive", tier: 2, requires: ["auto_beat"], effect: { kind: "unlock", key: "auto_breakdown" } },
   { id: "auto_skip", tree: "automation", name: "极速推进", desc: "跳关基数 +10/点", max: 3, cost: 1, type: "additive", tier: 2, requires: ["auto_offline"], effect: { kind: "skipBase", perPoint: 10 } },
   { id: "auto_keystone_perpetual", tree: "automation", name: "永动协议", desc: "每 1 有效攻速 → 独立伤害 ×1.02", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "perpetualProtocol" } },
   { id: "auto_keystone_offline", tree: "automation", name: "离线霸主", desc: "离线效率 100% + 上限 24 小时", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "offlineLord" } },
-  { id: "auto_keystone_smart", tree: "automation", name: "智能购买", desc: "解锁 Smart Buy 自动购买", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "smartBuy" } },
+  { id: "auto_keystone_smart", tree: "automation", name: "智能购买", desc: "强化自动升级的收益评估与长期购买效率", max: 1, cost: 3, type: "keystone", tier: 3, requires: ["auto_break", "auto_skip"], exclusiveGroup: "automation_keystone", effect: { kind: "keystone", key: "smartBuy" } },
 
   // ===== 贪婪树 =====
   { id: "greed_loot", tree: "greed", name: "掠夺", desc: "金币 +25%/点", max: 4, cost: 1, type: "additive", tier: 1, effect: { kind: "addPool", stat: "goldPct", perPoint: 0.25 } },

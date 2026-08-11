@@ -1,6 +1,6 @@
 // 游戏引擎：纯逻辑，不依赖 React/DOM，可 headless 运行（测试与模拟器共用）
 import { Big, toBig, type BigTuple } from "./bignum";
-import { CONFIG } from "./config";
+import { CONFIG, type ToolTierConfig } from "./config";
 import type {
   BossAffix, ChallengeId, DailyQuestType, EchoUpgradeId, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, NexusUpgradeId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
 } from "./types";
@@ -8,7 +8,7 @@ import { Rng } from "./rng";
 import {
   computeDerived, emptyBuffs, type RuntimeBuffs,
   enemyHp, enemyGold, isBossStage, bossHp, rollCrit, expectedCritMult,
-  overflowGold, crushGold, upgradeCost, upgradeTotalCost, prestigeEnergy, pickSpecialEnemy, seasonScore,
+  overflowGold, crushGold, upgradeCost, upgradeTotalCost, prestigeEnergy, prestigeGlobalMult, pickSpecialEnemy, seasonScore,
   critChanceFromLevel, critDamageFromLevel,
 } from "./formulas";
 import {
@@ -24,7 +24,7 @@ import { canEnterEcho as sysCanEnterEcho, enterEcho as sysEnterEcho, buyEchoUpgr
 import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate, canConvertOverflow as sysCanConvertOverflow, convertOverflow as sysConvertOverflow } from "./systems/talents";
 import { talentNodeById, TALENT_TREES } from "./data/talents";
-import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy } from "./systems/prestige";
+import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy, canPrestige as sysCanPrestige, prestigeStageRequirement } from "./systems/prestige";
 import { applyLeap, canLeap as sysCanLeap, leapCores, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
 import { applyLawRewrite, canRewriteLaw as sysCanRewriteLaw, lawShards, buyLawPatch as sysBuyLawPatch, lawShopCost as sysLawShopCost, canBuyLaw as sysCanBuyLaw } from "./systems/law";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
@@ -50,6 +50,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       rngState: seed,
       version: CONFIG.SAVE_VERSION,
       unlocks: [],
+      discoveries: [],
       achievements: [],
       milestonesSeen: [],
       settings: { sound: true, reduceMotion: false },
@@ -79,12 +80,17 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
         { name: "", talents: {}, keystones: {} },
       ],
     },
-    prestige: { energy: 0, totalEnergyEarned: 0, purchases: {} },
+    prestige: { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} },
     leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
     laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
     nexus: { unlocked: false, entered: false, dimension: 0, purchases: {}, bossAutoAttack: false },
     echo: { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} },
-    items: { consumables: {}, tools: {} },
+    items: {
+      consumables: {},
+      tools: {},
+      toolLevels: {},
+      autoPrestigeRule: { enabled: false, metric: "stage", comparator: "gte", value: 1000 },
+    },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
       totalEliteKills: 0, totalMimicKills: 0,
@@ -123,6 +129,7 @@ export class GameEngine {
   private dailyTimer = 0;
   private autoPrestigeTimer = 0;
   private autoUpgradeTimer = 0;
+  private autoSkillUpgradeTimer = 0;
   private talentOverflowTimer = 0;
   private nexusCheckTimer = 0;
   private echoCheckTimer = 0;
@@ -156,26 +163,48 @@ export class GameEngine {
   }
 
   // ---------------- 主循环 ----------------
+  private bossAutoAttackWindow(dt: number): number {
+    const combat = this.state.combat;
+    if (!combat.isBoss || this.skillActive("time_freeze")) return dt;
+    const drain = combat.bossAffixes.includes("time") ? CONFIG.BOSS_TIME_DRAIN_MULT : 1;
+    return Math.min(dt, Math.max(0, combat.bossTimer) / drain);
+  }
+
   tick(dt: number): void {
     this.timeSec += dt;
     tickSkills(this.state, dt, this.timeSec);
     this.tickCombo(dt);
-    this.tickBoss(dt);
     this.tickConsumables(dt);
-    // 自动攻击：Boss 战默认不自动攻击，进入第 4 维度「法则彼岸」后可自动攻击（或用碎片提前购买）
-    if (this.isUnlocked("auto_attack") && (!this.state.combat.isBoss || this.state.nexus?.bossAutoAttack)) {
-      this.autoAttack(dt);
+    // 自动攻击对普通敌人和 Boss 使用同一套 APS 累积逻辑；Boss 失败自动重试由 auto_boss 工具单独控制。
+    // 先结算本帧攻击再推进 Boss 计时，避免临界帧“明明打出了致命一击却先判超时”。
+    if (this.isUnlocked("auto_attack")) {
+      this.autoAttack(this.bossAutoAttackWindow(dt));
     }
-    if (this.state.items.tools.auto_upgrade) {
+    this.tickBoss(dt);
+    const autoUpgradeLevel = this.toolLevel("auto_upgrade");
+    if (autoUpgradeLevel > 0) {
+      const profile = CONFIG.AUTO_UPGRADE_TIERS[Math.min(autoUpgradeLevel, CONFIG.AUTO_UPGRADE_TIERS.length) - 1];
       this.autoUpgradeTimer -= dt;
-      if (this.autoUpgradeTimer <= 0) {
-        this.autoUpgradeTimer = 0.5;
-        // 自动升级：金币不足时用技能核心升级主动/被动技能
-        if (!this.smartBuy()) this.smartBuySkill();
+      this.autoSkillUpgradeTimer -= dt;
+      let catchUpRuns = 0;
+      while (this.autoUpgradeTimer < 0 && catchUpRuns < 4) {
+        this.autoUpgradeTimer += profile.intervalSec;
+        catchUpRuns += 1;
+        // Base upgrades catch up in bounded batches; rare skill cores retain the original two-upgrades-per-second pace.
+        const smartBoost = (this.state.talents.allocations.auto_keystone_smart ?? 0) > 0;
+        const bought = this.smartBuyBurst(
+          profile.reevaluations + (smartBoost ? 2 : 0),
+          Math.floor(profile.maxBatch * (smartBoost ? 1.25 : 1)),
+        );
+        if (bought === 0 && this.autoSkillUpgradeTimer <= 0) {
+          this.smartBuySkill();
+          this.autoSkillUpgradeTimer = 0.5;
+        }
       }
+      if (this.autoUpgradeTimer < -profile.intervalSec) this.autoUpgradeTimer = 0;
     }
-    // 自动释放技能：冷却结束且未在持续中的技能立即释放
-    if (this.state.items.tools.auto_skill && this.state.skills.actives.length > 0) {
+    // Auto-cast skills as soon as their cooldown ends.
+    if (this.toolLevel("auto_skill") > 0 && this.state.skills.actives.length > 0) {
       for (const inst of [...this.state.skills.actives]) {
         const def = SKILL_DEFS[inst.id];
         if (inst.cdRemaining <= 0 && (def.duration === 0 || !inst.active)) {
@@ -212,12 +241,14 @@ export class GameEngine {
     }
     this.autoPrestigeTimer -= dt;
     if (this.autoPrestigeTimer <= 0) {
-      this.autoPrestigeTimer = 10;
-      if (this.state.items.tools.auto_prestige && this.canPrestige()) {
+      const autoPrestigeLevel = this.toolLevel("auto_prestige");
+      this.autoPrestigeTimer = autoPrestigeLevel >= 2 ? 1 : 10;
+      if (autoPrestigeLevel > 0 && this.canPrestige()) {
         const killTime = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
-        if (Number.isFinite(killTime) && killTime > CONFIG.PRESTIGE.AUTO_WALL_SEC) {
-          this.prestige();
-        }
+        const shouldPrestige = autoPrestigeLevel >= 2
+          ? this.state.items.autoPrestigeRule.enabled && this.matchesAutoPrestigeRule()
+          : Number.isFinite(killTime) && killTime > CONFIG.PRESTIGE.AUTO_WALL_SEC;
+        if (shouldPrestige) this.prestige();
       }
     }
     // 自动分解反馈节流：约每 3s 汇总 emit 一次
@@ -619,7 +650,7 @@ export class GameEngine {
     const c = this.state.combat;
     const stage = c.stage;
     this.emit({ type: "bossFail", stage });
-    if (this.state.items.tools.auto_boss) {
+    if (this.toolLevel("auto_boss") > 0) {
       // 自动挑战器：同关重试
       this.spawnEnemy();
       return;
@@ -674,53 +705,47 @@ export class GameEngine {
     return Math.max(1, Math.floor(this.state.combat.stage));
   }
 
-  buyUpgrade(id: UpgradeId): boolean {
-    if (!this.upgradeUnlocked(id)) return false;
-    const lv = this.state.player.upgrades[id];
-    if (lv >= this.upgradeMaxLevel(id)) return false;
-    const cost = upgradeCost(id, lv);
-    if (toBig(this.state.player.gold).lt(cost)) return false;
-    this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
-    this.state.player.upgrades[id] = lv + 1;
-    this.emit({ type: "levelUp", upgrade: id, level: lv + 1 });
-    this.recomputeDerived();
-    return true;
-  }
-
-  buyUpgradeTimes(id: UpgradeId, times: number): number {
-    let bought = 0;
-    for (let i = 0; i < times; i++) {
-      if (!this.buyUpgrade(id)) break;
-      bought++;
-    }
-    return bought;
-  }
-
-  // 一次买满：仅在距离关卡上限的剩余等级内二分查找可购买数量。
-  buyUpgradeMax(id: UpgradeId): number {
+  private buyUpgradeBatch(id: UpgradeId, requested: number, finalize = true): number {
     if (!this.upgradeUnlocked(id)) return 0;
-    const gold = toBig(this.state.player.gold);
     const from = this.state.player.upgrades[id];
     const remainingLevels = Math.max(0, this.upgradeMaxLevel(id) - from);
     const MAX_BUY = 100000000; // 1e8 级防御性上限，避免极端或损坏数据。
+    const limit = Math.min(remainingLevels, Math.max(0, Math.floor(requested)), MAX_BUY);
+    if (limit <= 0) return 0;
+
+    const gold = toBig(this.state.player.gold);
     let lo = 0;
-    let hi = Math.min(remainingLevels, MAX_BUY);
+    let hi = limit;
     while (lo < hi) {
       const mid = Math.floor((lo + hi + 1) / 2);
       if (gold.gte(upgradeTotalCost(id, from, mid))) lo = mid;
       else hi = mid - 1;
     }
     if (lo <= 0) return 0;
-    const cost = upgradeTotalCost(id, from, lo);
-    this.state.player.gold = gold.sub(cost).toTuple();
+
+    this.state.player.gold = gold.sub(upgradeTotalCost(id, from, lo)).toTuple();
     this.state.player.upgrades[id] = from + lo;
-    this.recomputeDerived();
-    this.emit({ type: "levelUp", upgrade: id, level: from + lo });
+    if (finalize) {
+      this.recomputeDerived();
+      this.emit({ type: "levelUp", upgrade: id, level: from + lo });
+    }
     return lo;
   }
 
-  // Smart Buy：按 DPS 提升 / 成本 选择
-  smartBuy(): boolean {
+  buyUpgrade(id: UpgradeId): boolean {
+    return this.buyUpgradeBatch(id, 1) === 1;
+  }
+
+  buyUpgradeTimes(id: UpgradeId, times: number): number {
+    return this.buyUpgradeBatch(id, times);
+  }
+
+  // 一次买满：购买不超过当前关卡硬上限的全部可负担等级。
+  buyUpgradeMax(id: UpgradeId): number {
+    return this.buyUpgradeBatch(id, 100000000);
+  }
+
+  private bestAffordableUpgrade(): UpgradeId | null {
     const candidates: UpgradeId[] = ["attack", "aspd", "critChance", "critDamage", "gold"];
     let best: { id: UpgradeId; score: number } | null = null;
     for (const id of candidates) {
@@ -731,8 +756,31 @@ export class GameEngine {
       const score = this.estimateGainLog(id);
       if (!best || score > best.score) best = { id, score };
     }
-    if (!best) return false;
-    return this.buyUpgrade(best.id);
+    return best?.id ?? null;
+  }
+
+  // Smart Buy：按 DPS 提升 / 成本选择下一项，保留单次购买语义供模拟与测试使用。
+  smartBuy(): boolean {
+    const id = this.bestAffordableUpgrade();
+    return id ? this.buyUpgrade(id) : false;
+  }
+
+  // Auto-upgrade re-evaluates every bounded chunk, balancing fast catch-up with build efficiency.
+  private smartBuyBurst(reevaluations: number, maxBatch: number): number {
+    const cap = this.upgradeMaxLevel("attack");
+    const levels = Object.values(this.state.player.upgrades);
+    const maxGap = Math.max(0, ...levels.map((level) => cap - level));
+    const batchSize = Math.min(maxBatch, Math.max(1, Math.ceil(maxGap / 2)));
+    let total = 0;
+    for (let pass = 0; pass < reevaluations; pass++) {
+      const id = this.bestAffordableUpgrade();
+      if (!id) break;
+      const bought = this.buyUpgradeBatch(id, batchSize, false);
+      if (bought <= 0) break;
+      total += bought;
+    }
+    if (total > 0) this.recomputeDerived();
+    return total;
   }
 
   // Smart Buy 买不起基础升级时，用技能核心升级主动/被动技能（收益/成本比选最优）
@@ -821,7 +869,7 @@ export class GameEngine {
     return sysBreakdown(this.state, uid, this.derived.shardGainMult);
   }
   setAutoBreakdown(rarity: Rarity | null): boolean {
-    if (rarity && !this.state.items.tools.auto_breakdown) return false;
+    if (rarity && this.toolLevel("auto_breakdown") <= 0) return false;
     this.state.equipment.autoBreakdown = rarity;
     // 设定档位后立即清理背包存量并反馈
     const swept = this.sweepAutoBreakdownInventory();
@@ -861,7 +909,7 @@ export class GameEngine {
   }
   // 自动换装：背包中评分更高的装备自动穿上（需购买工具）
   maybeAutoEquip(): void {
-    if (!this.state.items.tools.auto_equip) return;
+    if (this.toolLevel("auto_equip") <= 0) return;
     for (const item of [...this.state.equipment.inventory]) {
       const cur = this.state.equipment.slots[item.slot];
       if (!cur || this.itemScore(item) > this.itemScore(cur)) this.equipItem(item.uid);
@@ -1024,9 +1072,13 @@ export class GameEngine {
   }
 
   // ---------------- 重构 ----------------
+  prestigeRequiredStage(): number {
+    return prestigeStageRequirement(this.state);
+  }
   canPrestige(): boolean {
-    if (!this.isUnlocked("prestige")) return false;
-    return prestigeEnergy(toBig(this.state.statistics.runDamage)) > 0;
+    const discovered = this.state.meta.discoveries.includes("prestige") || this.isUnlocked("prestige");
+    if (!discovered) return false;
+    return sysCanPrestige(this.state);
   }
   prestige(): { energyGained: number } | null {
     if (!this.canPrestige()) return null;
@@ -1191,7 +1243,7 @@ export class GameEngine {
     state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
     state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-    state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
     state.statistics.runDamage = [0, 0];
   }
 
@@ -1210,7 +1262,7 @@ export class GameEngine {
     state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
     state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-    state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
     state.statistics.runDamage = [0, 0];
   }
 
@@ -1372,41 +1424,93 @@ export class GameEngine {
   }
 
   // 永久工具：金币购买
+  toolLevel(id: ToolId): number {
+    const stored = Math.floor(this.state.items.toolLevels?.[id] ?? 0);
+    if (stored > 0) return Math.min(stored, CONFIG.TOOLS[id].length);
+    if (this.state.items.tools[id]) return id === "auto_upgrade" ? Math.min(2, CONFIG.TOOLS[id].length) : 1;
+    return 0;
+  }
+  toolMaxLevel(id: ToolId): number {
+    return CONFIG.TOOLS[id].length;
+  }
+  toolNextTier(id: ToolId): ToolTierConfig | null {
+    return CONFIG.TOOLS[id][this.toolLevel(id)] ?? null;
+  }
   toolCost(id: ToolId): BigTuple {
-    return CONFIG.TOOLS[id];
+    return this.toolNextTier(id)?.gold ?? [0, 0];
   }
   toolOwned(id: ToolId): boolean {
-    return this.state.items.tools[id] === true;
+    return this.toolLevel(id) > 0;
+  }
+  toolPurchaseReasons(id: ToolId): string[] {
+    const tier = this.toolNextTier(id);
+    if (!tier) return ["已满级"];
+    const reasons: string[] = [];
+    if (tier.minStage && this.state.combat.stage < tier.minStage) reasons.push(`需达到第 ${tier.minStage} 关`);
+    if (tier.minPrestiges && this.state.statistics.totalPrestiges < tier.minPrestiges) reasons.push(`需完成 ${tier.minPrestiges} 次重构`);
+    if (tier.energy && this.state.prestige.energy < tier.energy) reasons.push(`需持有 ${tier.energy} 奇点能量`);
+    if (tier.requiredTalent && (this.state.talents.allocations[tier.requiredTalent] ?? 0) <= 0) reasons.push("需先取得天赋购买权限");
+    if (tier.requiredUnlock && !this.state.meta.discoveries.includes(tier.requiredUnlock) && !this.isUnlocked(tier.requiredUnlock)) {
+      reasons.push(`需先发现${tier.requiredUnlock === "skills" ? "技能" : "装备"}系统`);
+    }
+    if (toBig(this.state.player.gold).lt(Big.fromTuple(tier.gold))) reasons.push("金币不足");
+    return reasons;
   }
   canBuyTool(id: ToolId): boolean {
-    if (this.toolOwned(id)) return false;
-    if (id === "auto_prestige" && this.state.prestige.totalEnergyEarned <= 0) return false;
-    const cost = Big.fromTuple(CONFIG.TOOLS[id]);
-    return toBig(this.state.player.gold).gte(cost);
+    return this.toolNextTier(id) !== null && this.toolPurchaseReasons(id).length === 0;
   }
   buyTool(id: ToolId): boolean {
-    if (this.toolOwned(id)) return false;
-    if (id === "auto_prestige" && this.state.prestige.totalEnergyEarned <= 0) return false;
-    const cost = Big.fromTuple(CONFIG.TOOLS[id]);
-    if (toBig(this.state.player.gold).lt(cost)) return false;
-    this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
+    const tier = this.toolNextTier(id);
+    if (!tier || this.toolPurchaseReasons(id).length > 0) return false;
+    this.state.player.gold = toBig(this.state.player.gold).sub(Big.fromTuple(tier.gold)).toTuple();
+    const level = this.toolLevel(id) + 1;
+    this.state.items.toolLevels[id] = level;
     this.state.items.tools[id] = true;
-    this.emit({ type: "unlock", key: id, label: TOOL_DEFS[id].name });
+    this.emit({ type: "unlock", key: id, label: `${TOOL_DEFS[id].name} Lv${level}` });
     if (id === "auto_equip") this.maybeAutoEquip();
-    // 购买自动分解后立即生效（若已设定档位）
     if (id === "auto_breakdown" && this.state.equipment.autoBreakdown) {
       const swept = this.sweepAutoBreakdownInventory();
       if (swept.count > 0) this.emit({ type: "autoBreakdown", count: swept.count, shards: swept.shards });
     }
     return true;
   }
+  setAutoPrestigeRule(rule: Partial<GameState["items"]["autoPrestigeRule"]>): void {
+    const current = this.state.items.autoPrestigeRule;
+    const metric = rule.metric && ["stage", "energy", "multRatio"].includes(rule.metric) ? rule.metric : current.metric;
+    const comparator = rule.comparator && ["gte", "lte", "eq"].includes(rule.comparator) ? rule.comparator : current.comparator;
+    const rawValue = rule.value ?? current.value;
+    this.state.items.autoPrestigeRule = {
+      enabled: typeof rule.enabled === "boolean" ? rule.enabled : current.enabled,
+      metric,
+      comparator,
+      value: Number.isFinite(rawValue) ? Math.max(0, rawValue) : current.value,
+    };
+  }
+  private matchesAutoPrestigeRule(): boolean {
+    const rule = this.state.items.autoPrestigeRule;
+    const gain = prestigeEnergy(toBig(this.state.statistics.runDamage));
+    let actual: number;
+    if (rule.metric === "stage") actual = this.state.combat.stage;
+    else if (rule.metric === "energy") actual = gain;
+    else {
+      const amp = this.state.prestige.purchases.singularityAmp ?? 0;
+      const before = prestigeGlobalMult(this.state.prestige.energy, amp);
+      actual = prestigeGlobalMult(this.state.prestige.energy + gain, amp).div(before).toNumber();
+    }
+    if (!Number.isFinite(actual)) return rule.comparator === "gte";
+    if (rule.comparator === "gte") return actual >= rule.value;
+    if (rule.comparator === "lte") return actual <= rule.value;
+    if (rule.metric === "stage" || rule.metric === "energy") return actual === Math.floor(rule.value);
+    return Math.abs(actual - rule.value) <= Math.max(1e-9, Math.abs(rule.value) * 0.01);
+  }
 
-  // ---------------- 解锁 / 成就 / 里程碑 ----------------
+  // ---------------- Unlocks / achievements / milestones ----------------
   private checkUnlocks(): void {
     const stage = this.state.combat.stage;
     for (const u of CONFIG.UNLOCKS) {
       if (stage >= u.stage && !this.state.meta.unlocks.includes(u.key)) {
         this.state.meta.unlocks.push(u.key);
+        if (!this.state.meta.discoveries.includes(u.key)) this.state.meta.discoveries.push(u.key);
         this.emit({ type: "unlock", key: u.key, label: u.label });
       }
     }

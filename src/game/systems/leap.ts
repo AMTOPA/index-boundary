@@ -126,7 +126,7 @@ export function applyLeap(state: GameState, coresGained: number): void {
   state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
   state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
   state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-  state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
   state.statistics.runDamage = [0, 0];
   // 保留：成就/统计/世界核心/元数据解锁/工具（永久基础设施）
 }

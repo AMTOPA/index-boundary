@@ -59,7 +59,7 @@ export function CombatArea() {
   const pct = maxHp.isZero() ? 0 : Math.min(100, Math.max(0, hp.div(maxHp).toNumber() * 100));
   const world = worldForStage(stage, newWorldLevel, nexusEntered, echoEntered);
   const worldIndex = WORLDS.findIndex((w) => w.id === world.id);
-  const bossPct = isBoss && bossTimer > 0 ? Math.min(100, Math.max(0, (bossTimer / CONFIG.BOSS_TIMER_SEC) * 100)) : 100;
+  const bossPct = isBoss ? Math.min(100, Math.max(0, (bossTimer / CONFIG.BOSS_TIMER_SEC) * 100)) : 100;
   const shieldMax = CONFIG.BOSS_SHIELD_HITS;
   const shieldLeft = isBoss && bossAffixes.includes("shield") ? bossShieldHits : 0;
   const voidLabel = isBoss && bossVoidTarget ? VOID_TARGET_LABEL[bossVoidTarget] : null;
@@ -86,7 +86,9 @@ export function CombatArea() {
             </span>
           )}
         </span>
-        <span className="mono">连击 {Math.floor(combo)}</span>
+        <span className="mono" title="连击会在窗口结束时清零；装备词条与过载连击可提高上限">
+          连击 {Math.floor(combo)} / {Math.floor(CONFIG.COMBO_CAP + derived.comboCapAdd)}
+        </span>
         {skipMode && <span style={{ color: "var(--crush)" }}>⚡极速推进</span>}
       </div>
       <div className="dps-line">

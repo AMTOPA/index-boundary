@@ -17,8 +17,15 @@ export function computePrestige(state: GameState): PrestigeResult {
   return { energyGained: energy, goldKept };
 }
 
+export function prestigeStageRequirement(state: GameState): number {
+  const stored = Math.floor(state.prestige.nextRequiredStage || CONFIG.PRESTIGE.BASE_STAGE);
+  return Math.min(CONFIG.PRESTIGE.MAX_STAGE_REQUIREMENT, Math.max(CONFIG.PRESTIGE.BASE_STAGE, stored));
+}
+
 export function canPrestige(state: GameState): boolean {
-  return prestigeEnergy(Big.fromTuple(state.statistics.runDamage)) > 0;
+  if (state.meta.activeChallenge !== null || state.meta.activeModifiers.length > 0) return false;
+  return state.combat.stage >= prestigeStageRequirement(state)
+    && prestigeEnergy(Big.fromTuple(state.statistics.runDamage)) > 0;
 }
 
 // 执行重构（engine 在调用前已计算并保存 derived 快照用于结算）
@@ -27,6 +34,10 @@ export function applyPrestige(state: GameState, energyGained: number, goldKept: 
   p.energy += energyGained;
   p.totalEnergyEarned += energyGained;
   state.statistics.totalPrestiges += 1;
+  p.nextRequiredStage = Math.min(
+    CONFIG.PRESTIGE.MAX_STAGE_REQUIREMENT,
+    prestigeStageRequirement(state) + CONFIG.PRESTIGE.STAGE_PER_PRESTIGE,
+  );
   state.statistics.runDamage = [0, 0]; // 本局伤害清零（重构按本局结算）
 
   // ---- 重置清单 ----

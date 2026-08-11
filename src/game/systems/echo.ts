@@ -44,7 +44,9 @@ export function echoSealsForElite(stage: number): number {
 // 是否已具备进入超维回响的条件（彼岸已进入 + 累计印记达标，不看关卡）
 export function echoReady(state: GameState): boolean {
   return !!state.nexus?.entered
-    && state.echo.totalSealsEarned >= CONFIG.ECHO.ENTRY_SEALS;
+    && state.combat.stage >= CONFIG.ECHO.ENTRY_STAGE
+    && state.echo.totalSealsEarned >= CONFIG.ECHO.ENTRY_SEALS
+    && state.echo.seals >= CONFIG.ECHO.ENTRY_COST;
 }
 
 export function canEnterEcho(state: GameState): boolean {
@@ -72,6 +74,7 @@ export function echoShopCost(state: GameState, id: EchoUpgradeId): number {
 }
 
 export function canBuyEcho(state: GameState, id: EchoUpgradeId): boolean {
+  if (!state.echo.entered) return false;
   const def = CONFIG.ECHO.SHOP[id];
   const cur = state.echo.purchases[id] ?? 0;
   if (cur >= def.max) return false;

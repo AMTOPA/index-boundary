@@ -29,20 +29,33 @@ const TABS: { id: PanelTab; label: string }[] = [
   { id: "echo", label: "回响" },
 ];
 
-export function PrestigePanel() {
+const PRESTIGE_TABS = new Set<PanelTab>(["prestige", "leap", "law", "nexus", "echo"]);
+const CHALLENGE_TABS = new Set<PanelTab>(["challenge", "season"]);
+
+export interface PrestigePanelProps {
+  section?: "prestige" | "challenge";
+}
+
+export function PrestigePanel({ section }: PrestigePanelProps = {}) {
   const { engine } = useGame();
-  const unlocked = useGameSelector((s) => s.meta.unlocks.includes("prestige"));
-  const unlockKeys = useGameSelector((s) => s.meta.unlocks.join("|"));
+  const unlocked = useGameSelector((s) => s.meta.unlocks.includes("prestige") || s.meta.discoveries.includes("prestige"));
+  const unlockKeys = useGameSelector((s) => [...s.meta.unlocks, ...s.meta.discoveries].join("|"));
   const nexusUnlocked = useGameSelector((s) => s.nexus?.unlocked ?? false);
   const echoUnlocked = useGameSelector((s) => s.echo?.unlocked ?? false);
   const energy = useGameSelector((s) => s.prestige.energy);
   const purchases = useGameSelector((s) => s.prestige.purchases);
   const runDamage = useGameSelector((s) => s.statistics.runDamage);
+  const currentStage = useGameSelector((s) => s.combat.stage);
   const activeChallenge = useGameSelector((s) => s.meta.activeChallenge);
   const activeModifiers = useGameSelector((s) => s.meta.activeModifiers);
   const challenges = useGameSelector((s) => s.challenges);
   const season = useGameSelector((s) => s.season);
-  const [tab, setTab] = useState<PanelTab>("prestige");
+  const [tab, setTab] = useState<PanelTab>(section ?? "prestige");
+  const visibleTabs = section === "challenge"
+    ? TABS.filter((item) => CHALLENGE_TABS.has(item.id))
+    : section === "prestige"
+      ? TABS.filter((item) => PRESTIGE_TABS.has(item.id))
+      : TABS;
   const [confirm, setConfirm] = useState(false);
   const [picked, setPicked] = useState<ChallengeId[]>(() => [...(season?.lastModifiers ?? [])].slice(0, CONFIG.SEASON.MAX_MODIFIERS));
 
@@ -66,6 +79,7 @@ export function PrestigePanel() {
   const previewEnergy = prestigeEnergy(toBig(runDamage));
   const previewMult = pm(energy + previewEnergy, purchases.singularityAmp ?? 0);
   const canPrestige = engine?.canPrestige() ?? false;
+  const requiredStage = engine?.prestigeRequiredStage() ?? CONFIG.PRESTIGE.BASE_STAGE;
   const unlockedKeys = new Set(unlockKeys ? unlockKeys.split("|") : []);
   const isTabUnlocked = (id: PanelTab): boolean => {
     if (id === "leap") return unlockedKeys.has("leap");
@@ -79,7 +93,7 @@ export function PrestigePanel() {
   return (
     <div className="panel">
       <div className="ach-filters" style={{ marginBottom: 12 }}>
-        {TABS.map((item) => {
+        {visibleTabs.map((item) => {
           const available = isTabUnlocked(item.id);
           return (
             <button
@@ -89,7 +103,7 @@ export function PrestigePanel() {
               aria-label={available ? item.label : "尚未解锁的高维系统"}
               onClick={() => setTab(item.id)}
             >
-              {available ? item.label : "🔒 ???"}
+              {available ? item.label : "? ???"}
             </button>
           );
         })}
@@ -101,6 +115,15 @@ export function PrestigePanel() {
           <div className="prestige-info">
             <div>当前奇点能量：<span className="prestige-energy mono">{formatNumber(energy)}</span></div>
             <div>当前全局倍率：<span className="mono">×{formatBigPrecise(pm(energy, purchases.singularityAmp ?? 0))}</span></div>
+            <div style={{ marginTop: 4 }}>
+              本次门槛：<span className="mono" style={{ color: currentStage >= requiredStage ? "var(--green)" : "var(--danger)" }}>{currentStage} / {requiredStage} 关</span>
+              <span style={{ marginLeft: 8, color: "var(--text-dim)", fontSize: 11 }}>成功后下次 +100 关，最高 10000 关</span>
+            </div>
+            {!canPrestige && (
+              <div style={{ marginTop: 4, color: "var(--danger)", fontSize: 12 }}>
+                {currentStage < requiredStage ? `本次重构需达到第 ${requiredStage} 关（当前 ${currentStage}）` : "本轮伤害尚不足以产生奇点能量"}
+              </div>
+            )}
             {canPrestige && (
               <div style={{ marginTop: 4, color: "var(--green)" }}>
                 重构可获 <span className="mono">+{previewEnergy}</span> 能量 → 倍率 <span className="mono">×{formatBigPrecise(previewMult)}</span>

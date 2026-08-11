@@ -30,6 +30,8 @@ const serviceWorker = read("public/sw.js");
 const css = read("src/app/globals.css");
 const auth = read("src/lib/auth.ts");
 const page = read("src/app/page.tsx");
+const navigation = read("src/components/navigation/MainNavigation.tsx");
+const cinematic = read("src/app/cinematic.css");
 const prestigePanel = read("src/components/prestige/PrestigePanel.tsx");
 const upgradePanel = read("src/components/upgrade/UpgradePanel.tsx");
 const equipPanel = read("src/components/equipment/EquipPanel.tsx");
@@ -70,12 +72,13 @@ check("质量验收脚本已接入", pkg.scripts?.["test:quality"] === "tsx scri
 check("viewport 使用设备宽度", layout.includes('width: "device-width"'));
 check("CSS 有移动端断点", /@media\s*\([^)]*max-width\s*:\s*\d+px/.test(css));
 check("页面阻止根级横向溢出", /overflow-x\s*:\s*hidden/.test(css));
-check("CSS 响应系统减弱动效设置", css.includes("prefers-reduced-motion"));
+check("CSS reduced motion", css.includes("prefers-reduced-motion") && cinematic.includes("prefers-reduced-motion"));
+check("cinematic command dock", cinematic.includes("command-dock") && cinematic.includes("nav-combat-core") && !cinematic.includes("animation: dockPulse"));
 
 
-check("主分页统一为底部五入口", page.includes('type MainTab = "combat" | "talents" | "equipment" | "items" | "systems"') && page.includes('className="bottom-nav"'));
-check("非当前主分页不会继续挂载", page.includes('{view === "combat" && (') && page.includes('{view === "equipment" && (') && page.includes('{view === "talents" && (') && page.includes('{view === "items" && ('));
-check("未解锁功能使用锁与问号", page.includes('locked ? "🔒"') && page.includes('locked ? "???"') && prestigePanel.includes('"🔒 ???"'));
+check("seven-entry command dock", navigation.includes("command-dock") && ["items", "talents", "equipment", "combat", "prestige", "challenge", "settings"].every((id) => navigation.includes(`"${id}"`)));
+check("inactive pages unmounted", page.includes('view === "combat"') && page.includes('view === "equipment"') && page.includes('view === "talents"') && page.includes('view === "items"') && page.includes('view === "prestige"') && page.includes('view === "challenge"') && page.includes('view === "settings"'));
+check("locked entries use question marks", navigation.includes("nav-question") && navigation.includes('locked ? "???"') && prestigePanel.includes("? ???"));
 check("五项基础升级受当前关卡硬上限", engine.includes("remainingLevels") && engine.includes("upgradeMaxLevel(_id: UpgradeId)"));
 check("星空降频并可在非战斗页暂停", starfield.includes("1_000 / 24") && starfield.includes("active?: boolean"));
 check("战斗粒子已限制帧率和数量", particles.includes("MAX_PARTICLES = 80") && particles.includes("FRAME_INTERVAL_MS = 1_000 / 30"));

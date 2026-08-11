@@ -13,10 +13,18 @@ export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "st
 export type TreeId = "destruction" | "automation" | "greed" | "singularity";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip" | "auto_prestige";
+export type ThresholdComparator = "gte" | "lte" | "eq";
+export type AutoPrestigeMetric = "stage" | "energy" | "multRatio";
+export interface AutoPrestigeRule {
+  enabled: boolean;
+  metric: AutoPrestigeMetric;
+  comparator: ThresholdComparator;
+  value: number;
+}
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
 export type LawId = "critExp" | "goldBoost" | "apsCap" | "goldToDmg";
-export type NexusUpgradeId = "nexusDmg" | "nexusGold" | "nexusShardGain" | "nexusBossAuto" | "nexusOverflow";
+export type NexusUpgradeId = "nexusDmg" | "nexusGold" | "nexusShardGain" | "nexusOverflow";
 export type EchoUpgradeId = "echoDmg" | "echoGold" | "echoSealGain" | "echoOverflow";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
@@ -144,6 +152,7 @@ export interface SeasonState {
 export interface PrestigeState {
   energy: number;
   totalEnergyEarned: number;
+  nextRequiredStage: number;
   purchases: Partial<Record<PrestigeUpgradeId, number>>;
 }
 
@@ -168,7 +177,7 @@ export interface NexusState {
   entered: boolean; // 是否已进入第四维度「法则彼岸」
   dimension: number; // 0=未进入 1=法则彼岸 2+=更高维度（预留）
   purchases: Partial<Record<NexusUpgradeId, number>>; // 彼岸商店已购升级
-  bossAutoAttack: boolean; // 进入彼岸后 Boss 自动攻击（也可用碎片提前购买）
+  bossAutoAttack: boolean; // 旧存档兼容字段；Boss 自动攻击现已并入基础 auto_attack
 }
 
 // 第 5 维度「超维回响」：进入彼岸后，收集足够「回响印记」进入；货币 = 回响印记
@@ -183,7 +192,9 @@ export interface EchoState {
 
 export interface ItemState {
   consumables: Partial<Record<ItemId, number>>;
-  tools: Partial<Record<ToolId, boolean>>;
+  tools: Partial<Record<ToolId, boolean>>; // legacy ownership compatibility
+  toolLevels: Partial<Record<ToolId, number>>;
+  autoPrestigeRule: AutoPrestigeRule;
 }
 
 export interface StatisticsState {
@@ -211,6 +222,7 @@ export interface MetaState {
   rngState: number;
   version: number;
   unlocks: string[]; // 已解锁系统 id（stage-5 等）
+  discoveries: string[]; // Historical system discoveries retained across resets
   achievements: string[];
   milestonesSeen: number[]; // 已庆祝的数量级
   settings: { sound: boolean; reduceMotion: boolean };

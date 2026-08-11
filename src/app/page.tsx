@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { GameProvider, useGame } from "@/components/game/GameProvider";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
 import { SettingsPanel } from "@/components/common/SettingsPanel";
@@ -18,32 +18,23 @@ import { LeaderboardPanel } from "@/components/leaderboard/LeaderboardPanel";
 import { exportSave, importSave } from "@/game/save";
 import { Starfield } from "@/components/combat/Starfield";
 import { worldForStage } from "@/game/data/worlds";
-import { subscribeCloud } from "@/game/cloud";
 import { formatBig, formatNumber } from "@/game/format";
 import { toBig } from "@/game/bignum";
 import { CONFIG } from "@/game/config";
 import type { GameState } from "@/game/types";
+import { MainNavigation, type MainTab } from "@/components/navigation/MainNavigation";
 
 // 高频操作统一放到底部主导航；升级嵌入战斗页，技能管理由战斗页快捷入口打开。
-type MainTab = "combat" | "talents" | "equipment" | "items" | "systems";
 type MainView = MainTab | "skills";
-type SystemsTab = "prestige" | "stats" | "achievements" | "account";
+type SettingsTab = "settings" | "stats" | "achievements" | "account";
 
 const NEW_PLAYER_GOAL_KEYS = ["auto_attack", "boss", "equipment", "skills", "talents", "prestige"] as const;
 
-const MAIN_TABS: { id: MainTab; label: string; icon: string; unlockKey?: string }[] = [
-  { id: "combat", label: "战斗", icon: "⚔️" },
-  { id: "equipment", label: "装备", icon: "🛡️", unlockKey: "equipment" },
-  { id: "talents", label: "天赋", icon: "🌿", unlockKey: "talents" },
-  { id: "items", label: "道具", icon: "📦" },
-  { id: "systems", label: "更多", icon: "🧭" },
-];
-
-const SYS_TABS: { id: SystemsTab; label: string; icon: string; unlockKey?: string }[] = [
+const SETTINGS_TABS: { id: SettingsTab; label: string; icon: string; unlockKey?: string }[] = [
+  { id: "settings", label: "设置与存档", icon: "⚙️" },
   { id: "stats", label: "统计", icon: "📊" },
-  { id: "prestige", label: "重构", icon: "🌀", unlockKey: "prestige" },
   { id: "achievements", label: "成就", icon: "🏆", unlockKey: "achievements" },
-  { id: "account", label: "账户", icon: "👤" },
+  { id: "account", label: "账户与排行", icon: "👤" },
 ];
 
 export default function Page() {
@@ -56,7 +47,8 @@ export default function Page() {
 
 function Shell() {
   const [view, setView] = useState<MainView>("combat");
-  const [tab, setTab] = useState<SystemsTab>("stats");
+  const unlockMask = useGameSelector((state) => `${state.meta.unlocks.join("|")}::${state.meta.discoveries.join("|")}`);
+  const unlocks = Array.from(new Set(unlockMask.split("::").flatMap((part) => part ? part.split("|") : [])));
   const worldTint = useGameSelector((state) => worldForStage(
     state.combat.stage,
     state.leap?.purchases?.newWorld ?? 0,
@@ -68,7 +60,7 @@ function Shell() {
     <>
       <Starfield tint={worldTint} active={view === "combat"} />
       <div className="app">
-        <TopBar view={view} />
+        <TopBar />
 
         <div className="page-content" data-page={view}>
           {view === "combat" && (
@@ -119,61 +111,39 @@ function Shell() {
             </main>
           )}
 
-          {view === "systems" && (
-            <main className="systems-view">
-              <SystemNavigation activeTab={tab} onChange={setTab} />
-              <div className="systems-content">
-                <Panel tab={tab} />
-              </div>
+          {view === "prestige" && (
+            <main className="single-view prestige-view prestige-management-view">
+              <PrestigePanel section="prestige" />
             </main>
           )}
+
+          {view === "challenge" && (
+            <main className="single-view challenge-view challenge-management-view">
+              <PrestigePanel section="challenge" />
+            </main>
+          )}
+
+          {view === "settings" && <SettingsHub />}
         </div>
 
-        <MainNavigation activeTab={view} onChange={setView} />
+        <MainNavigation activeTab={view === "skills" ? "combat" : view} unlocks={unlocks} onChange={setView} />
       </div>
     </>
   );
 }
 
-function MainNavigation({ activeTab, onChange }: { activeTab: MainView; onChange: (tab: MainTab) => void }) {
-  const unlocks = useGameSelector((state) => state.meta.unlocks.join("|"));
-  const unlockedSet = new Set(unlocks ? unlocks.split("|") : []);
-
-  return (
-    <nav className="bottom-nav" aria-label="游戏主分页">
-      {MAIN_TABS.map((item) => {
-        const locked = item.unlockKey ? !unlockedSet.has(item.unlockKey) : false;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={activeTab === item.id ? "page" : undefined}
-            aria-label={locked ? "尚未解锁的功能" : item.label}
-            className={`${activeTab === item.id ? "active" : ""} ${locked ? "nav-locked" : ""}`.trim()}
-            disabled={locked}
-            onClick={() => onChange(item.id)}
-          >
-            <span className="nav-icon" aria-hidden="true">{locked ? "🔒" : item.icon}</span>
-            <span className="nav-label">{locked ? "???" : item.label}</span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-function SystemNavigation({ activeTab, onChange }: { activeTab: SystemsTab; onChange: (tab: SystemsTab) => void }) {
+function SettingsNavigation({ activeTab, onChange }: { activeTab: SettingsTab; onChange: (tab: SettingsTab) => void }) {
   const unlocks = useGameSelector((state) => state.meta.unlocks.join("|"));
   const unlockedSet = new Set(unlocks ? unlocks.split("|") : []);
 
   return (
     <div className="systems-header">
       <div className="systems-heading-copy">
-        <span className="systems-section-label">ARCHIVE & ASCENSION</span>
-        <strong>成长档案</strong>
+        <span className="systems-section-label">SYSTEM & ARCHIVE</span>
+        <strong>设置中心</strong>
       </div>
-      <div className="systems-tabs" role="tablist" aria-label="系统功能">
-        {SYS_TABS.map((item) => {
+      <div className="systems-tabs" role="tablist" aria-label="设置中心分类">
+        {SETTINGS_TABS.map((item) => {
           const locked = item.unlockKey ? !unlockedSet.has(item.unlockKey) : false;
           return (
             <button
@@ -186,7 +156,7 @@ function SystemNavigation({ activeTab, onChange }: { activeTab: SystemsTab; onCh
               disabled={locked}
               onClick={() => onChange(item.id)}
             >
-              <span aria-hidden="true">{locked ? "🔒" : item.icon}</span>
+              <span aria-hidden="true">{locked ? "❓" : item.icon}</span>
               <span>{locked ? "???" : item.label}</span>
             </button>
           );
@@ -225,9 +195,28 @@ function NextUnlockHint({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function Panel({ tab }: { tab: SystemsTab }) {
+function SettingsHub() {
+  const [tab, setTab] = useState<SettingsTab>("settings");
+
+  return (
+    <main className="settings-view systems-view">
+      <SettingsNavigation activeTab={tab} onChange={setTab} />
+      <div className="systems-content">
+        <SettingsContent tab={tab} />
+      </div>
+    </main>
+  );
+}
+
+function SettingsContent({ tab }: { tab: SettingsTab }) {
   switch (tab) {
-    case "prestige": return <PrestigePanel />;
+    case "settings":
+      return (
+        <>
+          <SettingsPanel />
+          <SaveManagement />
+        </>
+      );
     case "stats": return <StatsPanel />;
     case "achievements": return <AchievementPanel />;
     case "account":
@@ -238,6 +227,61 @@ function Panel({ tab }: { tab: SystemsTab }) {
         </>
       );
   }
+}
+
+function SaveManagement() {
+  const { engine, reload, pushToast } = useGame();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleExport() {
+    if (!engine) return;
+    const text = exportSave(engine.state);
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `index-boundary-save-${Date.now()}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    pushToast("存档已导出");
+  }
+
+  function handleImportFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imported = importSave(String(reader.result ?? ""));
+      if (!imported) {
+        pushToast("导入失败：存档无效", "danger");
+        return;
+      }
+      reload(imported as GameState);
+      pushToast("存档已导入");
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <section className="panel" aria-labelledby="save-management-title">
+      <h3 id="save-management-title">账户与本地存档</h3>
+      <p style={{ fontSize: 13, color: "var(--text-dim)" }}>导出备份或导入已有存档。云存档登录与排行榜位于“账户与排行”。</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <button type="button" className="btn primary" onClick={handleExport}>导出存档</button>
+        <button type="button" className="btn" onClick={() => fileRef.current?.click()}>导入存档</button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="visually-hidden"
+        tabIndex={-1}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) handleImportFile(file);
+          event.target.value = "";
+        }}
+      />
+    </section>
+  );
 }
 
 function ResourceBar() {
@@ -272,43 +316,7 @@ function ResourceBar() {
   );
 }
 
-function TopBar({ view }: { view: MainView }) {
-  const { engine, reload, pushToast } = useGame();
-  const [username, setUsername] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const moreRef = useRef<HTMLDetailsElement>(null);
-
-  useEffect(() => subscribeCloud((c) => setUsername(c.user?.username ?? null)), []);
-  useEffect(() => { moreRef.current?.removeAttribute("open"); }, [view]);
-
-  function handleExport() {
-    if (!engine) return;
-    const text = exportSave(engine.state);
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `index-boundary-save-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    pushToast("存档已导出");
-  }
-
-  function handleImportFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? "");
-      const imported = importSave(text);
-      if (!imported) {
-        pushToast("导入失败：存档无效", "danger");
-        return;
-      }
-      reload(imported as GameState);
-      pushToast("存档已导入");
-    };
-    reader.readAsText(file);
-  }
-
+function TopBar() {
   return (
     <header className="topbar">
       <div className="game-title">
@@ -316,29 +324,6 @@ function TopBar({ view }: { view: MainView }) {
         <span className="en">Boundless Exponent</span>
       </div>
       <ResourceBar />
-      <div className="top-actions">
-        <details ref={moreRef} className="top-more">
-          <summary className="btn small" aria-label="打开账户与存档菜单">⋯ 更多</summary>
-          <div className="top-more-menu">
-            <span className="account-chip">{username ? `👤 ${username}` : "未登录"}</span>
-            <SettingsPanel className="top-settings-panel" />
-            <button type="button" className="btn small" onClick={handleExport}>导出存档</button>
-            <button type="button" className="btn small" onClick={() => fileRef.current?.click()}>导入存档</button>
-          </div>
-        </details>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".json,application/json"
-          className="visually-hidden"
-          tabIndex={-1}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleImportFile(f);
-            e.target.value = "";
-          }}
-        />
-      </div>
     </header>
   );
 }

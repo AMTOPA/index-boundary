@@ -40,8 +40,8 @@ export function upgradeCost(id: UpgradeId, level: number): Big {
   const growth = Big.fromNumber(u.growth).pow(level);
   let cost = Big.fromNumber(u.baseCost).mul(growth);
   if (u.rebaseEvery > 0 && level >= u.rebaseEvery) {
-    const rebase = Math.pow(u.rebaseMult, Math.floor(level / u.rebaseEvery));
-    cost = cost.mul(Big.fromNumber(rebase));
+    const rebase = Big.fromNumber(u.rebaseMult).pow(Math.floor(level / u.rebaseEvery));
+    cost = cost.mul(rebase);
   }
   return cost;
 }
@@ -54,6 +54,7 @@ export function upgradeTotalCost(id: UpgradeId, fromLevel: number, n: number): B
   const base = Big.fromNumber(u.baseCost);
   const R = u.rebaseEvery;
   const RM = u.rebaseMult;
+  const rebase = Big.fromNumber(RM);
   const gMinus1 = Big.fromNumber(growth - 1);
   if (R <= 0) {
     // sum base*g^(from+i) = base*g^from*(g^n-1)/(g-1)
@@ -65,7 +66,7 @@ export function upgradeTotalCost(id: UpgradeId, fromLevel: number, n: number): B
   // 第一段：当前重基块内剩余 (R - r0) 级
   if (r0 > 0) {
     const k = Math.min(R - r0, n);
-    const seg = base.mul(g.pow(fromLevel)).mul(Big.fromNumber(Math.pow(RM, Math.floor(fromLevel / R)))).mul(g.pow(k).sub(Big.ONE).div(gMinus1));
+    const seg = base.mul(g.pow(fromLevel)).mul(rebase.pow(Math.floor(fromLevel / R))).mul(g.pow(k).sub(Big.ONE).div(gMinus1));
     total = total.add(seg);
     done += k;
   }
@@ -76,8 +77,8 @@ export function upgradeTotalCost(id: UpgradeId, fromLevel: number, n: number): B
   if (fullBlocks > 0) {
     const qStart = Math.floor(startLevel / R);
     const blockGeom = g.pow(R).sub(Big.ONE).div(gMinus1);
-    const A = base.mul(blockGeom).mul(g.pow(startLevel)).mul(Big.fromNumber(Math.pow(RM, qStart)));
-    const ratio = g.pow(R).mul(Big.fromNumber(RM));
+    const A = base.mul(blockGeom).mul(g.pow(startLevel)).mul(rebase.pow(qStart));
+    const ratio = g.pow(R).mul(rebase);
     total = total.add(A.mul(ratio.pow(fullBlocks).sub(Big.ONE).div(ratio.sub(Big.ONE))));
     done += fullBlocks * R;
   }
@@ -85,7 +86,7 @@ export function upgradeTotalCost(id: UpgradeId, fromLevel: number, n: number): B
   const rem = n - done;
   if (rem > 0) {
     const qStart = Math.floor((fromLevel + done) / R);
-    const seg = base.mul(g.pow(fromLevel + done)).mul(Big.fromNumber(Math.pow(RM, qStart))).mul(g.pow(rem).sub(Big.ONE).div(gMinus1));
+    const seg = base.mul(g.pow(fromLevel + done)).mul(rebase.pow(qStart)).mul(g.pow(rem).sub(Big.ONE).div(gMinus1));
     total = total.add(seg);
   }
   return total;
@@ -487,6 +488,11 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
 
   // ---- 全局倍率（重构/里程碑）----
   const prestigeMult = inChallenge && CONFIG.CHALLENGE_DISABLE_PRESTIGE ? Big.ONE : prestigeGlobalMult(prestige.energy, prestige.purchases.singularityAmp ?? 0);
+  const resonanceStage = Math.min(state.combat.stage, CONFIG.PRESTIGE.BASE_STAGE);
+  const resonanceLayers = !inChallenge && statistics.totalPrestiges === 0 && resonanceStage >= CONFIG.PRESTIGE.FIRST_RUN_RESONANCE_START
+    ? Math.floor((resonanceStage - CONFIG.PRESTIGE.FIRST_RUN_RESONANCE_START) / CONFIG.PRESTIGE.FIRST_RUN_RESONANCE_STEP) + 1
+    : 0;
+  const firstRunResonanceMult = Big.fromNumber(CONFIG.PRESTIGE.FIRST_RUN_RESONANCE_MULT).pow(resonanceLayers);
   const milestoneMult = Big.fromNumber(milestoneMultFor(toBig(statistics.totalDamage).log10()));
   // 天赋残辉：溢出天赋点转化，永久全局倍率（伤害与金币同时生效）
   const talentResidueMult = Big.fromNumber(Math.pow(1 + CONFIG.TALENT_OVERFLOW.GLOBAL_MULT, state.talents?.residue ?? 0));
@@ -517,7 +523,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   goldMult = goldMult.mul(Big.fromNumber(challengePermMult(state, "gold")));
 
   // ---- 全局倍率 ----
-  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult).mul(talentResidueMult).mul(nexusMult).mul(echoMult);
+  const globalMult = acc.globalMult.mul(talentGlobal).mul(prestigeMult).mul(firstRunResonanceMult).mul(milestoneMult).mul(goldKeystoneMult).mul(leapGlobalMult).mul(talentResidueMult).mul(nexusMult).mul(echoMult);
 
   // ---- 单次伤害（非暴击） ----
   const base = baseAttack(player.upgrades.attack).mul(weaponAtkMult);
@@ -529,7 +535,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
     acc.comboCapAdd += skillEffect(def, inst ? inst.level : 1);
   }
   const comboDmgMult = overloadActive ? (SKILL_DEFS.overload_combo.comboDmgMult ?? 1) : 1;
-  const comboBonus = Math.min(CONFIG.COMBO_CAP + acc.comboCapAdd, state.combat.combo) * CONFIG.COMBO_BONUS_PER_HIT;
+  const comboBonus = Math.min(CONFIG.COMBO_DAMAGE_CAP + acc.comboCapAdd, state.combat.combo) * CONFIG.COMBO_BONUS_PER_HIT;
   let damagePerHit = base.mul(atkMult).mul(globalMult).mul(goldToDmgMult).mul(aspdOverflowMult).mul(perpetualMult);
   damagePerHit = damagePerHit.mul(Big.fromNumber(1 + comboBonus * comboDmgMult));
   // 分裂矩阵：最终伤害独立提升

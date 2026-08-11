@@ -162,6 +162,7 @@ describe("V13 内容：法则重写（第三层）+ 法则碎片 + 公式补丁"
 
   it("金币补强计入派生 goldMult（独立乘区 ×1.5@Lv2）", () => {
     const st = lawReadyState(13);
+    st.statistics.totalPrestiges = 1; // Isolate law gold boost from first-run resonance.
     st.laws.purchases.goldBoost = 2;
     const d = computeDerived(st, emptyBuffs(), 0);
     expect(d.goldMult.toNumber()).toBeCloseTo(1.5, 5);

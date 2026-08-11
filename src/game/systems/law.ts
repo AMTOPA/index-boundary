@@ -13,7 +13,7 @@ export function lawShards(state: GameState): number {
   const last = state.laws.lastRewriteMaxStage || 1;
   const doubled = maxStage >= last * CONFIG.LAWS.DOUBLE_MULT;
   const raw = doubled ? base * CONFIG.LAWS.DOUBLE_MULT : base;
-  // ??????????????????? 4 ?????
+  // Nexus shard-flow upgrades further multiply law-shard output.
   return Math.floor(raw * nexusShardGainMult(state));
 }
 
@@ -105,7 +105,7 @@ export function applyLawRewrite(state: GameState, shardsGained: number): void {
   state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
   state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
   state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-  state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
   // ---- 重置第二层跃迁的已购升级（保留未花费的核心）----
   state.leap.purchases = {};
   state.statistics.runDamage = [0, 0];

@@ -12,30 +12,37 @@ const ECHO_SHOP_ORDER: EchoUpgradeId[] = ["echoDmg", "echoGold", "echoSealGain",
 // 超维回响（第 5 维度）：进入彼岸后收集足够「回响印记」解锁，货币 = 回响印记
 export function EchoPanel() {
   const { engine } = useGame();
-  const state = useGameSelector((s) => s);
   const [confirmEnter, setConfirmEnter] = useState(false);
-
-  const echo = state.echo;
-  const seals = echo.seals;
+  const echoUnlocked = useGameSelector((s) => s.echo.unlocked);
+  const entered = useGameSelector((s) => s.echo.entered);
+  const seals = useGameSelector((s) => s.echo.seals);
+  const totalSealsEarned = useGameSelector((s) => s.echo.totalSealsEarned);
+  const purchases = useGameSelector((s) => s.echo.purchases);
+  useGameSelector((s) => Object.entries(s.echo.purchases).sort().join("|"));
+  const nexusEntered = useGameSelector((s) => s.nexus.entered);
+  const stage = useGameSelector((s) => s.combat.stage);
   const canEnter = engine?.canEnterEcho() ?? false;
-  const entered = echo.entered;
 
   // 未解锁：展示解锁条件
-  if (!echo.unlocked) {
+  if (!echoUnlocked) {
     return (
       <div className="panel">
         <h3>超维回响（第 5 维度）</h3>
         <div className="prestige-info">
           <div>
             需要 <span className="mono">已进入法则彼岸</span>
-            {" + 累计回响印记 ≥ "}<span className="mono">{formatNumber(CONFIG.ECHO.ENTRY_SEALS)}</span>（不看关卡）
+            {" + 当前关卡 ≥ "}<span className="mono">{formatNumber(CONFIG.ECHO.ENTRY_STAGE)}</span>
+            {" + 累计回响印记 ≥ "}<span className="mono">{formatNumber(CONFIG.ECHO.ENTRY_SEALS)}</span>
+            {" + 当前持有 ≥ "}<span className="mono">{formatNumber(CONFIG.ECHO.ENTRY_COST)}</span>
           </div>
           <div>
-            当前：彼岸 <span style={{ color: state.nexus?.entered ? "var(--green)" : "var(--text-dim)", fontSize: 12 }}>
-              {state.nexus?.entered ? "✓ 已进入" : "未进入"}
+            当前：彼岸 <span style={{ color: nexusEntered ? "var(--green)" : "var(--text-dim)", fontSize: 12 }}>
+              {nexusEntered ? "✓ 已进入" : "未进入"}
             </span>
             {" · 累计回响印记 "}
-            <span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(echo.totalSealsEarned)}</span>
+            <span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(totalSealsEarned)}</span>
+            {" · 当前持有 "}<span className="mono">{formatNumber(seals)}</span>
+            {" · 当前关卡 "}<span className="mono">{formatNumber(stage)}</span>
           </div>
           <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-dim)" }}>
             在彼岸世界（第 {formatNumber(CONFIG.ECHO.SEAL_MIN_STAGE)} 关起）击杀 Boss / 精英会掉落回响印记；
@@ -52,7 +59,7 @@ export function EchoPanel() {
       <div className="panel">
         <h3>超维回响（第 5 维度）</h3>
         <div className="prestige-info">
-          <div>回响印记：<span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(seals)}</span>（累计 {formatNumber(echo.totalSealsEarned)}）</div>
+          <div>回响印记：<span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(seals)}</span>（累计 {formatNumber(totalSealsEarned)}）</div>
         </div>
         <div style={{ marginTop: 10 }}>
           <button className="btn primary" disabled={!canEnter} onClick={() => setConfirmEnter(true)}>
@@ -84,12 +91,12 @@ export function EchoPanel() {
       <div className="prestige-info">
         <div>当前维度：<span className="mono">超维回响（第 5 维度）</span></div>
         <div>回响印记：<span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(seals)}</span></div>
-        <div>Boss 自动攻击：<span style={{ color: "var(--green)", fontSize: 12 }}>✓ 已激活</span></div>
+        <div>自动攻击协议：<span style={{ color: "var(--green)", fontSize: 12 }}>✓ 普通敌人与 Boss 同步运行</span></div>
       </div>
       <h3 style={{ marginTop: 14 }}>回响商店</h3>
       {ECHO_SHOP_ORDER.map((id) => {
         const def = CONFIG.ECHO.SHOP[id];
-        const cur = echo.purchases[id] ?? 0;
+        const cur = purchases[id] ?? 0;
         const maxed = cur >= def.max;
         const cost = engine ? engine.echoShopCost(id) : 0;
         const canBuy = engine?.canBuyEcho(id) ?? false;

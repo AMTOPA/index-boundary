@@ -47,6 +47,60 @@ describe("GameEngine", () => {
     expect(eng.state.combat.bossTimer).toBeGreaterThan(0);
   });
 
+  it("auto_attack 解锁后 Boss 也按 APS 累积攻击且不依赖彼岸开关", () => {
+    for (const bossAutoAttack of [false, true]) {
+      const st = createNewState(bossAutoAttack ? 71 : 70);
+      st.meta.unlocks = ["auto_attack"];
+      st.combat.stage = 10;
+      st.combat.isBoss = true;
+      st.combat.enemyHp = [1000, 0];
+      st.combat.enemyMaxHp = [1000, 0];
+      st.combat.bossTimer = 30;
+      st.nexus.bossAutoAttack = bossAutoAttack;
+      const eng = new GameEngine(st);
+      const hpBefore = Big.fromTuple(eng.state.combat.enemyHp).toNumber();
+      const attackInterval = 1 / eng.derived.effectiveAps;
+
+      eng.tick(attackInterval * 0.4);
+      expect(Big.fromTuple(eng.state.combat.enemyHp).toNumber()).toBe(hpBefore);
+
+      eng.tick(attackInterval * 0.61);
+      const hpAfter = Big.fromTuple(eng.state.combat.enemyHp).toNumber();
+      expect(hpAfter).toBeLessThan(hpBefore);
+      expect(hpAfter).toBeGreaterThan(0);
+    }
+  });
+
+  it("auto_boss 只负责 Boss 失败后留在同关自动重试", () => {
+    const retryState = createNewState(72);
+    retryState.combat.stage = 10;
+    retryState.combat.isBoss = true;
+    retryState.combat.enemyHp = [1000, 0];
+    retryState.combat.enemyMaxHp = [1000, 0];
+    retryState.combat.bossTimer = 0.01;
+    retryState.items.tools.auto_boss = true;
+    const retryEngine = new GameEngine(retryState);
+
+    retryEngine.tick(0.02);
+
+    expect(retryEngine.state.combat.stage).toBe(10);
+    expect(retryEngine.state.combat.isBoss).toBe(true);
+    expect(retryEngine.state.combat.bossTimer).toBeGreaterThan(0);
+
+    const fallbackState = createNewState(73);
+    fallbackState.combat.stage = 10;
+    fallbackState.combat.isBoss = true;
+    fallbackState.combat.enemyHp = [1000, 0];
+    fallbackState.combat.enemyMaxHp = [1000, 0];
+    fallbackState.combat.bossTimer = 0.01;
+    const fallbackEngine = new GameEngine(fallbackState);
+
+    fallbackEngine.tick(0.02);
+
+    expect(fallbackEngine.state.combat.stage).toBe(9);
+    expect(fallbackEngine.state.combat.isBoss).toBe(false);
+  });
+
   it("升级购买与派生属性联动", () => {
     const eng = new GameEngine();
     const st = eng.state;
@@ -118,6 +172,93 @@ describe("GameEngine", () => {
     }
   });
 
+  it("keeps high-level rebased upgrade costs finite and non-zero", () => {
+    for (const id of ["attack", "gold"] as const) {
+      const single = upgradeCost(id, 15_000);
+      const batch = upgradeTotalCost(id, 15_000, 500);
+      expect(single.isZero()).toBe(false);
+      expect(batch.isZero()).toBe(false);
+      expect(batch.gt(single)).toBe(true);
+    }
+  });
+
+  it("auto upgrade catches up high-stage saves in large batches without exceeding the stage cap", () => {
+    const stage = 15_000;
+    const st = createUpgradeTestState(stage, 105);
+    st.player.gold = [1, 1_000_000];
+    st.items.tools.auto_upgrade = true;
+    const eng = new GameEngine(st);
+    const totalCap = stage * BASE_UPGRADE_IDS.length;
+    const before = BASE_UPGRADE_IDS.reduce((sum, id) => sum + eng.state.player.upgrades[id], 0);
+
+    for (let i = 0; i < 10; i++) eng.tick(0.1);
+
+    const after = BASE_UPGRADE_IDS.reduce((sum, id) => sum + eng.state.player.upgrades[id], 0);
+    expect(after - before).toBeGreaterThanOrEqual(totalCap / 4);
+    expect(BASE_UPGRADE_IDS.every((id) => eng.state.player.upgrades[id] <= stage)).toBe(true);
+  });
+
+  it("auto upgrade keeps skill-core spending at the original bounded pace", () => {
+    const st = createNewState(109);
+    st.items.tools.auto_upgrade = true;
+    st.player.gold = [0, 0];
+    st.skills.cores = [1, 100];
+    st.skills.actives = [{ id: "overclock", level: 1, cdRemaining: 0, activeUntil: 0, active: false }];
+    const eng = new GameEngine(st);
+    const totalSkillLevels = () => eng.state.skills.actives.reduce((sum, skill) => sum + skill.level, 0)
+      + Object.values(eng.state.skills.passives).reduce((sum, level) => sum + level, 0);
+    const before = totalSkillLevels();
+
+    for (let i = 0; i < 10; i++) eng.tick(0.1);
+
+    expect(totalSkillLevels() - before).toBe(2);
+  });
+
+  it("base combo can reach its expanded 400-hit ceiling", () => {
+    const st = createNewState(107);
+    st.combat.combo = 399;
+    st.combat.comboTimer = CONFIG.COMBO_WINDOW_SEC;
+    st.combat.enemyHp = [1000, 0];
+    st.combat.enemyMaxHp = [1000, 0];
+    const eng = new GameEngine(st);
+
+    eng.click();
+
+    expect(eng.state.combat.combo).toBe(400);
+  });
+
+  it("Boss deadline frame resolves damage at the deadline without granting post-timeout attacks", () => {
+    const lethal = createNewState(106);
+    lethal.meta.unlocks = ["auto_attack"];
+    lethal.combat.stage = 10;
+    lethal.combat.isBoss = true;
+    lethal.combat.enemyHp = [1, 0];
+    lethal.combat.enemyMaxHp = [1, 0];
+    lethal.combat.bossAffixes = [];
+    const lethalEngine = new GameEngine(lethal);
+    const attackInterval = 1 / lethalEngine.derived.effectiveAps;
+    lethalEngine.state.combat.bossTimer = attackInterval + 0.000_001;
+
+    lethalEngine.tick(attackInterval + 0.01);
+
+    expect(lethalEngine.state.combat.stage).toBe(11);
+    expect(lethalEngine.state.combat.isBoss).toBe(false);
+
+    const expired = createNewState(108);
+    expired.meta.unlocks = ["auto_attack"];
+    expired.combat.stage = 10;
+    expired.combat.isBoss = true;
+    expired.combat.enemyHp = [1, 0];
+    expired.combat.enemyMaxHp = [1, 0];
+    expired.combat.bossAffixes = [];
+    expired.combat.bossTimer = 0.01;
+    const expiredEngine = new GameEngine(expired);
+
+    expiredEngine.tick(1);
+
+    expect(expiredEngine.state.combat.stage).toBe(9);
+    expect(expiredEngine.state.combat.isBoss).toBe(false);
+  });
   it("技能释放与冷却", () => {
     const st = createNewState(3);
     st.skills.actives = [{ id: "overclock", level: 1, cdRemaining: 0, activeUntil: 0, active: false }];
@@ -133,7 +274,7 @@ describe("GameEngine", () => {
     const st = createNewState(11);
     st.statistics.runDamage = [1, 30]; // 1e30
     st.meta.unlocks = ["prestige"];
-    st.combat.stage = 400;
+    st.combat.stage = 500;
     st.player.gold = [5, 5]; // 5e5
     const eng = new GameEngine(st);
     expect(eng.canPrestige()).toBe(true);
@@ -143,6 +284,7 @@ describe("GameEngine", () => {
     expect(eng.state.combat.stage).toBe(1);
     expect(eng.state.prestige.energy).toBeGreaterThan(0);
     expect(eng.state.prestige.totalEnergyEarned).toBe(res!.energyGained);
+    expect(eng.state.prestige.nextRequiredStage).toBe(600);
   });
 
   it("离线模拟：O(1) 估算，不产生 NaN", () => {

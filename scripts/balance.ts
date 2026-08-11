@@ -37,7 +37,7 @@ function main(): void {
         `${pad(r.firstPrestigeAt >= 0 ? `${(r.firstPrestigeAt / 60).toFixed(0)}m` : "-", 8)} (${el}s)`
       );
       if (r.maxStage <= 1) { console.error(`  策略 ${s} ${h}h 未推进`); failed = true; }
-      if (r.prestiges <= 0 || r.firstPrestigeAt <= 0 || r.firstPrestigeAt > 15 * 60) {
+      if (r.prestiges <= 0 || r.firstPrestigeAt <= 0 || r.firstPrestigeAt > 30 * 60) {
         console.error(`  strategy ${s}/${h}h failed the first-prestige timing check`);
         failed = true;
       }

@@ -207,7 +207,7 @@
 }
 
 @keyframes reducedFade {
-  0% { opacity: 0; transform: translate(-50%, 0) scale(0.96); }
-  20%, 75% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, 0) scale(1); }
+  0% { opacity: 0; }
+  20%, 75% { opacity: 1; }
+  100% { opacity: 0; }
 }

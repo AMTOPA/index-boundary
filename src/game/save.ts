@@ -1,7 +1,7 @@
 // 存档系统：localStorage + 版本迁移 + checksum + 三槽备份 + 导入导出
 // 存储可注入（Node 测试用 mock），浏览器端自动使用 localStorage
 import { CONFIG } from "./config";
-import type { GameState } from "./types";
+import type { AutoPrestigeMetric, GameState, ThresholdComparator, ToolId } from "./types";
 import { createNewState } from "./engine";
 import { leapStartStage } from "./systems/leap";
 
@@ -71,12 +71,29 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     return s;
   },
   // v4 → v5：第 5 维度「超维回响」状态（缺省由 normalizeState 兜底）
+  // v3 -> v4: no structural change; keep the migration chain continuous.
+  3: (s) => s,
   4: (s) => {
     if (!s.echo) {
       s.echo = { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} };
     }
     return s;
   },
+  // v5 -> v6: tool levels, auto-prestige rule, dynamic prestige gate and discoveries.
+  5: (s) => {
+    const items = (s.items ?? {}) as Record<string, any>;
+    const legacyTools = (items.tools ?? {}) as Partial<Record<ToolId, boolean>>;
+    const levels = { ...((items.toolLevels ?? {}) as Partial<Record<ToolId, number>>) };
+    for (const [id, owned] of Object.entries(legacyTools) as [ToolId, boolean][]) {
+      if (!owned || (levels[id] ?? 0) > 0) continue;
+      levels[id] = id === "auto_upgrade" ? 2 : 1;
+    }
+    items.toolLevels = levels;
+    items.autoPrestigeRule ??= { enabled: false, metric: "stage", comparator: "gte", value: 1000 };
+    s.items = items;
+    return s;
+  },
+
 };
 
 export function migrateState(raw: Record<string, unknown>, fromVersion: number): Record<string, unknown> {
@@ -117,6 +134,12 @@ export function normalizeState(raw: unknown): GameState {
   }
   state.prestige = { ...base.prestige, ...(r.prestige ?? {}) };
   state.prestige.purchases = { ...(r.prestige?.purchases ?? {}) };
+  if (!Number.isFinite(r.prestige?.nextRequiredStage)) {
+    const theoretical = Math.min(CONFIG.PRESTIGE.MAX_STAGE_REQUIREMENT, CONFIG.PRESTIGE.BASE_STAGE + Math.max(0, state.statistics?.totalPrestiges ?? r.statistics?.totalPrestiges ?? 0) * CONFIG.PRESTIGE.STAGE_PER_PRESTIGE);
+    const reachable = Math.max(CONFIG.PRESTIGE.BASE_STAGE, Math.floor(Math.max(0, r.statistics?.allTimeMaxStage ?? 0) / 100) * 100);
+    state.prestige.nextRequiredStage = Math.min(theoretical, reachable);
+  }
+  state.prestige.nextRequiredStage = Math.min(CONFIG.PRESTIGE.MAX_STAGE_REQUIREMENT, Math.max(CONFIG.PRESTIGE.BASE_STAGE, Math.floor(state.prestige.nextRequiredStage)));
   state.leap = { ...base.leap, ...(r.leap ?? {}) };
   state.leap.purchases = { ...(r.leap?.purchases ?? {}) };
   state.laws = { ...base.laws, ...(r.laws ?? {}) };
@@ -128,6 +151,28 @@ export function normalizeState(raw: unknown): GameState {
   state.items = { ...base.items, ...(r.items ?? {}) };
   state.items.consumables = { ...(r.items?.consumables ?? {}) };
   state.items.tools = { ...(r.items?.tools ?? {}) };
+  state.items.toolLevels = { ...(r.items?.toolLevels ?? {}) };
+  for (const id of Object.keys(CONFIG.TOOLS) as ToolId[]) {
+    const rawLevel = Number(state.items.toolLevels[id] ?? 0);
+    let level = Number.isFinite(rawLevel) ? Math.max(0, Math.floor(rawLevel)) : 0;
+    if (level === 0 && state.items.tools[id]) level = id === "auto_upgrade" ? 2 : 1;
+    level = Math.min(level, CONFIG.TOOLS[id].length);
+    if (level > 0) {
+      state.items.toolLevels[id] = level;
+      state.items.tools[id] = true;
+    } else {
+      delete state.items.toolLevels[id];
+    }
+  }
+  const metrics: AutoPrestigeMetric[] = ["stage", "energy", "multRatio"];
+  const comparators: ThresholdComparator[] = ["gte", "lte", "eq"];
+  const rawRule = r.items?.autoPrestigeRule ?? {};
+  state.items.autoPrestigeRule = {
+    enabled: typeof rawRule.enabled === "boolean" ? rawRule.enabled : base.items.autoPrestigeRule.enabled,
+    metric: metrics.includes(rawRule.metric) ? rawRule.metric : base.items.autoPrestigeRule.metric,
+    comparator: comparators.includes(rawRule.comparator) ? rawRule.comparator : base.items.autoPrestigeRule.comparator,
+    value: Number.isFinite(rawRule.value) ? Math.max(0, rawRule.value) : base.items.autoPrestigeRule.value,
+  };
   state.statistics = { ...base.statistics, ...(r.statistics ?? {}) };
   state.daily = { ...base.daily, ...(r.daily ?? {}) };
   state.daily.quests = Array.isArray(r.daily?.quests) ? r.daily.quests : [];
@@ -138,6 +183,18 @@ export function normalizeState(raw: unknown): GameState {
   state.season.lastModifiers = Array.isArray(state.season.lastModifiers) ? state.season.lastModifiers : [];
   state.meta.activeModifiers = Array.isArray(state.meta.activeModifiers) ? state.meta.activeModifiers : [];
   state.meta.unlocks = Array.isArray(state.meta.unlocks) ? state.meta.unlocks : [];
+  const inferredDiscoveries = [
+    ...state.meta.unlocks,
+    ...(state.statistics.totalPrestiges > 0 ? ["prestige"] : []),
+    ...(state.leap.totalLeaps > 0 ? ["leap"] : []),
+    ...(state.laws.totalRewrites > 0 ? ["lawRewrite"] : []),
+    ...(state.nexus.unlocked || state.nexus.entered ? ["nexus"] : []),
+    ...(state.echo.unlocked || state.echo.entered ? ["echo"] : []),
+  ];
+  state.meta.discoveries = Array.from(new Set([
+    ...(Array.isArray(r.meta?.discoveries) ? r.meta.discoveries : []),
+    ...inferredDiscoveries,
+  ]));
   state.meta.achievements = Array.isArray(state.meta.achievements) ? state.meta.achievements : [];
   state.meta.milestonesSeen = Array.isArray(state.meta.milestonesSeen) ? state.meta.milestonesSeen : [];
   state.meta.lastScoreSubmit = {
@@ -156,6 +213,7 @@ export function normalizeState(raw: unknown): GameState {
     const level = expectedLeapStartStage - 1;
     state.player.upgrades = { attack: level, aspd: level, critChance: level, critDamage: level, gold: level };
   }
+  state.meta.version = CONFIG.SAVE_VERSION;
   return state;
 }
 

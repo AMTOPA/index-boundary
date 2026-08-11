@@ -16,7 +16,7 @@ const UPGRADE_LABEL: Record<UpgradeId, string> = {
 
 export function StatsPanel() {
   const stats = useGameSelector((s) => s.statistics);
-  const recorder = useGameSelector((s) => s.items.tools.combat_recorder === true);
+  const recorder = useGameSelector((s) => (s.items.toolLevels.combat_recorder ?? 0) > 0 || s.items.tools.combat_recorder === true);
   const stage = useGameSelector((s) => s.combat.stage);
   const upgrades = useGameSelector((s) => s.player.upgrades);
   const prestige = useGameSelector((s) => s.prestige);

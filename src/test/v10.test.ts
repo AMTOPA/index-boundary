@@ -9,7 +9,8 @@ function walledPrestigeEngine(seed = 1): GameEngine {
   const st = createNewState(seed);
   st.meta.unlocks = ["prestige"];
   st.statistics.runDamage = [1, 30]; // 1e30 → 能量 > 0
-  st.prestige.totalEnergyEarned = 1; // 已至少重构 1 次（自动重构购买门槛）
+  st.statistics.totalPrestiges = 1; // 已至少重构 1 次（自动重构购买门槛）
+  st.combat.stage = 500;
   st.combat.enemyHp = [1, 50]; // 巨大 HP → 卡墙
   st.combat.enemyMaxHp = [1, 50];
   st.player.gold = [1, 25]; // 1e25，够买 1e24 自动重构
@@ -19,9 +20,9 @@ function walledPrestigeEngine(seed = 1): GameEngine {
 describe("V10 内容：自动重构工具 + 装备评分", () => {
   it("auto_prestige 未重构前不可购买（重构次数门槛）", () => {
     const eng = walledPrestigeEngine(9);
-    eng.state.prestige.totalEnergyEarned = 0;
+    eng.state.statistics.totalPrestiges = 0;
     expect(eng.canBuyTool("auto_prestige")).toBe(false);
-    eng.state.prestige.totalEnergyEarned = 1;
+    eng.state.statistics.totalPrestiges = 1;
     expect(eng.canBuyTool("auto_prestige")).toBe(true);
   });
 

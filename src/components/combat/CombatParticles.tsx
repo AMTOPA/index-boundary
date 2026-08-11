@@ -230,7 +230,8 @@ export function CombatParticles() {
           break;
         }
         case "kill":
-          burst(event.boss ? 8 : 10, "#3ddc84", 135);
+          // Boss finish particles are emitted by bossKill only to avoid duplicate bursts.
+          if (!event.boss) burst(10, "#3ddc84", 135);
           break;
         case "bossKill":
           burst(26, "#ffd93d", 235, "shard", 7);

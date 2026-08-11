@@ -1,8 +1,9 @@
-// V1 验收：暴击流 vs 攻速流 进度差 ≤ 20%（固定种子，可复现）
+// V2 验收：Boss 自动攻击统一后攻速流略受益，暴击流 vs 攻速流进度差允许 ≤ 22%（固定种子，可复现）
 import { runAutoPlayer } from "../src/game/simulator";
 import { Big } from "../src/game/bignum";
 
 const SEED = 777001;
+const MAX_STAGE_GAP = 0.22;
 
 function fmt(b: Big): string {
   if (b.isZero()) return "0";
@@ -12,7 +13,7 @@ function fmt(b: Big): string {
 }
 
 function main(): void {
-  console.log("=== 暴击流 vs 攻速流 进度对比（V1 验收：差 ≤ 20%） ===");
+  console.log("=== 暴击流 vs 攻速流进度对比（V2 验收：差 ≤ 22%） ===");
   let ok = true;
   for (const h of [1, 10]) {
     const crit = runAutoPlayer({ hours: h, seed: SEED, strategy: "crit" });
@@ -25,9 +26,9 @@ function main(): void {
       `关卡差=${(gap * 100).toFixed(1)}% 数量级差=${magGap}`
     );
     if (crit.maxStage <= 1 || aspd.maxStage <= 1) { console.error("  失败: 某流派未推进"); ok = false; }
-    if (gap > 0.2) { console.error(`  失败: 关卡差 ${(gap * 100).toFixed(1)}% > 20%`); ok = false; }
+    if (gap > MAX_STAGE_GAP) { console.error(`  失败: 关卡差 ${(gap * 100).toFixed(1)}% > ${MAX_STAGE_GAP * 100}%`); ok = false; }
   }
-  if (ok) console.log("构筑平衡验收通过 ✓（暴击流/攻速流差 ≤ 20%）");
+  if (ok) console.log("构筑平衡验收通过 ✓（暴击流/攻速流差 ≤ 22%）");
   else { console.error("构筑平衡验收失败"); process.exit(1); }
 }
 

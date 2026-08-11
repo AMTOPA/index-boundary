@@ -55,7 +55,9 @@ describe("V15 内容：挑战永久增益 + 挑战禁用重构倍率 + 自动分
 
   it("购买自动分解器且已设档位时也立即清理一次背包", () => {
     const eng = baseEngine(6);
-    eng.state.player.gold = [1, 9]; // 1e9 ≥ 1e8（auto_breakdown 新价）
+    eng.state.combat.stage = 150;
+    eng.state.talents.allocations.auto_break = 1;
+    eng.state.player.gold = [1, 19]; // 1e19 >= 1e18 (auto_breakdown)
     eng.state.equipment.autoBreakdown = "fine"; // 已设档位
     eng.state.equipment.inventory.push({ uid: "b1", slot: "weapon", rarity: "common", level: 0, main: { stat: "atkPct", mult: 1.5 }, affixes: [] });
     const fragBefore = toBig(eng.state.equipment.fragments).toNumber();
@@ -68,7 +70,7 @@ describe("V15 内容：挑战永久增益 + 挑战禁用重构倍率 + 自动分
     const eng = baseEngine(5);
     eng.state.player.gold = [1, 25]; // 1e25 ≥ 1e24
     expect(eng.canBuyTool("auto_prestige")).toBe(false);
-    eng.state.prestige.totalEnergyEarned = 1;
+    eng.state.statistics.totalPrestiges = 1;
     expect(eng.canBuyTool("auto_prestige")).toBe(true);
   });
 

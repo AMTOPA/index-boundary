@@ -1,0 +1,696 @@
+/* Cinematic command-deck theme: high-contrast sci-fi surfaces, centered seven-way dock and GPU-friendly motion. */
+:root {
+  --bg: #030711;
+  --bg2: #081120;
+  --panel: rgba(9, 20, 36, 0.96);
+  --panel-border: #203957;
+  --text: #e9f5ff;
+  --text-dim: #91a9c2;
+  --accent: #45ddff;
+  --accent-strong: #16bde8;
+  --accent-soft: rgba(69, 221, 255, 0.14);
+  --violet: #9b7bff;
+  --magenta: #ff4f9a;
+  --gold: #ffd166;
+  --crit: #ffad42;
+  --super: #b996ff;
+  --danger: #ff5470;
+  --green: #56e6aa;
+  --panel-highlight: rgba(255, 255, 255, 0.075);
+  --panel-shadow: rgba(0, 0, 0, 0.52);
+  --radius: 14px;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html { background: var(--bg); }
+
+body {
+  background:
+    radial-gradient(900px 600px at 8% -8%, rgba(22, 189, 232, 0.15), transparent 64%),
+    radial-gradient(780px 620px at 95% 4%, rgba(155, 123, 255, 0.13), transparent 66%),
+    radial-gradient(720px 460px at 48% 108%, rgba(255, 79, 154, 0.055), transparent 68%),
+    linear-gradient(180deg, #060c18 0%, #030711 48%, #02050d 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(101, 170, 214, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(101, 170, 214, 0.022) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 82%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 16%, transparent 0 22%, rgba(0, 0, 0, 0.18) 72%, rgba(0, 0, 0, 0.52) 100%);
+}
+
+.app {
+  width: min(100%, 1520px);
+  padding: 10px 16px calc(122px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  position: relative;
+  z-index: 20;
+  gap: 14px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(79, 137, 181, 0.2);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, rgba(13, 29, 49, 0.9), rgba(5, 13, 26, 0.84)),
+    radial-gradient(circle at 0 0, rgba(69, 221, 255, 0.12), transparent 42%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255, 255, 255, 0.045);
+}
+
+.game-title .cn {
+  color: #f4fbff;
+  text-shadow: 0 0 22px rgba(69, 221, 255, 0.28);
+}
+
+.game-title .en { color: #6fcde0; }
+
+.resources {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.resource {
+  min-width: 92px;
+  padding: 7px 10px;
+  border: 1px solid rgba(102, 155, 194, 0.14);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(18, 39, 64, 0.74), rgba(7, 17, 31, 0.74));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.resource-primary {
+  border-color: rgba(69, 221, 255, 0.24);
+  background:
+    linear-gradient(145deg, rgba(20, 56, 82, 0.78), rgba(8, 23, 40, 0.82)),
+    radial-gradient(circle at 20% 0, rgba(69, 221, 255, 0.12), transparent 58%);
+}
+
+.resource .label { color: #86a7c2; font-size: 10px; letter-spacing: 0.03em; }
+.resource .value { color: #edfaff; font-size: 14px; }
+
+.page-content > main,
+.page-content > .settings-view {
+  animation: commandPageIn 400ms var(--ease-emphasized) both;
+}
+
+.panel {
+  border-color: rgba(79, 130, 170, 0.31);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(145deg, rgba(14, 31, 52, 0.97), rgba(6, 14, 27, 0.965)),
+    radial-gradient(circle at 100% 0, rgba(69, 221, 255, 0.065), transparent 42%);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 255, 255, 0.052),
+    inset 0 0 34px rgba(44, 105, 154, 0.025);
+}
+
+.panel::before {
+  background:
+    linear-gradient(120deg, rgba(69, 221, 255, 0.07), transparent 30%, rgba(155, 123, 255, 0.045)),
+    linear-gradient(rgba(126, 186, 221, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 186, 221, 0.018) 1px, transparent 1px);
+  background-size: auto, 30px 30px, 30px 30px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+.panel h3 { color: #9db6cf; }
+
+.btn,
+.mini-btn,
+.buy-btn {
+  border-color: rgba(103, 159, 199, 0.28);
+  background: linear-gradient(180deg, rgba(28, 53, 82, 0.92), rgba(13, 28, 48, 0.94));
+  color: #e9f6ff;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.045);
+  transition: transform 180ms var(--ease-standard), border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+.btn:hover:not(:disabled),
+.mini-btn:hover:not(:disabled),
+.buy-btn:hover:not(:disabled) {
+  border-color: rgba(69, 221, 255, 0.7);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled),
+.mini-btn:active:not(:disabled),
+.buy-btn:active:not(:disabled) { transform: translateY(1px) scale(0.99); }
+
+.btn.primary,
+.buy-btn.afford {
+  border-color: rgba(69, 221, 255, 0.66);
+  background: linear-gradient(145deg, #137fa8, #14587f 58%, #323e88);
+  color: #f6fdff;
+  box-shadow: inset 0 1px rgba(255,255,255,0.14), 0 8px 20px rgba(15, 130, 178, 0.18);
+}
+
+/* ---------- Seven-way command dock ---------- */
+.command-dock {
+  --nav-rgb: 100 232 255;
+  position: fixed;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  z-index: 80;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(82px, 1fr)) 104px repeat(3, minmax(82px, 1fr));
+  align-items: end;
+  width: min(980px, calc(100% - 24px));
+  min-height: calc(88px + env(safe-area-inset-bottom));
+  gap: 5px;
+  padding: 22px 14px calc(9px + env(safe-area-inset-bottom));
+  overflow: visible;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.command-dock::before {
+  content: "";
+  position: absolute;
+  inset: 17px 0 0;
+  z-index: -2;
+  border: 1px solid rgba(83, 126, 160, 0.58);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  background:
+    radial-gradient(ellipse at 15% 12%, rgba(246, 200, 95, 0.11), transparent 30%),
+    radial-gradient(ellipse at 50% 0%, rgba(100, 232, 255, 0.13), transparent 28%),
+    radial-gradient(ellipse at 85% 12%, rgba(255, 120, 178, 0.1), transparent 31%),
+    linear-gradient(180deg, rgba(13, 29, 50, 0.99), rgba(4, 10, 21, 0.995));
+  box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.48), inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.command-dock::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  right: 24px;
+  left: 24px;
+  z-index: -1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(246, 200, 95, 0.52) 15%,
+    transparent 31%,
+    rgba(100, 232, 255, 0.72) 50%,
+    transparent 68%,
+    rgba(255, 120, 178, 0.5) 84%,
+    transparent 100%
+  );
+  opacity: 0.72;
+}
+
+.command-dock button[data-nav-id="items"] { --nav-rgb: 246 200 95; }
+.command-dock button[data-nav-id="talents"] { --nav-rgb: 182 156 255; }
+.command-dock button[data-nav-id="equipment"] { --nav-rgb: 102 227 196; }
+.command-dock button[data-nav-id="combat"] { --nav-rgb: 100 232 255; }
+.command-dock button[data-nav-id="prestige"] { --nav-rgb: 255 120 178; }
+.command-dock button[data-nav-id="challenge"] { --nav-rgb: 255 139 114; }
+.command-dock button[data-nav-id="settings"] { --nav-rgb: 169 190 211; }
+
+.command-dock button {
+  display: flex;
+  position: relative;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 5px 7px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  overflow: visible;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  color: rgb(var(--nav-rgb) / 0.68);
+  box-shadow: none;
+  transition: transform 220ms var(--ease-standard), color 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+
+.command-dock button::after {
+  content: "";
+  position: absolute;
+  right: 22%;
+  bottom: 2px;
+  left: 22%;
+  height: 2px;
+  border-radius: 999px;
+  background: rgb(var(--nav-rgb) / 0.92);
+  opacity: 0;
+  transform: scaleX(0.3);
+  transition: opacity 200ms ease, transform 300ms var(--ease-emphasized);
+}
+
+.command-dock button:hover:not(:disabled) {
+  color: rgb(var(--nav-rgb) / 0.96);
+  border-color: rgb(var(--nav-rgb) / 0.26);
+  background: rgb(var(--nav-rgb) / 0.075);
+  transform: translateY(-3px);
+}
+
+.command-dock button.active:not(.nav-combat-core) {
+  color: #f4fbff;
+  border-color: rgb(var(--nav-rgb) / 0.48);
+  background:
+    radial-gradient(circle at 50% 0, rgb(var(--nav-rgb) / 0.15), transparent 72%),
+    rgb(var(--nav-rgb) / 0.075);
+  box-shadow: inset 0 1px rgb(var(--nav-rgb) / 0.16), 0 0 18px rgb(var(--nav-rgb) / 0.09);
+}
+
+.command-dock button.active:not(.nav-combat-core)::after { opacity: 0.92; transform: scaleX(1); }
+
+.command-dock .nav-icon {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  color: rgb(var(--nav-rgb) / 0.9);
+}
+
+.command-dock .nav-icon svg { width: 23px; height: 23px; overflow: visible; }
+.command-dock .nav-label { font-size: 11px; font-weight: 750; letter-spacing: 0.04em; }
+
+.command-dock .nav-combat-core {
+  align-self: end;
+  width: 84px;
+  height: 84px;
+  min-height: 84px;
+  margin: 0 auto;
+  padding: 0;
+  transform: translateY(-15px);
+  border: 1px solid rgba(115, 235, 255, 0.9);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), transparent 17%),
+    radial-gradient(circle, #1d8fb8 0 36%, #0c4d72 58%, #07182e 72%);
+  color: #eefdff;
+  box-shadow:
+    0 0 0 7px rgba(9, 22, 40, 0.96),
+    0 0 0 8px rgba(69, 221, 255, 0.34),
+    0 0 30px rgba(69, 221, 255, 0.34),
+    inset 0 0 20px rgba(118, 235, 255, 0.28);
+}
+
+.command-dock .nav-combat-core::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  z-index: -1;
+  border: 1px solid rgba(69, 221, 255, 0.42);
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.command-dock .nav-combat-core::after {
+  right: 50%;
+  bottom: -7px;
+  left: 50%;
+  width: 34px;
+  height: 3px;
+  background: #8cf2ff;
+  opacity: 0.75;
+  transform: translateX(-50%);
+  box-shadow: 0 0 12px rgba(69, 221, 255, 0.8);
+}
+
+.command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-19px) scale(1.035); }
+.command-dock .nav-combat-core.active { background: radial-gradient(circle at 36% 28%, #bff8ff 0 5%, #23b9e2 24%, #12628b 55%, #091b34 73%); }
+.command-dock .nav-combat-core.active::before { opacity: 0.62; animation: none; }
+.command-dock .nav-combat-core .nav-icon { width: 31px; height: 31px; font-size: 23px; }
+.command-dock .nav-combat-core .nav-icon svg { width: 29px; height: 29px; }
+.command-dock .nav-combat-core .nav-label { color: #f5fdff; font-size: 10px; text-shadow: 0 0 10px rgba(69,221,255,0.7); }
+
+.command-dock .nav-locked {
+  color: #71869a !important;
+  border-color: rgba(137, 160, 181, 0.2) !important;
+  border-style: dashed;
+  background: rgba(8, 18, 31, 0.72) !important;
+  opacity: 0.86 !important;
+  cursor: not-allowed;
+}
+
+.command-dock .nav-locked .nav-icon {
+  color: #879aad;
+}
+
+.command-dock .nav-locked .nav-question {
+  background: rgba(169, 190, 211, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(3, 8, 17, 0.42);
+}
+
+
+/* ---------- Semantic page accents ---------- */
+.items-management-view { --section-rgb: 246 200 95; }
+.talent-management-view { --section-rgb: 182 156 255; }
+.equipment-management-view { --section-rgb: 102 227 196; }
+.battle-deck { --section-rgb: 100 232 255; }
+.prestige-management-view { --section-rgb: 255 120 178; }
+.challenge-management-view { --section-rgb: 255 139 114; }
+.settings-view { --section-rgb: 169 190 211; }
+
+:is(
+  .items-management-view,
+  .talent-management-view,
+  .equipment-management-view,
+  .battle-deck,
+  .prestige-management-view,
+  .challenge-management-view,
+  .settings-view
+) {
+  position: relative;
+  isolation: isolate;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 50% -8%, rgb(var(--section-rgb) / 0.095), transparent 54%);
+}
+
+:is(
+  .items-management-view,
+  .talent-management-view,
+  .equipment-management-view,
+  .battle-deck,
+  .prestige-management-view,
+  .challenge-management-view,
+  .settings-view
+)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid rgb(var(--section-rgb) / 0.13);
+  border-radius: inherit;
+}
+
+:is(
+  .items-management-view,
+  .talent-management-view,
+  .equipment-management-view,
+  .battle-deck,
+  .prestige-management-view,
+  .challenge-management-view,
+  .settings-view
+) .panel {
+  border-color: rgb(var(--section-rgb) / 0.24);
+}
+
+/* ---------- Battle theatre ---------- */
+.battle-deck { gap: 14px; }
+
+.command-arena {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.command-arena::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  right: 0;
+  left: 0;
+  z-index: 7;
+  height: 18%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(98, 228, 255, 0.06), rgba(166, 242, 255, 0.16), transparent);
+  opacity: 0.55;
+  transform: translateY(-120%);
+  animation: arenaScan 7s linear infinite;
+}
+
+.command-arena > .combat {
+  border: 1px solid rgba(69, 221, 255, 0.37);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--world-color, var(--accent)) 19%, transparent), transparent 33%),
+    radial-gradient(circle at 50% 46%, rgba(8, 31, 52, 0.76), transparent 60%),
+    linear-gradient(155deg, rgba(8, 24, 42, 0.98), rgba(2, 8, 18, 0.985));
+  box-shadow: 0 22px 54px rgba(0,0,0,0.46), inset 0 0 70px rgba(69,221,255,0.035);
+}
+
+.combat.boss-fight {
+  border-color: rgba(255, 84, 112, 0.62);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 67, 104, 0.17), transparent 31%),
+    radial-gradient(circle at 50% 58%, rgba(117, 29, 68, 0.13), transparent 56%),
+    linear-gradient(155deg, rgba(28, 10, 25, 0.985), rgba(5, 7, 17, 0.99));
+  box-shadow: 0 22px 58px rgba(0,0,0,0.52), inset 0 0 84px rgba(255, 53, 91, 0.1);
+}
+
+.enemy {
+  transition: transform 180ms var(--ease-standard), filter 180ms ease;
+}
+.enemy:hover { transform: scale(1.025); filter: brightness(1.1); }
+.enemy:active { transform: scale(0.96); }
+
+.enemy-stage::before {
+  content: "";
+  position: absolute;
+  inset: 15%;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--world-color, var(--accent)) 42%, transparent);
+  border-radius: 50%;
+  opacity: 0.36;
+  transform: rotate(0deg) scale(1);
+  animation: enemyOrbit 12s linear infinite;
+}
+
+.combat.boss-fight .enemy-stage::before {
+  border-style: dashed;
+  border-color: rgba(255, 84, 112, 0.5);
+  animation-duration: 7s;
+}
+
+.hp-bar {
+  height: 11px;
+  padding: 2px;
+  border: 1px solid rgba(114, 167, 207, 0.3);
+  border-radius: 999px;
+  background: rgba(0, 4, 12, 0.86);
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.7);
+}
+
+.hp-fill {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #21badd, #73efff 70%, #e7fdff);
+  box-shadow: 0 0 13px rgba(69, 221, 255, 0.58);
+  transition: width 120ms linear;
+}
+
+.hp-fill.boss {
+  background: linear-gradient(90deg, #b31646, #ff5470 62%, #ffc1cd);
+  box-shadow: 0 0 16px rgba(255, 84, 112, 0.62);
+}
+
+.boss-timer {
+  border: 1px solid rgba(255, 84, 112, 0.28);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(54, 8, 27, 0.62);
+}
+
+.click-hint {
+  padding: 5px 12px;
+  border: 1px solid rgba(69, 221, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(3, 12, 24, 0.62);
+  color: #91bdd1;
+}
+
+.command-console,
+.upgrade-panel-embedded {
+  border-color: rgba(69, 221, 255, 0.25);
+  background:
+    linear-gradient(155deg, rgba(13, 31, 52, 0.985), rgba(5, 13, 26, 0.98)),
+    radial-gradient(circle at 90% 0, rgba(69, 221, 255, 0.1), transparent 42%);
+}
+
+.command-console-heading h2,
+.upgrade-panel-embedded .panel-title h3 { color: #effbff; }
+.command-kicker,
+.systems-section-label { color: #65e5ff; }
+
+.upgrade-panel-embedded .upgrade-row,
+.shop-row,
+.prestige-info,
+.stat-item {
+  border-color: rgba(97, 148, 188, 0.18);
+  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+}
+
+/* ---------- Settings and secondary destinations ---------- */
+.systems-header {
+  border-color: rgba(69, 221, 255, 0.27);
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, rgba(13, 31, 52, 0.97), rgba(5, 13, 26, 0.97)),
+    radial-gradient(circle at 0 0, rgba(69, 221, 255, 0.09), transparent 42%);
+}
+
+.systems-heading-copy strong { color: #f0fbff; font-size: 18px; }
+.systems-tabs .mini-btn.active {
+  border-color: rgba(69, 221, 255, 0.58);
+  background: linear-gradient(145deg, rgba(69, 221, 255, 0.16), rgba(155, 123, 255, 0.08));
+  color: #c9f8ff;
+}
+
+.settings-view .systems-content {
+  display: grid;
+  gap: 12px;
+}
+
+/* ---------- Major event impact ---------- */
+.event-card {
+  border-color: rgba(var(--event-color), 0.62);
+  box-shadow:
+    0 30px 100px rgba(0,0,0,0.7),
+    0 0 54px rgba(var(--event-color),0.17),
+    inset 0 1px rgba(255,255,255,0.1),
+    inset 0 0 58px rgba(var(--event-color),0.06);
+}
+
+.event-title,
+.prestige-title,
+.nexus-title,
+.echo-title {
+  text-shadow: 0 0 22px rgba(var(--event-color), 0.48);
+}
+
+@keyframes commandPageIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.993); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes arenaScan {
+  0% { transform: translateY(-120%); }
+  100% { transform: translateY(720%); }
+}
+
+@keyframes enemyOrbit {
+  to { transform: rotate(360deg) scale(1); }
+}
+
+@media (max-width: 1024px) {
+  .app { padding-inline: 12px; }
+  .topbar { grid-template-columns: auto minmax(0, 1fr); }
+  .resources { justify-content: flex-start; }
+  .command-dock {
+    grid-template-columns: repeat(3, minmax(68px, 1fr)) 88px repeat(3, minmax(68px, 1fr));
+    width: min(900px, calc(100% - 16px));
+    gap: 3px;
+    padding-inline: 9px;
+  }
+  .command-dock .nav-combat-core { width: 76px; height: 76px; min-height: 76px; }
+}
+
+@media (max-width: 760px) {
+  .app { padding: 7px 8px calc(103px + env(safe-area-inset-bottom)); }
+  .topbar { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 9px; }
+  .game-title { display: none; }
+  .resources { grid-column: 1; width: 100%; flex-wrap: nowrap; overflow-x: auto; }
+  .resource { min-width: 84px; padding: 6px 8px; }
+  .command-dock {
+    grid-template-columns: repeat(3, minmax(42px, 1fr)) 68px repeat(3, minmax(42px, 1fr));
+    width: 100%;
+    min-height: calc(78px + env(safe-area-inset-bottom));
+    gap: 1px;
+    padding: 18px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  }
+  .command-dock::before { top: 14px; border-radius: 18px 18px 0 0; }
+  .command-dock button { min-height: 48px; padding: 5px 1px; border-radius: 9px; }
+  .command-dock .nav-icon { width: 21px; height: 21px; font-size: 15px; }
+  .command-dock .nav-icon svg { width: 20px; height: 20px; }
+  .command-dock .nav-label { font-size: 10px; letter-spacing: 0; }
+  .command-dock .nav-combat-core { width: 62px; height: 62px; min-height: 62px; transform: translateY(-11px); }
+  .command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-13px) scale(1.025); }
+  .command-dock .nav-combat-core .nav-icon { width: 25px; height: 25px; }
+  .command-dock .nav-combat-core .nav-label { font-size: 10px; }
+  .battle-deck { gap: 9px; }
+  .panel { border-radius: 12px; }
+  .systems-header { padding: 10px; }
+  .systems-heading-copy { margin-bottom: 4px; }
+}
+
+@media (max-width: 430px) {
+  .command-dock { grid-template-columns: repeat(3, minmax(39px, 1fr)) 62px repeat(3, minmax(39px, 1fr)); }
+  .command-dock .nav-label { font-size: 10px; }
+  .command-dock .nav-combat-core { width: 58px; height: 58px; min-height: 58px; }
+  .command-dock .nav-combat-core .nav-label { display: block; font-size: 10px; }
+  .resource { min-width: 78px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-content > main,
+  .page-content > .settings-view,
+  .prestige-management-view > .panel,
+  .challenge-management-view > .panel,
+  .settings-view .systems-content > *,
+  .command-dock .nav-combat-core::before,
+  .command-arena::after,
+  .enemy-stage::before {
+    animation: none !important;
+  }
+
+  .command-dock button,
+  .enemy,
+  .btn,
+  .mini-btn,
+  .buy-btn { transition-duration: 0.01ms !important; }
+}
+
+/* Boss ring is a readable timer first; motion stays in a separate decorative layer. */
+.boss-ring {
+  animation: none !important;
+  filter: drop-shadow(0 0 10px rgba(255, 84, 112, 0.72));
+}
+.boss-ring::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px dashed rgba(255, 190, 202, 0.46);
+  border-radius: 50%;
+  opacity: 0.72;
+  animation: bossRingAccent 9s linear infinite;
+}
+.stage-info,
+.click-hint { position: relative; z-index: 10; }
+.dps-line { z-index: 10; }
+.combat-particles { z-index: 4; }
+.nav-question {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font: 800 12px/1 var(--font-mono);
+}
+@keyframes bossRingAccent { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .boss-ring::after { animation: none; }
+}

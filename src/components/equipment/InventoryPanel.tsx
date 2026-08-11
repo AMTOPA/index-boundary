@@ -43,7 +43,7 @@ export function InventoryContent({ engine, embedded = false }: { engine: GameEng
   const inventory = useGameSelector((s) => s.equipment.inventory);
   const slots = useGameSelector((s) => s.equipment.slots);
   const autoBreakdown = useGameSelector((s) => s.equipment.autoBreakdown);
-  const hasAutoBreakdownTool = useGameSelector((s) => s.items.tools.auto_breakdown === true);
+  const hasAutoBreakdownTool = useGameSelector((s) => (s.items.toolLevels.auto_breakdown ?? 0) > 0 || s.items.tools.auto_breakdown === true);
   const [invSort, setInvSort] = useState<InvSort>("upgrade");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [protectedIds, setProtectedIds] = useState<Set<string>>(() => new Set());

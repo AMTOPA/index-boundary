@@ -6,7 +6,8 @@ import type { GameEvent, SkillId } from "../game/types";
 describe("V4 内容：永久工具商店", () => {
   it("buyTool 扣除金币并置已拥有", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 9]; // 1e9 足够购买
+    st.combat.stage = 100;
+    st.player.gold = [1, 9]; // 1e9 >= 1e8 (auto_upgrade Lv1)
     const eng = new GameEngine(st);
     expect(eng.canBuyTool("auto_upgrade")).toBe(true);
     const goldBefore = toBig(eng.state.player.gold);
@@ -18,7 +19,8 @@ describe("V4 内容：永久工具商店", () => {
 
   it("重复购买失败且不重复扣款", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 9];
+    st.combat.stage = 50;
+    st.player.gold = [1, 11];
     const eng = new GameEngine(st);
     expect(eng.buyTool("auto_boss")).toBe(true);
     const gold = toBig(eng.state.player.gold).toNumber();
@@ -37,7 +39,9 @@ describe("V4 内容：永久工具商店", () => {
 
   it("buyTool 触发 unlock 事件", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 15]; // 1e15 ≥ 1e12（auto_skill 新价）
+    st.combat.stage = 150;
+    st.meta.discoveries = ["skills"];
+    st.player.gold = [1, 22]; // 1e22 >= 1e21 (auto_skill)
     const eng = new GameEngine(st);
     const keys: string[] = [];
     eng.onEvent((e: GameEvent) => {
@@ -148,9 +152,11 @@ describe("V4 内容：自动分解门槛", () => {
 
   it("购买自动分解器后可设置", () => {
     const st = createNewState(1);
-    st.player.gold = [1, 9];
+    st.combat.stage = 150;
+    st.talents.allocations.auto_break = 1;
+    st.player.gold = [1, 19];
     const eng = new GameEngine(st);
-    eng.buyTool("auto_breakdown");
+    expect(eng.buyTool("auto_breakdown")).toBe(true);
     expect(eng.setAutoBreakdown("rare")).toBe(true);
     expect(eng.state.equipment.autoBreakdown).toBe("rare");
   });
