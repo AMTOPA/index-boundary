@@ -9,7 +9,6 @@ import { CONFIG } from "@/game/config";
 import { EnemyCanvas } from "./EnemyCanvas";
 import { CombatParticles } from "./CombatParticles";
 import { DamageNumbers } from "./DamageNumbers";
-import { SkillBar } from "@/components/skills/SkillBar";
 
 export function CombatArea() {
   const { engine } = useGame();
@@ -130,7 +129,6 @@ export function CombatArea() {
       <div className="click-hint">
         {autoAttack ? "点击或空格攻击 · 自动攻击进行中" : "点击怪物 / 按空格攻击"}
       </div>
-      <SkillBar />
     </div>
   );
 }

@@ -1454,39 +1454,104 @@ export class GameEngine {
 
   static simulateOffline(state: GameState, durationSec: number): OfflineResult {
     const maxSec = Math.min(durationSec, CONFIG.OFFLINE.MAX_HOURS * 3600);
-    const buffs = emptyBuffs();
-    const derived = computeDerived(state, buffs, 0);
+    const derived = computeDerived(state, emptyBuffs(), 0);
     const eff = GameEngine.offlineEfficiency(state, derived);
     const dps = derived.dps;
+    const hpGrowth = GameEngine.effectiveHpGrowthOf(state);
+    const killTimeOf = (st: number, isBoss: boolean): number => {
+      const hp = isBoss ? bossHp(st, hpGrowth) : enemyHp(st, hpGrowth);
+      const kt = hp.div(dps).toNumber();
+      return Number.isFinite(kt) ? Math.max(0, kt) : Infinity;
+    };
+    const normalKillable = (st: number) => killTimeOf(st, false) <= CONFIG.OFFLINE.WALL_KILL_TIME_SEC;
+    const bossKillable = (st: number) => killTimeOf(st, true) <= CONFIG.OFFLINE.BOSS_KILL_TIME_SEC;
+    const killableAt = (st: number) => (isBossStage(st) ? bossKillable(st) : normalKillable(st));
+
+    // 找「可稳定击杀的普通关」作为离线农场（只刷金币，不推进阶段；Boss 关不可作为农场防 10 倍金币刷取）
+    const findFarm = (st: number): number => {
+      let s = st;
+      for (let back = 0; back < CONFIG.OFFLINE.FALLBACK_MAX_STAGES + 1 && s >= 1; back++) {
+        if (!isBossStage(s) && normalKillable(s)) return s;
+        if (s === 1) break;
+        s -= 1;
+      }
+      return 1;
+    };
+
+    const startStage = state.combat.stage;
+    let stage = startStage;
     let t = 0;
-    let kills = 0;
-    let stage = state.combat.stage;
+    let advanceKills = 0; // 推进类击杀（计入掉落）
+    let farmKills = 0; // 农场重复击杀（只计统计，不计掉落，防墙前刷装备）
+    let bossKills = 0;
     let gold = Big.ZERO;
+
+    // 农场结算：以某个普通关的每秒金币 × 可用时长（效率在最后统一乘；击杀节奏与在线一致：killTime + 攻击间隔）
+    const farm = (farmStage: number, availSec: number): void => {
+      const kt = killTimeOf(farmStage, false);
+      if (!Number.isFinite(kt) || kt <= 0) return;
+      const hp = enemyHp(farmStage, hpGrowth);
+      const crush = derived.damagePerHit.gte(hp.mul(Big.fromNumber(CONFIG.CRUSH_THRESHOLD)));
+      const per = kt + (crush ? 0 : 0.3);
+      const perSecGold = enemyGold(farmStage, hpGrowth).mul(derived.goldMult).div(Big.fromNumber(per));
+      gold = gold.add(perSecGold.mul(Big.fromNumber(availSec)));
+      farmKills += Math.floor((availSec / per) * eff);
+    };
+
     while (t < maxSec) {
-      if (isBossStage(stage)) break;
-      const hp = enemyHp(stage, GameEngine.effectiveHpGrowthOf(state));
-      const killTime = hp.div(dps).toNumber();
-      if (!Number.isFinite(killTime) || killTime > CONFIG.OFFLINE.WALL_KILL_TIME_SEC) break;
+      if (isBossStage(stage)) {
+        const bKillTime = killTimeOf(stage, true);
+        // 打不动 Boss 或达到 Boss 击杀上限 → 转入农场（Boss 前普通关）
+        if (!Number.isFinite(bKillTime) || bKillTime > CONFIG.OFFLINE.BOSS_KILL_TIME_SEC || bossKills >= CONFIG.OFFLINE.MAX_BOSS_KILLS) {
+          farm(findFarm(stage), maxSec - t);
+          t = maxSec;
+          break;
+        }
+        const per = bKillTime;
+        if (t + per > maxSec) {
+          const frac = (maxSec - t) / per;
+          gold = gold.add(enemyGold(stage, hpGrowth).mul(derived.goldMult).mul(Big.fromNumber(10)).mul(derived.bossGoldMult).mul(Big.fromNumber(Math.min(1, frac))));
+          t = maxSec;
+          break;
+        }
+        t += per;
+        gold = gold.add(enemyGold(stage, hpGrowth).mul(derived.goldMult).mul(Big.fromNumber(10)).mul(derived.bossGoldMult));
+        advanceKills++;
+        bossKills++;
+        stage++;
+        continue;
+      }
+      const killTime = killTimeOf(stage, false);
+      // 撞墙（普通怪打不动）→ 转入农场（墙前可稳定击杀的普通关）
+      if (!Number.isFinite(killTime) || killTime > CONFIG.OFFLINE.WALL_KILL_TIME_SEC) {
+        farm(findFarm(stage), maxSec - t);
+        t = maxSec;
+        break;
+      }
+      const hp = enemyHp(stage, hpGrowth);
       const crush = derived.damagePerHit.gte(hp.mul(Big.fromNumber(CONFIG.CRUSH_THRESHOLD)));
       const per = killTime + (crush ? 0 : 0.3);
       if (t + per > maxSec) {
         const frac = (maxSec - t) / per;
-        gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
+        gold = gold.add(enemyGold(stage, hpGrowth).mul(derived.goldMult).mul(Big.fromNumber(Math.min(1, frac))));
         t = maxSec;
         break;
       }
       t += per;
-      gold = gold.add(enemyGold(stage, GameEngine.effectiveHpGrowthOf(state)).mul(derived.goldMult));
-      kills++;
+      gold = gold.add(enemyGold(stage, hpGrowth).mul(derived.goldMult));
+      advanceKills++;
       stage++;
     }
+
     gold = gold.mul(Big.fromNumber(eff));
-    const expectedDrops = kills * dropChance(Math.max(1, stage), derived.dropMult.toNumber() - 1);
+    const kills = advanceKills + farmKills;
+    // 掉落只按「推进类击杀」计算（农场重复击杀不给掉落，防墙前刷装备）
+    const expectedDrops = advanceKills * dropChance(Math.max(1, stage), derived.dropMult.toNumber() - 1);
     const drops = Math.min(CONFIG.OFFLINE.MAX_DROPS, Math.floor(expectedDrops));
     return {
       goldGained: gold,
       kills,
-      stagesAdvanced: stage - state.combat.stage,
+      stagesAdvanced: Math.max(0, stage - startStage),
       drops,
       seconds: maxSec, // 真实离线时长（封顶）；t 为模拟战斗墙内时间
       capped: durationSec > maxSec,

@@ -13,7 +13,7 @@
     "test:balance": "tsx scripts/balance.ts",
     "test:save": "tsx scripts/save-test.ts",
     "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts",
-    "test:acceptance": "tsx scripts/builds.ts && tsx scripts/walls.ts && tsx scripts/reclear.ts && tsx scripts/leap.ts && tsx scripts/law.ts && tsx scripts/season-accept.ts",
+    "test:acceptance": "tsx scripts/builds.ts && tsx scripts/walls.ts && tsx scripts/reclear.ts && tsx scripts/leap.ts && tsx scripts/law.ts && tsx scripts/offline-accept.ts && tsx scripts/season-accept.ts",
     "test:api": "tsx scripts/api-smoke.ts"
   },
   "dependencies": {

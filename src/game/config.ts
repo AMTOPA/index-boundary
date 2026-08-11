@@ -393,10 +393,14 @@ export const CONFIG = {
   ] as { key: string; stage: number; label: string }[],
 
   // 离线
+  // 离线
   OFFLINE: {
     MAX_HOURS: 8,
     EFFICIENCY: 0.5,
-    WALL_KILL_TIME_SEC: 3, // 击杀时间 > 3s 视为撞墙
+    WALL_KILL_TIME_SEC: 3, // 普通怪击杀时间 > 3s 视为撞墙
+    BOSS_KILL_TIME_SEC: 30, // 离线能击杀 Boss 的击杀时间阈值（与在线 Boss 计时一致）
+    MAX_BOSS_KILLS: 20, // 离线 Boss 击杀上限（防极端溢出）
+    FALLBACK_MAX_STAGES: 25, // 撞墙时回退寻找「可稳定击杀关卡」的最大步数
     MAX_DROPS: 20,
     MAX_PAYOUT_SEC: 8 * 3600,
   },

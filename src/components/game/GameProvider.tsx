@@ -194,7 +194,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     );
     cleanupRef.current.push(worldUnsub);
 
-    const saveIv = window.setInterval(() => saveGame(eng.state), CONFIG.SAVE_INTERVAL_MS);
+    const saveIv = window.setInterval(() => {
+      eng.state.meta.lastSeenAt = Date.now();
+      saveGame(eng.state);
+    }, CONFIG.SAVE_INTERVAL_MS);
     cleanupRef.current.push(() => window.clearInterval(saveIv));
 
     const cloudIv = window.setInterval(() => void uploadSave(eng.state), 5000);
@@ -211,8 +214,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }, 60000);
     cleanupRef.current.push(() => window.clearInterval(lbIv));
 
-    const onHide = () => { saveGame(eng.state); void uploadSave(eng.state); };
-    const onUnload = () => { saveGame(eng.state); };
+    const onHide = () => { eng.state.meta.lastSeenAt = Date.now(); saveGame(eng.state); void uploadSave(eng.state); };
+    const onUnload = () => { eng.state.meta.lastSeenAt = Date.now(); saveGame(eng.state); };
     const onKey = (e: KeyboardEvent) => {
       if (e.code === "Space" && !isTyping(e.target)) {
         e.preventDefault();
