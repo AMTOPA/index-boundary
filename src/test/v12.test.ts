@@ -19,15 +19,37 @@ function leapReadyState(seed = 1): GameState {
 type GameState = ReturnType<typeof createNewState>;
 
 describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋树", () => {
-  it("首次跃迁获得 1+1=2 核心（最大关卡 ≥ 上次×2）", () => {
+  it("首次在 10000 关跃迁只获得基础 1 核心", () => {
     const st = leapReadyState(2);
     const eng = new GameEngine(st);
     expect(eng.canLeap()).toBe(true);
     const r = eng.leap();
     expect(r).not.toBeNull();
-    expect(r!.cores).toBe(2);
+    expect(r!.cores).toBe(1);
     expect(eng.state.leap.totalLeaps).toBe(1);
-    expect(eng.state.leap.cores).toBe(2);
+    expect(eng.state.leap.cores).toBe(1);
+  });
+
+  it("额外核心要求本次世界线严格超过 15000 关", () => {
+    const below = leapReadyState(201);
+    below.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE - 1;
+    expect(leapCores(below)).toBe(1);
+
+    const atThreshold = leapReadyState(202);
+    atThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE;
+    expect(leapCores(atThreshold)).toBe(1);
+
+    const above = leapReadyState(203);
+    above.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE + 1;
+    expect(leapCores(above)).toBe(2);
+  });
+
+  it("额外核心不再依赖历史最高关或上次跃迁关", () => {
+    const st = leapReadyState(204);
+    st.combat.stage = CONFIG.LEAP.STAGE;
+    st.statistics.allTimeMaxStage = 50000;
+    st.leap.lastLeapMaxStage = 100;
+    expect(leapCores(st)).toBe(1);
   });
 
   it("未解锁/未达关卡不可跃迁", () => {
@@ -91,18 +113,20 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
   it("购买世界核心升级扣减核心并生效", () => {
     const st = leapReadyState(5);
     const eng = new GameEngine(st);
-    eng.leap(); // cores = 2
+    eng.leap(); // cores = 1
     expect(eng.buyLeapUpgrade("allStats")).toBe(true); // cost 1
-    expect(eng.state.leap.cores).toBe(1);
+    expect(eng.state.leap.cores).toBe(0);
     expect(eng.state.leap.purchases.allStats).toBe(1);
-    expect(eng.buyLeapUpgrade("allStats")).toBe(false); // cost 2，剩 1 核心不足
+    expect(eng.buyLeapUpgrade("allStats")).toBe(false); // cost 2，核心不足
     expect(eng.state.leap.purchases.allStats).toBe(1);
   });
 
-  it("全属性每 3 级 ×2", () => {
-    expect(leapAllStatsMult(0).toNumber()).toBe(1);
-    expect(leapAllStatsMult(3).toNumber()).toBe(2);
-    expect(leapAllStatsMult(6).toNumber()).toBe(4);
+  it("全属性每一级都按 ×1.3 乘算生效", () => {
+    expect(leapAllStatsMult(0).toNumber()).toBeCloseTo(1);
+    expect(leapAllStatsMult(1).toNumber()).toBeCloseTo(1.3);
+    expect(leapAllStatsMult(2).toNumber()).toBeCloseTo(1.69);
+    expect(leapAllStatsMult(3).toNumber()).toBeCloseTo(2.197);
+    expect(leapAllStatsMult(30).toNumber()).toBeCloseTo(Math.pow(1.3, 30));
   });
 
   it("法则指数降低怪物 HP 成长基数（有界 -0.12）", () => {
@@ -133,9 +157,19 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
 
   it("全属性乘区进入派生属性", () => {
     const st = leapReadyState(9);
-    st.leap.purchases.allStats = 6; // ×4
+    st.leap.purchases.allStats = 6; // ×1.3^6
     const eng = new GameEngine(st);
-    expect(eng.derived.leapGlobalMult.toNumber()).toBe(4);
+    expect(eng.derived.leapGlobalMult.toNumber()).toBeCloseTo(Math.pow(1.3, 6));
+  });
+
+  it("全属性每级同步提升实际伤害与金币倍率", () => {
+    const base = new GameEngine(leapReadyState(901));
+    const boostedState = leapReadyState(902);
+    boostedState.leap.purchases.allStats = 1;
+    const boosted = new GameEngine(boostedState);
+
+    expect(boosted.derived.damagePerHit.div(base.derived.damagePerHit).toNumber()).toBeCloseTo(1.3);
+    expect(boosted.derived.goldMult.div(base.derived.goldMult).toNumber()).toBeCloseTo(1.3);
   });
 
   it("奇点天赋：法则扭曲降低 HP 成长", () => {

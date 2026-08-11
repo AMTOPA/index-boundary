@@ -28,7 +28,7 @@ console.log("=== V1.5 验收：世界跃迁 + 世界核心 + 奇点天赋 ===");
 const eng = new GameEngine(leapReady(101));
 check("10000 关可跃迁", eng.canLeap());
 const r = eng.leap();
-check("首次跃迁获得 2 核心（1 + 翻倍奖励）", r !== null && r.cores === 2, `cores=${r?.cores}`);
+check("10000 关首次跃迁获得基础 1 核心", r !== null && r.cores === 1, `cores=${r?.cores}`);
 check("跃迁后关卡回到 1（起始世界 Lv0）", eng.state.combat.stage === 1);
 check("跃迁重置升级", eng.state.player.upgrades.attack === 0);
 check("跃迁重置装备", Object.keys(eng.state.equipment.slots).length === 0);
@@ -48,9 +48,15 @@ let fibOk = true;
 fib.forEach((v, i) => { if (leapShopCostFrom(i, "allStats") !== v) fibOk = false; });
 check("商店价格 1/2/3/5/8/13（斐波那契）", fibOk);
 
-// 3. 全属性每 3 级 ×2
-check("全属性 Lv3 → ×2", leapAllStatsMult(3).toNumber() === 2);
-check("全属性 Lv6 → ×4", leapAllStatsMult(6).toNumber() === 4);
+// 3. 固定额外核心门槛 + 全属性每级 ×1.3
+const atBonusThreshold = leapReady(107);
+atBonusThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE;
+check("15000 关仍为 1 核心", leapCores(atBonusThreshold) === 1);
+const aboveBonusThreshold = leapReady(108);
+aboveBonusThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE + 1;
+check("15001 关获得 2 核心", leapCores(aboveBonusThreshold) === 2);
+check("全属性 Lv1 → ×1.3", Math.abs(leapAllStatsMult(1).toNumber() - 1.3) < 1e-9);
+check("全属性 Lv3 → ×2.197", Math.abs(leapAllStatsMult(3).toNumber() - Math.pow(1.3, 3)) < 1e-9);
 
 // 4. 法则指数有界降低 HP
 const stLaw = leapReady(102);
@@ -89,7 +95,7 @@ check("法则扭曲 HP 成长降低", engSing2.derived.hpGrowth < CONFIG.HP_GROW
 // 8. 自动跃迁
 const stAuto = leapReady(105);
 const engAuto = new GameEngine(stAuto);
-engAuto.leap(); // 2 cores
+engAuto.leap(); // 1 core
 engAuto.buyLeapUpgrade("autoLeap"); // cost 1
 engAuto.state.combat.stage = CONFIG.LEAP.STAGE;
 engAuto.state.statistics.allTimeMaxStage = CONFIG.LEAP.STAGE;

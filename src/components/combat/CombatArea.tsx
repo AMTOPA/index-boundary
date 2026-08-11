@@ -70,6 +70,10 @@ export function CombatArea() {
       className={`panel combat ${styles.combatSurface} ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""} ${isBoss ? "boss-fight" : ""}`}
       style={{ ["--world-color" as string]: world.color }}
     >
+      <div className={styles.arenaFrame} aria-hidden="true">
+        <span className={styles.arenaSignal}>COMBAT LINK</span>
+        <span className={styles.arenaSector}>SECTOR {String(worldIndex + 1).padStart(2, "0")}</span>
+      </div>
       <div className="stage-info">
         <span>
           第 <span className="stage mono">{stage}</span> 关

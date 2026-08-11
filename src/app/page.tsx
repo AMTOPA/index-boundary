@@ -8,7 +8,6 @@ import { CombatArea } from "@/components/combat/CombatArea";
 import { SkillPanel } from "@/components/skills/SkillPanel";
 import { QuickSkillBar } from "@/components/skills/SkillBar";
 import { EquipPanel } from "@/components/equipment/EquipPanel";
-import { InventoryPanel } from "@/components/equipment/InventoryPanel";
 import { TalentPanel } from "@/components/talents/TalentPanel";
 import { PrestigePanel } from "@/components/prestige/PrestigePanel";
 import { StatsPanel } from "@/components/stats/StatsPanel";
@@ -25,27 +24,25 @@ import { toBig } from "@/game/bignum";
 import { CONFIG } from "@/game/config";
 import type { GameState } from "@/game/types";
 
-// 主分页统一放到底部：一次只挂载当前页面，避免不可见 Canvas 和长列表继续运行。
-type MainTab = "combat" | "upgrades" | "skills" | "systems";
-type SystemsTab = "equip" | "inventory" | "talents" | "prestige" | "stats" | "achievements" | "items" | "account";
+// 高频操作统一放到底部主导航；升级嵌入战斗页，技能管理由战斗页快捷入口打开。
+type MainTab = "combat" | "talents" | "equipment" | "items" | "systems";
+type MainView = MainTab | "skills";
+type SystemsTab = "prestige" | "stats" | "achievements" | "account";
 
 const NEW_PLAYER_GOAL_KEYS = ["auto_attack", "boss", "equipment", "skills", "talents", "prestige"] as const;
 
 const MAIN_TABS: { id: MainTab; label: string; icon: string; unlockKey?: string }[] = [
   { id: "combat", label: "战斗", icon: "⚔️" },
-  { id: "upgrades", label: "升级", icon: "⬆️" },
-  { id: "skills", label: "技能", icon: "🔷", unlockKey: "skills" },
-  { id: "systems", label: "系统", icon: "🧭" },
+  { id: "equipment", label: "装备", icon: "🛡️", unlockKey: "equipment" },
+  { id: "talents", label: "天赋", icon: "🌿", unlockKey: "talents" },
+  { id: "items", label: "道具", icon: "📦" },
+  { id: "systems", label: "更多", icon: "🧭" },
 ];
 
 const SYS_TABS: { id: SystemsTab; label: string; icon: string; unlockKey?: string }[] = [
   { id: "stats", label: "统计", icon: "📊" },
-  { id: "equip", label: "装备", icon: "🛡️", unlockKey: "equipment" },
-  { id: "inventory", label: "背包", icon: "🎒", unlockKey: "equipment" },
-  { id: "talents", label: "天赋", icon: "🌿", unlockKey: "talents" },
   { id: "prestige", label: "重构", icon: "🌀", unlockKey: "prestige" },
   { id: "achievements", label: "成就", icon: "🏆", unlockKey: "achievements" },
-  { id: "items", label: "道具", icon: "📦" },
   { id: "account", label: "账户", icon: "👤" },
 ];
 
@@ -57,22 +54,9 @@ export default function Page() {
   );
 }
 
-function useWideLayout(): boolean {
-  const [wide, setWide] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
-    const fn = () => setWide(mq.matches);
-    fn();
-    mq.addEventListener("change", fn);
-    return () => mq.removeEventListener("change", fn);
-  }, []);
-  return wide;
-}
-
 function Shell() {
-  const [view, setView] = useState<MainTab>("combat");
+  const [view, setView] = useState<MainView>("combat");
   const [tab, setTab] = useState<SystemsTab>("stats");
-  const wide = useWideLayout();
   const worldTint = useGameSelector((state) => worldForStage(
     state.combat.stage,
     state.leap?.purchases?.newWorld ?? 0,
@@ -88,11 +72,12 @@ function Shell() {
 
         <div className="page-content" data-page={view}>
           {view === "combat" && (
-            <main className="command-deck" aria-label="战斗指挥舱">
+            <main className="battle-deck" aria-label="战斗指挥舱">
               <div className="command-arena">
                 <CombatArea />
               </div>
-              <aside className="command-console panel">
+              <UpgradePanel embedded />
+              <section className="command-console panel">
                 <div className="command-console-heading">
                   <div>
                     <span className="command-kicker">COMMAND CONSOLE</span>
@@ -102,19 +87,35 @@ function Shell() {
                 </div>
                 <NextUnlockHint compact />
                 <QuickSkillBar embedded onManage={() => setView("skills")} />
-              </aside>
-            </main>
-          )}
-
-          {view === "upgrades" && (
-            <main className="single-view single-view-narrow">
-              <UpgradePanel />
+              </section>
             </main>
           )}
 
           {view === "skills" && (
             <main className="single-view skill-management-view">
+              <div className="view-return-bar">
+                <button type="button" className="btn small" onClick={() => setView("combat")}>← 返回战斗</button>
+                <span>技能管理</span>
+              </div>
               <SkillPanel />
+            </main>
+          )}
+
+          {view === "talents" && (
+            <main className="single-view talent-management-view">
+              <TalentPanel />
+            </main>
+          )}
+
+          {view === "equipment" && (
+            <main className="single-view equipment-management-view">
+              <EquipPanel />
+            </main>
+          )}
+
+          {view === "items" && (
+            <main className="single-view items-management-view">
+              <ItemsPanel />
             </main>
           )}
 
@@ -122,7 +123,7 @@ function Shell() {
             <main className="systems-view">
               <SystemNavigation activeTab={tab} onChange={setTab} />
               <div className="systems-content">
-                <Panel tab={tab} wide={wide} />
+                <Panel tab={tab} />
               </div>
             </main>
           )}
@@ -134,7 +135,7 @@ function Shell() {
   );
 }
 
-function MainNavigation({ activeTab, onChange }: { activeTab: MainTab; onChange: (tab: MainTab) => void }) {
+function MainNavigation({ activeTab, onChange }: { activeTab: MainView; onChange: (tab: MainTab) => void }) {
   const unlocks = useGameSelector((state) => state.meta.unlocks.join("|"));
   const unlockedSet = new Set(unlocks ? unlocks.split("|") : []);
 
@@ -168,8 +169,8 @@ function SystemNavigation({ activeTab, onChange }: { activeTab: SystemsTab; onCh
   return (
     <div className="systems-header">
       <div className="systems-heading-copy">
-        <span className="systems-section-label">SYSTEM MATRIX</span>
-        <strong>系统矩阵</strong>
+        <span className="systems-section-label">ARCHIVE & ASCENSION</span>
+        <strong>成长档案</strong>
       </div>
       <div className="systems-tabs" role="tablist" aria-label="系统功能">
         {SYS_TABS.map((item) => {
@@ -224,15 +225,11 @@ function NextUnlockHint({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function Panel({ tab, wide }: { tab: SystemsTab; wide?: boolean }) {
+function Panel({ tab }: { tab: SystemsTab }) {
   switch (tab) {
-    case "equip": return <EquipPanel wide={wide} />;
-    case "inventory": return <InventoryPanel />;
-    case "talents": return <TalentPanel />;
     case "prestige": return <PrestigePanel />;
     case "stats": return <StatsPanel />;
     case "achievements": return <AchievementPanel />;
-    case "items": return <ItemsPanel />;
     case "account":
       return (
         <>
@@ -275,7 +272,7 @@ function ResourceBar() {
   );
 }
 
-function TopBar({ view }: { view: MainTab }) {
+function TopBar({ view }: { view: MainView }) {
   const { engine, reload, pushToast } = useGame();
   const [username, setUsername] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);

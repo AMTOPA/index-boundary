@@ -8,12 +8,21 @@ export interface LeapResult {
   coresGained: number;
 }
 
-// 跃迁获得核心：1 + （本次最大关卡 ≥ 上次 ×2 → 额外 +1）
+// 本轮世界线超过固定门槛时获得额外核心；不再随上次最高关翻倍抬高门槛。
+export function hasLeapCoreBonusAtStage(stage: number): boolean {
+  return stage > CONFIG.LEAP.CORE_BONUS_STAGE;
+}
+
+export function leapCoresForStage(stage: number): number {
+  return CONFIG.LEAP.CORE_PER_LEAP + (hasLeapCoreBonusAtStage(stage) ? 1 : 0);
+}
+
+export function hasLeapCoreBonus(state: GameState): boolean {
+  return hasLeapCoreBonusAtStage(state.combat.stage);
+}
+
 export function leapCores(state: GameState): number {
-  const maxStage = state.statistics.allTimeMaxStage;
-  const last = state.leap.lastLeapMaxStage || 1;
-  const extra = maxStage >= last * CONFIG.LEAP.CORE_DOUBLE_MULT ? 1 : 0;
-  return CONFIG.LEAP.CORE_PER_LEAP + extra;
+  return leapCoresForStage(state.combat.stage);
 }
 
 export function canLeap(state: GameState): boolean {
@@ -63,9 +72,10 @@ export function leapStartUpgradeLevel(state: GameState): number {
   return Math.max(0, leapStartStage(state) - 1);
 }
 
-// 全属性：全局伤害/金币 ×2 每 3 级（防平滑膨胀）
+// 全属性：每一级都会立即提升，全局伤害与金币按 ×1.3 乘算叠加。
 export function leapAllStatsMult(level: number): Big {
-  return Big.fromNumber(Math.pow(2, Math.floor(level / 3)));
+  const safeLevel = Math.max(0, Math.min(CONFIG.LEAP.SHOP.allStats.max, Math.floor(level)));
+  return Big.fromNumber(CONFIG.LEAP.SHOP.allStats.perLevel).pow(safeLevel);
 }
 
 // 生效的怪物 HP 成长指数（法则指数 -0.005/级，上限 -0.12）

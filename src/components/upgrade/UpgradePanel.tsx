@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
 import { NumberDisplay } from "@/components/common/NumberDisplay";
@@ -54,14 +55,16 @@ const DEFS: UpgradeDef[] = [
   },
 ];
 
-const BULK_STEPS = [10, 25, 100];
+const BUY_MODES = [1, 10, 25, 100, "max"] as const;
+type BuyMode = (typeof BUY_MODES)[number];
 
-export function UpgradePanel() {
+export function UpgradePanel({ embedded = false }: { embedded?: boolean }) {
   const { engine } = useGame();
   const upgrades = useGameSelector((s) => s.player.upgrades);
   const gold = useGameSelector((s) => s.player.gold);
   const unlocks = useGameSelector((s) => s.meta.unlocks);
   const derived = useDerived();
+  const [buyMode, setBuyMode] = useState<BuyMode>(1);
 
   const goldBig = toBig(gold);
 
@@ -78,13 +81,28 @@ export function UpgradePanel() {
     return false;
   };
   return (
-    <div className="panel">
+    <section className={`panel upgrade-panel ${embedded ? "upgrade-panel-embedded" : ""}`.trim()}>
       <div className="panel-title">
         <div>
-          <h3>基础升级</h3>
-          <span className="hint">五项等级均不可超过当前关卡</span>
+          <span className="command-kicker">LIVE AUGMENTATION</span>
+          <h3>即时强化</h3>
+          <span className="hint">战斗中直接升级 · 五项等级不可超过当前关卡</span>
         </div>
         <span className="hint">金币 <span className="mono" style={{ color: "var(--gold)" }}>{formatBig(goldBig)}</span></span>
+      </div>
+      <div className="upgrade-buy-modes" role="group" aria-label="升级购买档位">
+        <span>购买档位</span>
+        {BUY_MODES.map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={`mini-btn ${buyMode === mode ? "active" : ""}`}
+            aria-pressed={buyMode === mode}
+            onClick={() => setBuyMode(mode)}
+          >
+            {mode === "max" ? "MAX" : `×${mode}`}
+          </button>
+        ))}
       </div>
       {DEFS.map((def) => {
         const level = upgrades[def.id] ?? 0;
@@ -104,13 +122,17 @@ export function UpgradePanel() {
             </div>
             {!gated && !capped && !nearCap && (
               <div className="upgrade-buy">
-                <button className={`buy-btn ${afford ? "afford" : ""}`} disabled={!afford} onClick={() => engine?.buyUpgrade(def.id)}>购买</button>
-                <div className="buy-counts">
-                  {BULK_STEPS.map((n) => (
-                    <button key={n} className="mini-btn" onClick={() => engine?.buyUpgradeTimes(def.id, n)}>×{n}</button>
-                  ))}
-                  <button key="max" className="mini-btn buy-max" onClick={() => engine?.buyUpgradeMax(def.id)}>MAX</button>
-                </div>
+                <button
+                  className={`buy-btn ${afford ? "afford" : ""}`}
+                  disabled={!afford}
+                  onClick={() => {
+                    if (buyMode === "max") engine?.buyUpgradeMax(def.id);
+                    else if (buyMode === 1) engine?.buyUpgrade(def.id);
+                    else engine?.buyUpgradeTimes(def.id, buyMode);
+                  }}
+                >
+                  {buyMode === "max" ? "升至 MAX" : buyMode === 1 ? "购买" : `购买 ×${buyMode}`}
+                </button>
               </div>
             )}
             {!gated && capped && (
@@ -122,6 +144,6 @@ export function UpgradePanel() {
           </div>
         );
       })}
-    </div>
+    </section>
   );
 }

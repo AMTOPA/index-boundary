@@ -151,7 +151,7 @@ export interface LeapState {
   cores: number;
   totalCoresEarned: number;
   totalLeaps: number;
-  lastLeapMaxStage: number; // 上次跃迁时的最大关卡（用于 ×2 判定）
+  lastLeapMaxStage: number; // 旧存档兼容与统计字段，不再参与核心奖励计算
   purchases: Partial<Record<LeapUpgradeId, number>>;
 }
 

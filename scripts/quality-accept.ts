@@ -31,6 +31,8 @@ const css = read("src/app/globals.css");
 const auth = read("src/lib/auth.ts");
 const page = read("src/app/page.tsx");
 const prestigePanel = read("src/components/prestige/PrestigePanel.tsx");
+const upgradePanel = read("src/components/upgrade/UpgradePanel.tsx");
+const equipPanel = read("src/components/equipment/EquipPanel.tsx");
 const engine = read("src/game/engine.ts");
 const starfield = read("src/components/combat/Starfield.tsx");
 const particles = read("src/components/combat/CombatParticles.tsx");
@@ -71,13 +73,15 @@ check("页面阻止根级横向溢出", /overflow-x\s*:\s*hidden/.test(css));
 check("CSS 响应系统减弱动效设置", css.includes("prefers-reduced-motion"));
 
 
-check("主分页统一为底部四入口", page.includes('type MainTab = "combat" | "upgrades" | "skills" | "systems"') && page.includes('className="bottom-nav"'));
-check("非当前主分页不会继续挂载", page.includes('{view === "combat" && (') && page.includes('{view === "upgrades" && (') && page.includes('{view === "skills" && ('));
+check("主分页统一为底部五入口", page.includes('type MainTab = "combat" | "talents" | "equipment" | "items" | "systems"') && page.includes('className="bottom-nav"'));
+check("非当前主分页不会继续挂载", page.includes('{view === "combat" && (') && page.includes('{view === "equipment" && (') && page.includes('{view === "talents" && (') && page.includes('{view === "items" && ('));
 check("未解锁功能使用锁与问号", page.includes('locked ? "🔒"') && page.includes('locked ? "???"') && prestigePanel.includes('"🔒 ???"'));
 check("五项基础升级受当前关卡硬上限", engine.includes("remainingLevels") && engine.includes("upgradeMaxLevel(_id: UpgradeId)"));
 check("星空降频并可在非战斗页暂停", starfield.includes("1_000 / 24") && starfield.includes("active?: boolean"));
 check("战斗粒子已限制帧率和数量", particles.includes("MAX_PARTICLES = 80") && particles.includes("FRAME_INTERVAL_MS = 1_000 / 30"));
-check("解锁提示具备可读背景和水波纹", css.includes("unlockRipple") && css.includes(".unlock-inner::before"));
+check("解锁提示具备可读背景和水波纹", css.includes("eventRipple") && css.includes(".event-card") && css.includes(".event-ripples"));
+check("升级嵌入战斗页且购买档位复用", page.includes("<UpgradePanel embedded />") && upgradePanel.includes("upgrade-buy-modes"));
+check("装备入口固定合并背包与制作", equipPanel.includes('{ id: "inventory"') && !equipPanel.includes("wide = false"));
 
 check("生产会话 Cookie 启用 secure", auth.includes('secure: process.env.NODE_ENV === "production"'));
 check("认证包含 IP 与用户名限流", auth.includes(":ip:") && auth.includes(":username:"));

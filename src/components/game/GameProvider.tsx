@@ -329,25 +329,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}
       </div>
       {unlockCard && (
-        <div className="unlock-card">
-          <div className="unlock-inner">
-            <div className="big">解锁</div>
+        <div className="unlock-card event-overlay" role="status" aria-live="assertive">
+          <div className="event-ripples" aria-hidden="true"><span /><span /><span /></div>
+          <div className="unlock-inner event-card">
+            <div className="event-eyebrow">SYSTEM ONLINE</div>
+            <div className="event-emblem" aria-hidden="true"><span>✦</span></div>
+            <div className="big">功能解锁</div>
+            <div className="event-divider" aria-hidden="true"><i /></div>
             <div className="sub">{unlockCard}</div>
           </div>
         </div>
       )}
       {milestoneFlash !== null && (
-        <div className="milestone-flash">
-          <div className="milestone-inner">
+        <div className="milestone-flash event-overlay" role="status" aria-live="polite">
+          <div className="event-ripples" aria-hidden="true"><span /><span /><span /></div>
+          <div className="milestone-inner event-card">
+            <div className="event-eyebrow">POWER THRESHOLD</div>
+            <div className="event-emblem" aria-hidden="true"><span>↑</span></div>
             <div className="mag mono">10^{milestoneFlash}</div>
-            <div className="sub">伤害数量级突破！</div>
+            <div className="event-divider" aria-hidden="true"><i /></div>
+            <div className="sub">伤害数量级突破</div>
           </div>
         </div>
       )}
       {leapFlash !== null && (
         <div className="leap-flash">
           <div className="leap-rings"><span /><span /><span /></div>
-          <div className="leap-inner">
+          <div className="leap-inner event-card event-card-major">
+            <div className="event-eyebrow">WORLDLINE SHIFT</div>
             <div className="leap-title">世界跃迁</div>
             <div className="leap-sub">跨越世界线 · 新的法则展开</div>
             <div className="leap-cores mono">+{leapFlash} 世界核心</div>
@@ -357,7 +366,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       {lawFlash !== null && (
         <div className="law-flash">
           <div className="leap-rings"><span /><span /><span /></div>
-          <div className="leap-inner">
+          <div className="leap-inner event-card event-card-major">
+            <div className="event-eyebrow">FORMULA REWRITE</div>
             <div className="law-title">法则重写</div>
             <div className="leap-sub">法典重铸 · 公式被改写</div>
             <div className="leap-cores mono">+{lawFlash} 法则碎片</div>
@@ -367,7 +377,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       {prestigeFlash !== null && (
         <div className="prestige-flash">
           <div className="leap-rings"><span /><span /><span /></div>
-          <div className="leap-inner">
+          <div className="leap-inner event-card event-card-major">
+            <div className="event-eyebrow">SINGULARITY RECONSTRUCTION</div>
             <div className="prestige-title">宇宙坍缩·重构</div>
             <div className="leap-sub">新的奇点能量展开</div>
             <div className="leap-cores mono">+{prestigeFlash} 能量</div>
@@ -377,7 +388,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       {nexusFlash !== null && (
         <div className="nexus-flash">
           <div className="leap-rings"><span /><span /><span /></div>
-          <div className="leap-inner">
+          <div className="leap-inner event-card event-card-major">
+            <div className="event-eyebrow">DIMENSION UNLOCKED</div>
             <div className="nexus-title">法则彼岸</div>
             <div className="leap-sub">第 4 维度 · 新的法则货币：法则碎片</div>
             <div className="leap-cores">Boss 自动攻击 已激活</div>
@@ -387,7 +399,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       {echoFlash !== null && (
         <div className="echo-flash">
           <div className="echo-rings"><span /><span /><span /><span /></div>
-          <div className="leap-inner">
+          <div className="leap-inner event-card event-card-major">
+            <div className="event-eyebrow">TRANSCENDENCE</div>
             <div className="echo-title">超维回响</div>
             <div className="leap-sub">第 5 维度 · 新的法则货币：回响印记</div>
             <div className="leap-cores">更高维度的法则展开</div>
@@ -396,7 +409,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       )}
       {worldFlash && (
         <div className="world-flash" style={{ "--world": worldFlash.color } as React.CSSProperties}>
-          <div className="world-flash-inner">
+          <div className="world-flash-inner event-card">
+            <div className="event-eyebrow">WORLD SYNC</div>
             <div className="world-flash-label">进入新世界</div>
             <div className="world-flash-name">{worldFlash.name}</div>
           </div>

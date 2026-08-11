@@ -24,7 +24,7 @@ const SLOTS: EquipSlot[] = CONFIG.EQUIPMENT.SLOTS as unknown as EquipSlot[];
 
 type EquipTab = "equipped" | "craft" | "inventory";
 
-export function EquipPanel({ wide = false }: { wide?: boolean }) {
+export function EquipPanel() {
   const { engine } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("equipment"));
   const slots = useGameSelector((s) => s.equipment.slots);
@@ -37,22 +37,25 @@ export function EquipPanel({ wide = false }: { wide?: boolean }) {
   if (!unlocked) {
     return (
       <div className="panel">
-        <h3>装备</h3>
-        <p className={styles.lockedHint}>到达第 50 关解锁装备系统。</p>
+        <h3>装备仓库</h3>
+        <p className={styles.lockedHint}>到达第 50 关解锁装备、背包与制作系统。</p>
       </div>
     );
   }
 
   const tabs: { id: EquipTab; label: string }[] = [
     { id: "equipped", label: `已装备 (${SLOTS.filter((slot) => slots[slot]).length})` },
-    ...(wide ? [] : [{ id: "inventory" as EquipTab, label: `背包 (${inventory.length})` }]),
+    { id: "inventory", label: `背包 (${inventory.length})` },
     { id: "craft", label: "制作 / 套装" },
   ];
 
   return (
     <div className="panel equip-panel">
       <div className="panel-title">
-        <h3>装备</h3>
+        <div>
+          <span className="command-kicker">ARSENAL & STORAGE</span>
+          <h3>装备仓库</h3>
+        </div>
         <ResourceChip icon="💠" label="碎片" value={fragments} tone="frag" />
       </div>
 
@@ -144,7 +147,9 @@ export function EquipPanel({ wide = false }: { wide?: boolean }) {
         </div>
       )}
 
-      {tab === "inventory" && <InventoryContent engine={engine} embedded />}
+      <div hidden={tab !== "inventory"}>
+        <InventoryContent engine={engine} embedded />
+      </div>
     </div>
   );
 }
