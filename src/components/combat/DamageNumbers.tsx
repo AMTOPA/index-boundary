@@ -24,8 +24,8 @@ interface AutoBucket {
   timer: number;
 }
 
-const AUTO_WINDOW_MS = 150;
-const MAX_VISIBLE = 12;
+const AUTO_WINDOW_MS = 180;
+const MAX_VISIBLE = 8;
 let nextId = 0;
 
 export function DamageNumbers() {
@@ -94,7 +94,7 @@ export function DamageNumbers() {
       if (event.type !== "hit") return;
 
       const damage = toBig(event.damage);
-      const emphasized = event.isClick || event.crit || event.superCrit || event.crush;
+      const emphasized = event.isClick || event.superCrit || event.crush;
       if (!emphasized) {
         if (autoBucket) {
           autoBucket.damage = autoBucket.damage.add(damage);

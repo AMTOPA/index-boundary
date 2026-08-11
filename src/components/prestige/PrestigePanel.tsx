@@ -32,6 +32,9 @@ const TABS: { id: PanelTab; label: string }[] = [
 export function PrestigePanel() {
   const { engine } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("prestige"));
+  const unlockKeys = useGameSelector((s) => s.meta.unlocks.join("|"));
+  const nexusUnlocked = useGameSelector((s) => s.nexus?.unlocked ?? false);
+  const echoUnlocked = useGameSelector((s) => s.echo?.unlocked ?? false);
   const energy = useGameSelector((s) => s.prestige.energy);
   const purchases = useGameSelector((s) => s.prestige.purchases);
   const runDamage = useGameSelector((s) => s.statistics.runDamage);
@@ -63,15 +66,33 @@ export function PrestigePanel() {
   const previewEnergy = prestigeEnergy(toBig(runDamage));
   const previewMult = pm(energy + previewEnergy, purchases.singularityAmp ?? 0);
   const canPrestige = engine?.canPrestige() ?? false;
+  const unlockedKeys = new Set(unlockKeys ? unlockKeys.split("|") : []);
+  const isTabUnlocked = (id: PanelTab): boolean => {
+    if (id === "leap") return unlockedKeys.has("leap");
+    if (id === "law") return unlockedKeys.has("lawRewrite");
+    if (id === "nexus") return nexusUnlocked;
+    if (id === "echo") return echoUnlocked;
+    if (id === "season") return season.unlocked;
+    return true;
+  };
 
   return (
     <div className="panel">
       <div className="ach-filters" style={{ marginBottom: 12 }}>
-        {TABS.map((t) => (
-          <button key={t.id} className={`mini-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((item) => {
+          const available = isTabUnlocked(item.id);
+          return (
+            <button
+              key={item.id}
+              className={`mini-btn ${tab === item.id ? "active" : ""} ${available ? "" : "system-tab-locked"}`.trim()}
+              disabled={!available}
+              aria-label={available ? item.label : "尚未解锁的高维系统"}
+              onClick={() => setTab(item.id)}
+            >
+              {available ? item.label : "🔒 ???"}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "prestige" && (

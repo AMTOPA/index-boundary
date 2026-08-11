@@ -80,7 +80,10 @@ export function UpgradePanel() {
   return (
     <div className="panel">
       <div className="panel-title">
-        <h3>升级</h3>
+        <div>
+          <h3>基础升级</h3>
+          <span className="hint">五项等级均不可超过当前关卡</span>
+        </div>
         <span className="hint">金币 <span className="mono" style={{ color: "var(--gold)" }}>{formatBig(goldBig)}</span></span>
       </div>
       {DEFS.map((def) => {
@@ -88,7 +91,7 @@ export function UpgradePanel() {
         const cost = upgradeCost(def.id, level);
         const afford = goldBig.gte(cost);
         const gated = def.gate !== null && !unlocks.includes(def.gate);
-        // 关卡等级上限：攻速/暴击率/暴伤 上限 = 当前关卡数（推关解锁）；攻击/金币不设限
+        // 五种基础升级的硬上限均为当前关卡数，单买、批量和 MAX 使用同一校验。
         const stageCap = engine?.upgradeMaxLevel(def.id) ?? null;
         const capped = stageCap !== null && level >= stageCap;
         const nearCap = !gated && !capped && isNearCap(def.id, level);

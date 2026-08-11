@@ -669,18 +669,15 @@ export class GameEngine {
     return true;
   }
 
-  // 升级等级上限：攻速/暴击按关卡数限制，攻击/金币不设限
-  upgradeMaxLevel(id: UpgradeId): number | null {
-    if (!CONFIG.UPGRADE_STAGE_CAP) return null;
-    if ((CONFIG.UPGRADE_UNCAPPED as readonly string[]).includes(id)) return null;
-    return Math.max(1, this.state.combat.stage);
+  // 五种基础升级都以当前关卡为硬上限。
+  upgradeMaxLevel(_id: UpgradeId): number {
+    return Math.max(1, Math.floor(this.state.combat.stage));
   }
 
   buyUpgrade(id: UpgradeId): boolean {
     if (!this.upgradeUnlocked(id)) return false;
     const lv = this.state.player.upgrades[id];
-    const cap = this.upgradeMaxLevel(id);
-    if (cap !== null && lv >= cap) return false;
+    if (lv >= this.upgradeMaxLevel(id)) return false;
     const cost = upgradeCost(id, lv);
     if (toBig(this.state.player.gold).lt(cost)) return false;
     this.state.player.gold = toBig(this.state.player.gold).sub(cost).toTuple();
@@ -699,19 +696,19 @@ export class GameEngine {
     return bought;
   }
 
-  // 一次买满：二分查找当前金币可购买的最大等级数（闭式成本 O(log n)）
+  // 一次买满：仅在距离关卡上限的剩余等级内二分查找可购买数量。
   buyUpgradeMax(id: UpgradeId): number {
     if (!this.upgradeUnlocked(id)) return 0;
     const gold = toBig(this.state.player.gold);
     const from = this.state.player.upgrades[id];
-    const MAX_BUY = 100000000; // 1e8 级封顶，防极端输入
+    const remainingLevels = Math.max(0, this.upgradeMaxLevel(id) - from);
+    const MAX_BUY = 100000000; // 1e8 级防御性上限，避免极端或损坏数据。
     let lo = 0;
-    let hi = 1;
-    while (hi <= MAX_BUY && gold.gte(upgradeTotalCost(id, from, hi))) hi *= 2;
-    hi = Math.min(hi, MAX_BUY);
-    while (lo + 1 < hi) {
-      const mid = Math.floor((lo + hi) / 2);
-      if (gold.gte(upgradeTotalCost(id, from, mid))) lo = mid; else hi = mid;
+    let hi = Math.min(remainingLevels, MAX_BUY);
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi + 1) / 2);
+      if (gold.gte(upgradeTotalCost(id, from, mid))) lo = mid;
+      else hi = mid - 1;
     }
     if (lo <= 0) return 0;
     const cost = upgradeTotalCost(id, from, lo);
@@ -728,8 +725,7 @@ export class GameEngine {
     let best: { id: UpgradeId; score: number } | null = null;
     for (const id of candidates) {
       if (!this.upgradeUnlocked(id)) continue;
-      const cap = this.upgradeMaxLevel(id);
-      if (cap !== null && this.state.player.upgrades[id] >= cap) continue;
+      if (this.state.player.upgrades[id] >= this.upgradeMaxLevel(id)) continue;
       const cost = upgradeCost(id, this.state.player.upgrades[id]);
       if (toBig(this.state.player.gold).lt(cost)) continue;
       const score = this.estimateGainLog(id);

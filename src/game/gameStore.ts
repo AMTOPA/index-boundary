@@ -3,8 +3,8 @@ import { createNewState } from "./engine";
 import type { DerivedStats, GameState } from "./types";
 import { computeDerived, emptyBuffs } from "./formulas";
 
-/** The engine remains at 20 TPS, while React-facing state is capped at 10 FPS. */
-export const GAME_UI_PUBLISH_INTERVAL_MS = 100;
+/** The engine remains at 20 TPS, while React-facing state is capped at 8 FPS. */
+export const GAME_UI_PUBLISH_INTERVAL_MS = 125;
 
 export const gameStore = createStore<GameState>(createNewState());
 export const derivedStore = createStore<{ v: number; derived: DerivedStats }>({

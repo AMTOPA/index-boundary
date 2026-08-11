@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
-import { useGameSelector, useDerived } from "@/components/common/hooks";
+import { useGameSelector, useDerived, useReducedMotion } from "@/components/common/hooks";
 import { toBig } from "@/game/bignum";
 import { formatBig } from "@/game/format";
 import { worldForStage, WORLDS, BOSS_AFFIX_LABEL, BOSS_AFFIX_ICON, BOSS_AFFIX_DESC, VOID_TARGET_LABEL } from "@/game/data/worlds";
@@ -25,26 +25,19 @@ export function CombatArea() {
   const combo = useGameSelector((s) => s.combat.combo);
   const skipMode = useGameSelector((s) => s.combat.skipMode);
   const autoAttack = useGameSelector((s) => s.meta.unlocks.includes("auto_attack"));
+  const newWorldLevel = useGameSelector((s) => s.leap?.purchases?.newWorld ?? 0);
   const nexusEntered = useGameSelector((s) => s.nexus?.entered ?? false);
   const echoEntered = useGameSelector((s) => s.echo?.entered ?? false);
   const derived = useDerived();
   const [shake, setShake] = useState(false);
   const [impact, setImpact] = useState<"crush" | "boss">("crush");
   const shakeTimer = useRef(0);
-  const reducedMotion = useRef(false);
-
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncPreference = () => { reducedMotion.current = query.matches; };
-    syncPreference();
-    query.addEventListener("change", syncPreference);
-    return () => query.removeEventListener("change", syncPreference);
-  }, []);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!engine) return;
     const unsubscribe = engine.onEvent((ev) => {
-      if ((ev.type === "crush" || ev.type === "bossKill" || ev.type === "bossFail") && !reducedMotion.current) {
+      if ((ev.type === "crush" || ev.type === "bossKill" || ev.type === "bossFail") && !reducedMotion) {
         const nextImpact = ev.type === "crush" ? "crush" : "boss";
         setImpact(nextImpact);
         setShake(true);
@@ -59,12 +52,12 @@ export function CombatArea() {
       unsubscribe();
       window.clearTimeout(shakeTimer.current);
     };
-  }, [engine]);
+  }, [engine, reducedMotion]);
 
   const hp = toBig(enemyHp);
   const maxHp = toBig(enemyMaxHp);
   const pct = maxHp.isZero() ? 0 : Math.min(100, Math.max(0, hp.div(maxHp).toNumber() * 100));
-  const world = worldForStage(stage, 0, nexusEntered, echoEntered);
+  const world = worldForStage(stage, newWorldLevel, nexusEntered, echoEntered);
   const worldIndex = WORLDS.findIndex((w) => w.id === world.id);
   const bossPct = isBoss && bossTimer > 0 ? Math.min(100, Math.max(0, (bossTimer / CONFIG.BOSS_TIMER_SEC) * 100)) : 100;
   const shieldMax = CONFIG.BOSS_SHIELD_HITS;

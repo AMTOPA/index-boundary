@@ -3,10 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "@/components/common/hooks";
 
-const STAR_COUNT = 90;
-const FRAME_INTERVAL_MS = 1_000 / 30;
+const STAR_COUNT = 64;
+const FRAME_INTERVAL_MS = 1_000 / 24;
 
-export function Starfield({ tint }: { tint: string }) {
+export function Starfield({ tint, active = true }: { tint: string; active?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const reducedMotion = useReducedMotion();
 
@@ -16,13 +16,15 @@ export function Starfield({ tint }: { tint: string }) {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    const dpr = Math.min(reducedMotion ? 1 : 1.5, window.devicePixelRatio || 1);
+    const dpr = Math.min(reducedMotion ? 1 : 1.25, window.devicePixelRatio || 1);
     let width = 0;
     let height = 0;
     let raf = 0;
     let elapsed = 0;
     let lastFrame = 0;
-    let visible = !document.hidden;
+    let visible = !document.hidden && active;
+    let nebula: CanvasGradient | null = null;
+    let horizon: CanvasGradient | null = null;
 
     const stars = Array.from({ length: STAR_COUNT }, (_, index) => ({
       accent: index % 11 === 0,
@@ -61,25 +63,14 @@ export function Starfield({ tint }: { tint: string }) {
       }
 
       context.globalAlpha = 1;
-      const nebula = context.createRadialGradient(
-        width * 0.5,
-        height * 0.18,
-        0,
-        width * 0.5,
-        height * 0.18,
-        Math.max(width, height) * 0.65,
-      );
-      nebula.addColorStop(0, `${tint}26`);
-      nebula.addColorStop(0.6, `${tint}0d`);
-      nebula.addColorStop(1, "transparent");
-      context.fillStyle = nebula;
-      context.fillRect(0, 0, width, height);
-
-      const horizon = context.createLinearGradient(0, height * 0.52, 0, height);
-      horizon.addColorStop(0, "transparent");
-      horizon.addColorStop(1, "rgba(3,7,16,0.28)");
-      context.fillStyle = horizon;
-      context.fillRect(0, height * 0.52, width, height * 0.48);
+      if (nebula) {
+        context.fillStyle = nebula;
+        context.fillRect(0, 0, width, height);
+      }
+      if (horizon) {
+        context.fillStyle = horizon;
+        context.fillRect(0, height * 0.52, width, height * 0.48);
+      }
     };
 
     const resize = () => {
@@ -90,6 +81,20 @@ export function Starfield({ tint }: { tint: string }) {
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      nebula = context.createRadialGradient(
+        width * 0.5,
+        height * 0.18,
+        0,
+        width * 0.5,
+        height * 0.18,
+        Math.max(width, height) * 0.65,
+      );
+      nebula.addColorStop(0, `${tint}26`);
+      nebula.addColorStop(0.6, `${tint}0d`);
+      nebula.addColorStop(1, "transparent");
+      horizon = context.createLinearGradient(0, height * 0.52, 0, height);
+      horizon.addColorStop(0, "transparent");
+      horizon.addColorStop(1, "rgba(3,7,16,0.28)");
       render(false);
     };
 
@@ -110,7 +115,7 @@ export function Starfield({ tint }: { tint: string }) {
     };
 
     const onVisibilityChange = () => {
-      visible = !document.hidden;
+      visible = !document.hidden && active;
       if (!visible) {
         if (raf) cancelAnimationFrame(raf);
         raf = 0;
@@ -129,7 +134,7 @@ export function Starfield({ tint }: { tint: string }) {
       window.removeEventListener("resize", resize);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [tint, reducedMotion]);
+  }, [tint, reducedMotion, active]);
 
   return <canvas className="starfield" ref={ref} aria-hidden="true" />;
 }

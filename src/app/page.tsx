@@ -2,12 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { GameProvider, useGame } from "@/components/game/GameProvider";
 import { useGameSelector, useDerived } from "@/components/common/hooks";
-import { NumberDisplay } from "@/components/common/NumberDisplay";
-import { ResourceChip } from "@/components/common/ResourceChip";
 import { SettingsPanel } from "@/components/common/SettingsPanel";
 import { UpgradePanel } from "@/components/upgrade/UpgradePanel";
 import { CombatArea } from "@/components/combat/CombatArea";
 import { SkillPanel } from "@/components/skills/SkillPanel";
+import { QuickSkillBar } from "@/components/skills/SkillBar";
 import { EquipPanel } from "@/components/equipment/EquipPanel";
 import { InventoryPanel } from "@/components/equipment/InventoryPanel";
 import { TalentPanel } from "@/components/talents/TalentPanel";
@@ -21,24 +20,31 @@ import { exportSave, importSave } from "@/game/save";
 import { Starfield } from "@/components/combat/Starfield";
 import { worldForStage } from "@/game/data/worlds";
 import { subscribeCloud } from "@/game/cloud";
-import { formatNumber } from "@/game/format";
+import { formatBig, formatNumber } from "@/game/format";
+import { toBig } from "@/game/bignum";
 import { CONFIG } from "@/game/config";
 import type { GameState } from "@/game/types";
 
-// 双舱布局：战斗舱（主页：战斗 + 升级 + 技能）/ 系统舱（另一页：装备/背包/天赋/重构/统计/成就/道具/账户）
-type View = "combat" | "systems";
+// 主分页统一放到底部：一次只挂载当前页面，避免不可见 Canvas 和长列表继续运行。
+type MainTab = "combat" | "upgrades" | "skills" | "systems";
 type SystemsTab = "equip" | "inventory" | "talents" | "prestige" | "stats" | "achievements" | "items" | "account";
-type CombatSub = "combat" | "upgrades" | "skills";
 
 const NEW_PLAYER_GOAL_KEYS = ["auto_attack", "boss", "equipment", "skills", "talents", "prestige"] as const;
 
-const SYS_TABS: { id: SystemsTab; label: string; icon: string }[] = [
-  { id: "equip", label: "装备", icon: "⚔️" },
-  { id: "inventory", label: "背包", icon: "🎒" },
-  { id: "talents", label: "天赋", icon: "🌿" },
-  { id: "prestige", label: "重构", icon: "🌀" },
+const MAIN_TABS: { id: MainTab; label: string; icon: string; unlockKey?: string }[] = [
+  { id: "combat", label: "战斗", icon: "⚔️" },
+  { id: "upgrades", label: "升级", icon: "⬆️" },
+  { id: "skills", label: "技能", icon: "🔷", unlockKey: "skills" },
+  { id: "systems", label: "系统", icon: "🧭" },
+];
+
+const SYS_TABS: { id: SystemsTab; label: string; icon: string; unlockKey?: string }[] = [
   { id: "stats", label: "统计", icon: "📊" },
-  { id: "achievements", label: "成就", icon: "🏆" },
+  { id: "equip", label: "装备", icon: "🛡️", unlockKey: "equipment" },
+  { id: "inventory", label: "背包", icon: "🎒", unlockKey: "equipment" },
+  { id: "talents", label: "天赋", icon: "🌿", unlockKey: "talents" },
+  { id: "prestige", label: "重构", icon: "🌀", unlockKey: "prestige" },
+  { id: "achievements", label: "成就", icon: "🏆", unlockKey: "achievements" },
   { id: "items", label: "道具", icon: "📦" },
   { id: "account", label: "账户", icon: "👤" },
 ];
@@ -64,82 +70,132 @@ function useWideLayout(): boolean {
 }
 
 function Shell() {
-  const [view, setView] = useState<View>("combat");
-  const [tab, setTab] = useState<SystemsTab>("equip");
-  const [sub, setSub] = useState<CombatSub>("combat");
+  const [view, setView] = useState<MainTab>("combat");
+  const [tab, setTab] = useState<SystemsTab>("stats");
   const wide = useWideLayout();
-  const toggleView = () => setView((v) => (v === "combat" ? "systems" : "combat"));
-  const gridSub = sub === "upgrades" ? "sub-upgrades" : sub === "skills" ? "sub-skills" : "sub-combat";
-  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0, s.nexus?.entered ?? false, s.echo?.entered ?? false).color);
+  const worldTint = useGameSelector((state) => worldForStage(
+    state.combat.stage,
+    state.leap?.purchases?.newWorld ?? 0,
+    state.nexus?.entered ?? false,
+    state.echo?.entered ?? false,
+  ).color);
+
   return (
     <>
-      <Starfield tint={worldTint} />
+      <Starfield tint={worldTint} active={view === "combat"} />
       <div className="app">
-        <TopBar view={view} onToggleView={toggleView} />
-        {view === "combat" ? (
-          <>
-            <div className="combat-sub-nav">
-              {([
-                ["combat", "⚔️ 战斗"],
-                ["upgrades", "⬆️ 升级"],
-                ["skills", "🔷 技能"],
-              ] as [CombatSub, string][]).map(([id, label]) => (
-                <button key={id} className={`mini-btn ${sub === id ? "active" : ""}`} onClick={() => setSub(id)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <NextUnlockHint />
-            <div className={`main-grid ${gridSub}`}>
-              <aside className="side-left">
-                <UpgradePanel />
-              </aside>
-              <main className="main-col">
+        <TopBar view={view} />
+
+        <div className="page-content" data-page={view}>
+          {view === "combat" && (
+            <main className="command-deck" aria-label="战斗指挥舱">
+              <div className="command-arena">
                 <CombatArea />
-              </main>
-              <aside className="side-right">
-                <SkillPanel />
-              </aside>
-            </div>
-          </>
-        ) : (
-          <div className="systems-view">
-            <div className="systems-header">
-              <span className="systems-section-label">系统舱</span>
-              <div className="systems-tabs" role="tablist" aria-label="系统功能">
-                {SYS_TABS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === t.id}
-                    className={`mini-btn ${tab === t.id ? "active" : ""}`}
-                    onClick={() => setTab(t.id)}
-                  >
-                    <span aria-hidden="true">{t.icon}</span> {t.label}
-                  </button>
-                ))}
               </div>
-            </div>
-            <div className="systems-content">
-              <Panel tab={tab} wide={wide} />
-            </div>
-          </div>
-        )}
-        <nav className="bottom-nav" aria-label="主导航">
-          <button type="button" aria-current={view === "combat" ? "page" : undefined} className={view === "combat" ? "active" : ""} onClick={() => setView("combat")}>
-            <span aria-hidden="true">⚔️</span><span className="nav-label">战斗</span>
-          </button>
-          <button type="button" aria-current={view === "systems" ? "page" : undefined} className={view === "systems" ? "active" : ""} onClick={() => setView("systems")}>
-            <span aria-hidden="true">🗂️</span><span className="nav-label">系统</span>
-          </button>
-        </nav>
+              <aside className="command-console panel">
+                <div className="command-console-heading">
+                  <div>
+                    <span className="command-kicker">COMMAND CONSOLE</span>
+                    <h2>指挥控制台</h2>
+                  </div>
+                  <span className="command-online"><i /> 在线</span>
+                </div>
+                <NextUnlockHint compact />
+                <QuickSkillBar embedded onManage={() => setView("skills")} />
+              </aside>
+            </main>
+          )}
+
+          {view === "upgrades" && (
+            <main className="single-view single-view-narrow">
+              <UpgradePanel />
+            </main>
+          )}
+
+          {view === "skills" && (
+            <main className="single-view skill-management-view">
+              <SkillPanel />
+            </main>
+          )}
+
+          {view === "systems" && (
+            <main className="systems-view">
+              <SystemNavigation activeTab={tab} onChange={setTab} />
+              <div className="systems-content">
+                <Panel tab={tab} wide={wide} />
+              </div>
+            </main>
+          )}
+        </div>
+
+        <MainNavigation activeTab={view} onChange={setView} />
       </div>
     </>
   );
 }
 
-function NextUnlockHint() {
+function MainNavigation({ activeTab, onChange }: { activeTab: MainTab; onChange: (tab: MainTab) => void }) {
+  const unlocks = useGameSelector((state) => state.meta.unlocks.join("|"));
+  const unlockedSet = new Set(unlocks ? unlocks.split("|") : []);
+
+  return (
+    <nav className="bottom-nav" aria-label="游戏主分页">
+      {MAIN_TABS.map((item) => {
+        const locked = item.unlockKey ? !unlockedSet.has(item.unlockKey) : false;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            aria-current={activeTab === item.id ? "page" : undefined}
+            aria-label={locked ? "尚未解锁的功能" : item.label}
+            className={`${activeTab === item.id ? "active" : ""} ${locked ? "nav-locked" : ""}`.trim()}
+            disabled={locked}
+            onClick={() => onChange(item.id)}
+          >
+            <span className="nav-icon" aria-hidden="true">{locked ? "🔒" : item.icon}</span>
+            <span className="nav-label">{locked ? "???" : item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SystemNavigation({ activeTab, onChange }: { activeTab: SystemsTab; onChange: (tab: SystemsTab) => void }) {
+  const unlocks = useGameSelector((state) => state.meta.unlocks.join("|"));
+  const unlockedSet = new Set(unlocks ? unlocks.split("|") : []);
+
+  return (
+    <div className="systems-header">
+      <div className="systems-heading-copy">
+        <span className="systems-section-label">SYSTEM MATRIX</span>
+        <strong>系统矩阵</strong>
+      </div>
+      <div className="systems-tabs" role="tablist" aria-label="系统功能">
+        {SYS_TABS.map((item) => {
+          const locked = item.unlockKey ? !unlockedSet.has(item.unlockKey) : false;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === item.id}
+              aria-label={locked ? "尚未解锁的系统" : item.label}
+              className={`mini-btn ${activeTab === item.id ? "active" : ""} ${locked ? "system-tab-locked" : ""}`.trim()}
+              disabled={locked}
+              onClick={() => onChange(item.id)}
+            >
+              <span aria-hidden="true">{locked ? "🔒" : item.icon}</span>
+              <span>{locked ? "???" : item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NextUnlockHint({ compact = false }: { compact?: boolean }) {
   const stage = useGameSelector((s) => s.combat.stage);
   const unlocks = useGameSelector((s) => s.meta.unlocks);
   const next = CONFIG.UNLOCKS.find(
@@ -152,7 +208,7 @@ function NextUnlockHint() {
   const progress = Math.min(100, Math.max(0, (stage / next.stage) * 100));
 
   return (
-    <aside className="next-unlock" aria-live="polite" aria-label="下一解锁目标">
+    <aside className={`next-unlock ${compact ? "next-unlock-compact" : ""}`.trim()} aria-live="polite" aria-label="下一解锁目标">
       <div className="next-unlock-copy">
         <span className="next-unlock-kicker">下一目标</span>
         <strong>{next.label}</strong>
@@ -187,10 +243,40 @@ function Panel({ tab, wide }: { tab: SystemsTab; wide?: boolean }) {
   }
 }
 
-function TopBar({ view, onToggleView }: { view: View; onToggleView: () => void }) {
-  const { engine, reload, pushToast } = useGame();
-  const state = useGameSelector((s) => s);
+function ResourceBar() {
+  const gold = useGameSelector((state) => formatBig(toBig(state.player.gold)));
+  const stage = useGameSelector((state) => state.combat.stage);
+  const fragments = useGameSelector((state) => formatBig(toBig(state.equipment.fragments)));
+  const cores = useGameSelector((state) => formatBig(toBig(state.skills.cores)));
+  const energy = useGameSelector((state) => formatNumber(state.prestige.energy));
+  const worldCores = useGameSelector((state) => formatNumber(state.leap?.cores ?? 0));
+  const lawShards = useGameSelector((state) => formatNumber(state.laws?.shards ?? 0));
+  const unlockMask = useGameSelector((state) => {
+    const unlocked = state.meta.unlocks;
+    return (unlocked.includes("equipment") ? 1 : 0)
+      | (unlocked.includes("skills") ? 2 : 0)
+      | (unlocked.includes("prestige") ? 4 : 0)
+      | (unlocked.includes("leap") ? 8 : 0)
+      | (unlocked.includes("lawRewrite") ? 16 : 0);
+  });
   const derived = useDerived();
+
+  return (
+    <div className="resources" aria-label="当前资源">
+      <div className="resource resource-primary"><span className="label">🪙 金币</span><span className="value gold mono">{gold}</span></div>
+      <div className="resource resource-primary"><span className="label">🏰 关卡</span><span className="value mono">{stage}</span></div>
+      <div className="resource resource-primary"><span className="label">⚡ DPS</span><span className="value mono">{formatBig(derived.dps)}</span></div>
+      {(unlockMask & 1) !== 0 && <div className="resource"><span className="label">💠 碎片</span><span className="value frag mono">{fragments}</span></div>}
+      {(unlockMask & 2) !== 0 && <div className="resource"><span className="label">🔷 技能核心</span><span className="value core mono">{cores}</span></div>}
+      {(unlockMask & 4) !== 0 && <div className="resource"><span className="label">🌌 奇点能量</span><span className="value energy mono">{energy}</span></div>}
+      {(unlockMask & 8) !== 0 && <div className="resource"><span className="label">🔮 世界核心</span><span className="value mono resource-super">{worldCores}</span></div>}
+      {(unlockMask & 16) !== 0 && <div className="resource"><span className="label">📜 法则碎片</span><span className="value mono resource-gold">{lawShards}</span></div>}
+    </div>
+  );
+}
+
+function TopBar({ view }: { view: MainTab }) {
+  const { engine, reload, pushToast } = useGame();
   const [username, setUsername] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const moreRef = useRef<HTMLDetailsElement>(null);
@@ -226,62 +312,14 @@ function TopBar({ view, onToggleView }: { view: View; onToggleView: () => void }
     reader.readAsText(file);
   }
 
-  const unlocks = state.meta.unlocks;
-  const equipmentUnlocked = unlocks.includes("equipment");
-  const skillsUnlocked = unlocks.includes("skills");
-  const prestigeUnlocked = unlocks.includes("prestige");
-  const leapUnlocked = unlocks.includes("leap");
-  const lawsUnlocked = unlocks.includes("lawRewrite");
-
   return (
     <header className="topbar">
       <div className="game-title">
         <span className="cn">指数边界</span>
         <span className="en">Boundless Exponent</span>
       </div>
-      <div className="resources" aria-label="当前资源">
-        <div className="resource resource-primary">
-          <span className="label">🪙 金币</span>
-          <NumberDisplay className="value gold" value={state.player.gold} />
-        </div>
-        <div className="resource resource-primary">
-          <span className="label">🏰 关卡</span>
-          <span className="value mono">{state.combat.stage}</span>
-        </div>
-        <div className="resource resource-primary">
-          <span className="label">⚡ DPS</span>
-          <NumberDisplay className="value" value={derived.dps} />
-        </div>
-        {equipmentUnlocked && <ResourceChip icon="💠" label="碎片" value={state.equipment.fragments} tone="frag" />}
-        {skillsUnlocked && (
-          <div className="resource">
-            <span className="label">🔷 技能核心</span>
-            <NumberDisplay className="value core" value={state.skills.cores} />
-          </div>
-        )}
-        {prestigeUnlocked && (
-          <div className="resource">
-            <span className="label">🌌 奇点能量</span>
-            <span className="value energy mono">{formatNumber(state.prestige.energy)}</span>
-          </div>
-        )}
-        {leapUnlocked && (
-          <div className="resource">
-            <span className="label">🔮 世界核心</span>
-            <span className="value mono resource-super">{formatNumber(state.leap?.cores ?? 0)}</span>
-          </div>
-        )}
-        {lawsUnlocked && (
-          <div className="resource">
-            <span className="label">📜 法则碎片</span>
-            <span className="value mono resource-gold">{formatNumber(state.laws?.shards ?? 0)}</span>
-          </div>
-        )}
-      </div>
+      <ResourceBar />
       <div className="top-actions">
-        <button type="button" className="btn small systems-open" onClick={onToggleView}>
-          {view === "combat" ? "🗂️ 系统 ▸" : "◂ 返回战斗"}
-        </button>
         <details ref={moreRef} className="top-more">
           <summary className="btn small" aria-label="打开账户与存档菜单">⋯ 更多</summary>
           <div className="top-more-menu">

@@ -47,7 +47,7 @@
 .skillGrid,
 .passiveGrid.passiveGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   width: 100%;
   max-width: none;
   gap: 9px;
@@ -69,7 +69,7 @@
   width: 100%;
   min-width: 0;
   max-width: none;
-  min-height: 96px;
+  min-height: 82px;
   border: 0;
   border-radius: 0;
   padding: 10px 8px;
@@ -121,7 +121,7 @@
 }
 
 .lockedCard.lockedCard {
-  min-height: 142px;
+  min-height: 112px;
   border: 1px dashed var(--panel-border);
   border-radius: 11px;
 }
@@ -218,16 +218,130 @@
 
   .skillGrid,
   .passiveGrid.passiveGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .castButton.castButton,
   .lockedCard.lockedCard {
-    min-height: 108px;
+    min-height: 88px;
   }
 
   .upgradeButton.upgradeButton {
     min-height: 44px;
     font-size: 12px;
   }
+}
+
+
+.quickPanel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.embedded {
+  padding-top: 12px;
+  border-top: 1px solid rgba(126, 186, 221, 0.14);
+}
+
+.quickHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quickHeading h3 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.quickKicker {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.quickSkill.quickSkill {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  max-width: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  overflow: hidden;
+  padding: 8px 9px;
+  border-radius: 9px;
+}
+
+.quickIcon {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  font-size: 19px;
+}
+
+.quickCopy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  text-align: left;
+}
+
+.quickCopy strong,
+.quickCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickCopy strong { font-size: 11px; }
+.quickCopy small { color: var(--text-dim); font-size: 10px; }
+
+.quickLocked {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px dashed rgba(124, 143, 174, 0.26);
+  border-radius: 10px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.quickLocked strong { color: var(--text); letter-spacing: 0.14em; }
+.quickLocked small { font-size: 10px; line-height: 1.35; }
+
+@media (min-width: 1180px) {
+  .skillGrid { grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); }
+  .passiveGrid.passiveGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 440px) {
+  .skillGrid,
+  .passiveGrid.passiveGrid { grid-template-columns: 1fr; }
+  .quickGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quickSkill.quickSkill { min-height: 54px; padding-inline: 7px; }
+  .quickLocked { grid-template-columns: auto 1fr; }
+  .quickLocked small { grid-column: 1 / -1; }
 }

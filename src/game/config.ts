@@ -52,9 +52,6 @@ export const CONFIG = {
   BASE_APS: 1,
   APS_SOFT_CAP: 10,
   UPGRADE_NEAR_CAP_RATIO: 0.005, // 升级下一级有效收益 < 0.5% 视为近上限（隐藏购买按钮）
-  // 关卡等级上限：攻速/暴击率/暴伤 上限 = 当前关卡数（100 关最高 100 级）；攻击/金币不设限
-  UPGRADE_STAGE_CAP: true,
-  UPGRADE_UNCAPPED: ["attack", "gold"] as const,
 
   // 连击
   COMBO_WINDOW_SEC: 3,

@@ -15,10 +15,21 @@ import { formatNumber } from "@/game/format";
 import type { PassiveId, SkillId } from "@/game/types";
 import styles from "./SkillBar.module.css";
 
+function activeSkillRevision(state: { skills: { actives: { id: string; level: number; cdRemaining: number; active: boolean }[] } }): string {
+  return state.skills.actives
+    .map((skill) => `${skill.id}:${skill.level}:${Math.ceil(skill.cdRemaining * 5)}:${skill.active ? 1 : 0}`)
+    .join("|");
+}
+
+function useActiveSkills() {
+  useGameSelector(activeSkillRevision);
+  return useGameSelector((state) => state.skills.actives);
+}
+
 export function SkillBar() {
   const { engine } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("skills"));
-  const actives = useGameSelector((s) => s.skills.actives);
+  const actives = useActiveSkills();
   const cores = useGameSelector((s) => s.skills.cores);
   const passives = useGameSelector((s) => s.skills.passives);
   if (!unlocked) return null;
@@ -149,5 +160,71 @@ export function SkillBar() {
         </div>
       </section>
     </div>
+  );
+}
+
+
+export function QuickSkillBar({ onManage, embedded = false }: { onManage: () => void; embedded?: boolean }) {
+  const { engine } = useGame();
+  const unlocked = useGameSelector((state) => state.meta.unlocks.includes("skills"));
+  const actives = useActiveSkills();
+
+  if (!unlocked) {
+    return (
+      <section className={`${styles.quickPanel} ${embedded ? styles.embedded : ""}`.trim()} aria-label="未解锁技能快捷栏">
+        <div className={styles.quickLocked}>
+          <span aria-hidden="true">🔒</span>
+          <strong>???</strong>
+          <small>推进关卡后解锁新的指挥模块</small>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={`${styles.quickPanel} ${embedded ? styles.embedded : ""}`.trim()} aria-labelledby="quick-skills-heading">
+      <div className={styles.quickHeading}>
+        <div>
+          <span className={styles.quickKicker}>TACTICAL SKILLS</span>
+          <h3 id="quick-skills-heading">主动技能</h3>
+        </div>
+        <button type="button" className="mini-btn" onClick={onManage}>管理</button>
+      </div>
+      <div className={styles.quickGrid}>
+        {actives.map((instance) => {
+          const definition = SKILL_DEFS[instance.id];
+          const cooldown = skillCooldown(definition, instance.level);
+          const cooldownRatio = cooldown > 0 ? Math.min(1, instance.cdRemaining / cooldown) : 0;
+          const ready = instance.cdRemaining <= 0;
+          const status = instance.active ? "生效中" : ready ? "就绪" : `${Math.ceil(instance.cdRemaining)}s`;
+
+          return (
+            <button
+              key={instance.id}
+              type="button"
+              className={`skill-btn ${styles.quickSkill} ${ready ? "ready" : ""}`}
+              style={ready ? { borderColor: definition.color } : undefined}
+              disabled={!ready || !engine}
+              onClick={() => engine?.cast(instance.id as SkillId)}
+              aria-label={`释放${definition.name}，${status}`}
+              title={`${definition.name}：${definition.desc}`}
+            >
+              <span className={styles.quickIcon} aria-hidden="true">{definition.icon}</span>
+              <span className={styles.quickCopy}>
+                <strong>{definition.name}</strong>
+                <small>{status}</small>
+              </span>
+              {!ready && (
+                <span
+                  className={`cd-overlay ${styles.cooldownOverlay}`}
+                  style={{ height: `${cooldownRatio * 100}%` }}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

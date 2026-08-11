@@ -17,7 +17,8 @@ interface Particle {
   kind: "spark" | "ring" | "shard";
 }
 
-const MAX_PARTICLES = 120;
+const MAX_PARTICLES = 80;
+const FRAME_INTERVAL_MS = 1_000 / 30;
 
 export function CombatParticles() {
   const { engine } = useGame();
@@ -37,10 +38,11 @@ export function CombatParticles() {
     let width = 1;
     let height = 1;
     let lastAmbientSpark = 0;
+    let lastCritBurst = 0;
 
     const resize = () => {
       const rect = (canvas.parentElement ?? canvas).getBoundingClientRect();
-      const dpr = Math.min(reducedMotion ? 1 : 1.75, window.devicePixelRatio || 1);
+      const dpr = Math.min(reducedMotion ? 1 : 1.35, window.devicePixelRatio || 1);
       width = Math.max(1, rect.width);
       height = Math.max(1, rect.height);
       canvas.style.width = `${width}px`;
@@ -91,7 +93,11 @@ export function CombatParticles() {
     const tick = (now: number) => {
       raf = 0;
       if (!visible) return;
-      const dt = Math.min(0.04, Math.max(0, (now - lastFrame) / 1_000));
+      if (now - lastFrame < FRAME_INTERVAL_MS) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1_000));
       lastFrame = now;
       clear();
       context.globalCompositeOperation = "lighter";
@@ -143,7 +149,7 @@ export function CombatParticles() {
       size = 4,
     ) => {
       const origin = center();
-      const actualCount = reducedMotion ? Math.min(3, Math.ceil(count / 8)) : count;
+      const actualCount = reducedMotion ? Math.min(3, Math.ceil(count / 8)) : Math.min(count, 20);
       for (let index = 0; index < actualCount; index += 1) {
         const angle = Math.random() * Math.PI * 2;
         const velocity = speed * (0.45 + Math.random() * 0.7);
@@ -197,7 +203,7 @@ export function CombatParticles() {
         case "hit": {
           const now = performance.now();
           const origin = center();
-          if (event.isClick || event.crit || event.superCrit || event.crush || now - lastAmbientSpark > 110) {
+          if (event.isClick || event.crit || event.superCrit || event.crush || now - lastAmbientSpark > 160) {
             lastAmbientSpark = now;
             spawn({
               x: origin.x + (Math.random() - 0.5) * 42,
@@ -211,14 +217,15 @@ export function CombatParticles() {
               life: 0.28,
             });
           }
-          if (event.crit) burst(event.isClick ? 8 : 5, "#ffb52e", 125);
-          if (event.superCrit) {
-            burst(14, "#b26bff", 175, "shard", 6);
-            spawnRing("#b26bff", 42, 0.42);
-          }
           if (event.crush) {
             burst(14, "#ffffff", 210);
             spawnRing("#ffffff", 68, 0.48);
+          } else if (event.superCrit) {
+            burst(14, "#b26bff", 175, "shard", 6);
+            spawnRing("#b26bff", 42, 0.42);
+          } else if (event.crit && (event.isClick || now - lastCritBurst > 100)) {
+            lastCritBurst = now;
+            burst(event.isClick ? 8 : 5, "#ffb52e", 125);
           }
           break;
         }

@@ -34,6 +34,8 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
     let visible = !document.hidden;
     let raf = 0;
     let settleTimer = 0;
+    let reducedRenderTimer = 0;
+    let lastReducedRender = 0;
     let elapsed = 0;
     let lastTick = performance.now();
     let lastRender = 0;
@@ -116,9 +118,16 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       const duration = event.crush ? 330 : event.superCrit ? 250 : 170;
       impact.current = { until: now + duration, strength, duration };
       if (reducedMotion && visible) {
-        render(now);
+        const emphasized = event.isClick || event.crit || event.superCrit || event.crush;
+        if (!emphasized) return;
+        window.clearTimeout(reducedRenderTimer);
+        const delay = Math.max(0, 1_000 / 12 - (now - lastReducedRender));
+        reducedRenderTimer = window.setTimeout(() => {
+          lastReducedRender = performance.now();
+          render(lastReducedRender);
+        }, delay);
         window.clearTimeout(settleTimer);
-        settleTimer = window.setTimeout(() => render(performance.now()), duration + 25);
+        settleTimer = window.setTimeout(() => render(performance.now()), duration + 35);
       }
     });
 
@@ -130,6 +139,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       unsubscribe?.();
       if (raf) cancelAnimationFrame(raf);
       window.clearTimeout(settleTimer);
+      window.clearTimeout(reducedRenderTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [engine, worldId, worldColor, isBoss, affixes, kind, reducedMotion]);

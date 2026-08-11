@@ -5,6 +5,16 @@ import { CONFIG } from "../game/config";
 import { SKILL_IDS } from "../game/data/skills";
 import { upgradeCost, upgradeTotalCost, goldMultFromLevel, critDamageFromLevel } from "../game/formulas";
 
+const BASE_UPGRADE_IDS = ["attack", "aspd", "critChance", "critDamage", "gold"] as const;
+
+function createUpgradeTestState(stage: number, seed: number) {
+  const state = createNewState(seed);
+  state.combat.stage = stage;
+  state.meta.unlocks = ["aspd_upgrade", "crit"];
+  state.player.gold = [1e12, 0];
+  return state;
+}
+
 describe("GameEngine", () => {
   it("新存档生成敌人", () => {
     const eng = new GameEngine();
@@ -44,6 +54,68 @@ describe("GameEngine", () => {
     const before = eng.derived.damagePerHit.toNumber();
     expect(eng.buyUpgrade("attack")).toBe(true);
     expect(eng.derived.damagePerHit.toNumber()).toBeGreaterThan(before);
+  });
+
+  it("caps every base upgrade at the current stage for single purchases", () => {
+    const stage = 12;
+    for (const id of BASE_UPGRADE_IDS) {
+      const st = createUpgradeTestState(stage, 101);
+      st.player.upgrades[id] = stage - 1;
+      const eng = new GameEngine(st);
+
+      expect(eng.upgradeMaxLevel(id)).toBe(stage);
+      expect(eng.buyUpgrade(id)).toBe(true);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+      const goldAtCap = eng.state.player.gold;
+      expect(eng.buyUpgrade(id)).toBe(false);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+      expect(eng.state.player.gold).toEqual(goldAtCap);
+    }
+  });
+
+  it("caps every base upgrade at the current stage for batch purchases", () => {
+    const stage = 12;
+    for (const id of BASE_UPGRADE_IDS) {
+      const st = createUpgradeTestState(stage, 102);
+      st.player.upgrades[id] = stage - 3;
+      const eng = new GameEngine(st);
+
+      expect(eng.buyUpgradeTimes(id, 100)).toBe(3);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+      expect(eng.buyUpgradeTimes(id, 10)).toBe(0);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+    }
+  });
+
+  it("limits MAX binary search to the levels remaining before the stage cap", () => {
+    const stage = 12;
+    for (const id of BASE_UPGRADE_IDS) {
+      const st = createUpgradeTestState(stage, 103);
+      st.player.upgrades[id] = stage - 4;
+      const eng = new GameEngine(st);
+
+      expect(eng.buyUpgradeMax(id)).toBe(4);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+      const goldAtCap = eng.state.player.gold;
+      expect(eng.buyUpgradeMax(id)).toBe(0);
+      expect(eng.state.player.upgrades[id]).toBe(stage);
+      expect(eng.state.player.gold).toEqual(goldAtCap);
+    }
+  });
+
+  it("keeps Smart Buy within the current-stage cap for every base upgrade", () => {
+    const stage = 12;
+    for (const target of BASE_UPGRADE_IDS) {
+      const st = createUpgradeTestState(stage, 104);
+      for (const id of BASE_UPGRADE_IDS) st.player.upgrades[id] = stage;
+      st.player.upgrades[target] = stage - 1;
+      const eng = new GameEngine(st);
+
+      expect(eng.smartBuy()).toBe(true);
+      expect(eng.state.player.upgrades[target]).toBe(stage);
+      expect(BASE_UPGRADE_IDS.every((id) => eng.state.player.upgrades[id] <= stage)).toBe(true);
+      expect(eng.smartBuy()).toBe(false);
+    }
   });
 
   it("技能释放与冷却", () => {
@@ -134,8 +206,10 @@ describe("GameEngine", () => {
   });
 
   it("buyUpgradeMax：用当前金币买满不超支", () => {
-    const eng = new GameEngine(createNewState(1));
-    eng.state.player.gold = [1e9, 0];
+    const st = createNewState(1);
+    st.combat.stage = 1000;
+    st.player.gold = [1e9, 0];
+    const eng = new GameEngine(st);
     const before = eng.state.player.upgrades.attack;
     const goldBefore = Big.fromTuple(eng.state.player.gold);
     const n = eng.buyUpgradeMax("attack");
