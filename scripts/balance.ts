@@ -1,5 +1,5 @@
 // 平衡对比：五种自动玩家策略在 1h / 10h 的进度差异（固定种子，可复现）
-import { runAutoPlayer, type SimStrategy } from "../src/game/simulator";
+import { runAutoPlayer, type SimResult, type SimStrategy } from "../src/game/simulator";
 import { Big } from "../src/game/bignum";
 
 const SEED = 424242;
@@ -20,11 +20,15 @@ function main(): void {
   console.log(header);
   console.log("-".repeat(header.length));
   let failed = false;
+  const results = new Map<number, Map<SimStrategy, SimResult>>();
   const strategies: SimStrategy[] = ["equal", "attack", "gold", "crit", "aspd"];
   for (const h of [1, 10]) {
+    const byStrategy = new Map<SimStrategy, SimResult>();
+    results.set(h, byStrategy);
     for (const s of strategies) {
       const t0 = Date.now();
       const r = runAutoPlayer({ hours: h, seed: SEED, strategy: s });
+      byStrategy.set(s, r);
       const el = ((Date.now() - t0) / 1000).toFixed(1);
       console.log(
         `${pad(LABEL[s], 10)}${pad(`${h}h`, 6)}${pad(String(r.stage), 8)}${pad(String(r.maxStage), 10)}` +
@@ -33,8 +37,36 @@ function main(): void {
         `${pad(r.firstPrestigeAt >= 0 ? `${(r.firstPrestigeAt / 60).toFixed(0)}m` : "-", 8)} (${el}s)`
       );
       if (r.maxStage <= 1) { console.error(`  策略 ${s} ${h}h 未推进`); failed = true; }
+      if (r.prestiges <= 0 || r.firstPrestigeAt <= 0 || r.firstPrestigeAt > 15 * 60) {
+        console.error(`  strategy ${s}/${h}h failed the first-prestige timing check`);
+        failed = true;
+      }
+      const levels = r.upgradeLevels;
+      if (levels.attack < 1 || levels.aspd < 1 || levels.critDamage < 1 || levels.gold < 1) {
+        console.error(`  strategy ${s}/${h}h lacks required supporting upgrades`);
+        failed = true;
+      }
     }
   }
+  const oneHour = results.get(1)!;
+  const tenHours = results.get(10)!;
+  for (const strategy of strategies) {
+    const shortRun = oneHour.get(strategy)!;
+    const longRun = tenHours.get(strategy)!;
+    if (shortRun.maxStage < 2_500 || longRun.maxStage < 3_500 || longRun.maxStage < shortRun.maxStage) {
+      console.error(`  strategy ${strategy} failed the 1h/10h progression floor`);
+      failed = true;
+    }
+  }
+  for (const [hours, byStrategy] of results) {
+    const stages = [...byStrategy.values()].map((result) => result.maxStage);
+    const spread = Math.max(...stages) / Math.min(...stages);
+    if (spread > 2) {
+      console.error(`  ${hours}h build spread is too large: ${spread.toFixed(2)}x`);
+      failed = true;
+    }
+  }
+
   if (failed) { console.error("平衡对比失败"); process.exit(1); }
   console.log("平衡对比通过 ✓（更多分析请使用 /dev/balance 页面）");
 }

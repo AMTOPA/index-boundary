@@ -1,21 +1,48 @@
-// WebAudio 合成音效（零音频资产）
+// Lightweight WebAudio sound effects. Audio is created only after an explicit user gesture.
 let ctx: AudioContext | null = null;
-let enabled = true;
+let enabled = false;
+const lastPlayedAt: Partial<Record<SfxName, number>> = {};
 
-export function setAudioEnabled(v: boolean): void {
-  enabled = v;
+const SFX_COOLDOWN_MS: Partial<Record<SfxName, number>> = {
+  click: 25,
+  kill: 40,
+  crit: 45,
+  superCrit: 70,
+  crush: 90,
+  drop: 80,
+  upgrade: 45,
+};
+
+export function setAudioEnabled(value: boolean): void {
+  enabled = value;
 }
 
-export function initAudio(): void {
-  if (!ctx && typeof window !== "undefined") {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AC) ctx = new AC();
+/**
+ * Unlock WebAudio from a pointer/keyboard handler. Calling this during page load is
+ * intentionally a no-op until sound is enabled and a caller supplies a user gesture.
+ */
+export async function initAudio(): Promise<boolean> {
+  if (!enabled || typeof window === "undefined") return false;
+
+  if (!ctx) {
+    const AudioContextCtor = window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return false;
+    ctx = new AudioContextCtor();
   }
-  if (ctx && ctx.state === "suspended") void ctx.resume();
+
+  if (ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      return false;
+    }
+  }
+  return ctx.state === "running";
 }
 
 function tone(freq: number, dur: number, type: OscillatorType, gain = 0.12, delay = 0, slideTo?: number): void {
-  if (!ctx || !enabled) return;
+  if (!ctx || !enabled || ctx.state !== "running") return;
   const t0 = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -30,7 +57,7 @@ function tone(freq: number, dur: number, type: OscillatorType, gain = 0.12, dela
 }
 
 function noise(dur: number, gain = 0.1, delay = 0): void {
-  if (!ctx || !enabled) return;
+  if (!ctx || !enabled || ctx.state !== "running") return;
   const t0 = ctx.currentTime + delay;
   const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -50,7 +77,13 @@ export type SfxName =
   | "upgrade" | "unlock" | "prestige" | "milestone" | "error" | "drop";
 
 export function playSfx(name: SfxName): void {
-  if (!ctx || !enabled) return;
+  if (!ctx || !enabled || ctx.state !== "running") return;
+
+  const now = performance.now();
+  const cooldown = SFX_COOLDOWN_MS[name] ?? 0;
+  if (cooldown > 0 && now - (lastPlayedAt[name] ?? -Infinity) < cooldown) return;
+  lastPlayedAt[name] = now;
+
   switch (name) {
     case "click": tone(880, 0.04, "square", 0.03); break;
     case "kill": tone(440, 0.06, "triangle", 0.05); break;

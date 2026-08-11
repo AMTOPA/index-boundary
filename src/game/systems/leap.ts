@@ -58,6 +58,11 @@ export function leapStartStage(state: GameState): number {
   return Math.min(CONFIG.LEAP.STAGE - 1, 1 + lv * CONFIG.LEAP.SHOP.startStage.perLevel);
 }
 
+// Starting at stage x + 1 grants level x in every base upgrade.
+export function leapStartUpgradeLevel(state: GameState): number {
+  return Math.max(0, leapStartStage(state) - 1);
+}
+
 // 全属性：全局伤害/金币 ×2 每 3 级（防平滑膨胀）
 export function leapAllStatsMult(level: number): Big {
   return Big.fromNumber(Math.pow(2, Math.floor(level / 3)));
@@ -80,8 +85,10 @@ export function applyLeap(state: GameState, coresGained: number): void {
   l.lastLeapMaxStage = state.statistics.allTimeMaxStage;
 
   // ---- 彻底洗牌：重置升级/金币/关卡/装备/技能/天赋/重构 ----
+  const startStage = leapStartStage(state);
+  const startUpgradeLevel = leapStartUpgradeLevel(state);
   state.combat = {
-    stage: leapStartStage(state),
+    stage: startStage,
     enemyHp: [0, 0],
     enemyMaxHp: [0, 0],
     isBoss: false,
@@ -99,7 +106,13 @@ export function applyLeap(state: GameState, coresGained: number): void {
     bossVoidTarget: null,
   };
   state.player.gold = [0, 0];
-  state.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+  state.player.upgrades = {
+    attack: startUpgradeLevel,
+    aspd: startUpgradeLevel,
+    critChance: startUpgradeLevel,
+    critDamage: startUpgradeLevel,
+    gold: startUpgradeLevel,
+  };
   state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
   state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
   state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };

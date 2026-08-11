@@ -5,6 +5,7 @@ import {
   apiLogin, apiLogout, apiMe, apiRegister, apiUploadSave, apiFetchSave, apiSubmitScore,
   type AuthUser, type ScoreKind,
 } from "../lib/api";
+import { normalizeState } from "./save";
 
 export interface CloudState {
   user: AuthUser | null;
@@ -89,7 +90,7 @@ export async function fetchCloudSave(): Promise<GameState | null> {
   if (!cloud.user) return null;
   try {
     const { save } = await apiFetchSave();
-    return (save as GameState | null) ?? null;
+    return save ? normalizeState(save) : null;
   } catch {
     return null;
   }

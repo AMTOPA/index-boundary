@@ -9,6 +9,7 @@ import { CONFIG } from "@/game/config";
 import { EnemyCanvas } from "./EnemyCanvas";
 import { CombatParticles } from "./CombatParticles";
 import { DamageNumbers } from "./DamageNumbers";
+import styles from "./CombatVisuals.module.css";
 
 export function CombatArea() {
   const { engine } = useGame();
@@ -30,11 +31,20 @@ export function CombatArea() {
   const [shake, setShake] = useState(false);
   const [impact, setImpact] = useState<"crush" | "boss">("crush");
   const shakeTimer = useRef(0);
+  const reducedMotion = useRef(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPreference = () => { reducedMotion.current = query.matches; };
+    syncPreference();
+    query.addEventListener("change", syncPreference);
+    return () => query.removeEventListener("change", syncPreference);
+  }, []);
 
   useEffect(() => {
     if (!engine) return;
-    return engine.onEvent((ev) => {
-      if (ev.type === "crush" || ev.type === "bossKill" || ev.type === "bossFail") {
+    const unsubscribe = engine.onEvent((ev) => {
+      if ((ev.type === "crush" || ev.type === "bossKill" || ev.type === "bossFail") && !reducedMotion.current) {
         const nextImpact = ev.type === "crush" ? "crush" : "boss";
         setImpact(nextImpact);
         setShake(true);
@@ -45,6 +55,10 @@ export function CombatArea() {
         }, nextImpact === "boss" ? 560 : 460);
       }
     });
+    return () => {
+      unsubscribe();
+      window.clearTimeout(shakeTimer.current);
+    };
   }, [engine]);
 
   const hp = toBig(enemyHp);
@@ -60,7 +74,7 @@ export function CombatArea() {
 
   return (
     <div
-      className={`panel combat ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""} ${isBoss ? "boss-fight" : ""}`}
+      className={`panel combat ${styles.combatSurface} ${shake ? "shake" : ""} ${shake ? `${impact}-impact` : ""} ${isBoss ? "boss-fight" : ""}`}
       style={{ ["--world-color" as string]: world.color }}
     >
       <div className="stage-info">
@@ -82,7 +96,7 @@ export function CombatArea() {
         <div>DPS <span className="mono" style={{ color: "var(--accent)" }}>{formatBig(derived.dps)}</span></div>
         <div style={{ fontSize: 11 }}>单次 <span className="mono">{formatBig(derived.damagePerHit)}</span></div>
       </div>
-      <div className="enemy-wrap">
+      <div className={`enemy-wrap ${styles.enemyWrap}`}>
         <div className={`enemy-stage ${isBoss ? "boss" : ""} ${enemyKind === "elite" ? "elite" : ""} ${enemyKind === "mimic" ? "mimic" : ""}`}>
           {isBoss && <div className="boss-ring" style={{ background: `conic-gradient(var(--danger) ${bossPct}%, rgba(255,255,255,0.08) 0)` }} />}
           <button

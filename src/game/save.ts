@@ -3,6 +3,7 @@
 import { CONFIG } from "./config";
 import type { GameState } from "./types";
 import { createNewState } from "./engine";
+import { leapStartStage } from "./systems/leap";
 
 export interface SaveFile {
   format: string;
@@ -145,6 +146,16 @@ export function normalizeState(raw: unknown): GameState {
     prestige: state.meta.lastScoreSubmit?.prestige,
     season: state.meta.lastScoreSubmit?.season,
   };
+  // Repair saves created by the old leap bug: stage x + 1 with every base upgrade left at zero.
+  const expectedLeapStartStage = leapStartStage(state);
+  const isBrokenLeapStart = state.leap.totalLeaps > 0
+    && expectedLeapStartStage > 1
+    && state.combat.stage === expectedLeapStartStage
+    && Object.values(state.player.upgrades).every((level) => level === 0);
+  if (isBrokenLeapStart) {
+    const level = expectedLeapStartStage - 1;
+    state.player.upgrades = { attack: level, aspd: level, critChance: level, critDamage: level, gold: level };
+  }
   return state;
 }
 

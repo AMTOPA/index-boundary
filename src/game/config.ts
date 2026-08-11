@@ -319,7 +319,7 @@ export const CONFIG = {
     CORE_DOUBLE_MULT: 2, // 本次最大关卡 ≥ 上次×2 → 额外 +1 核心
     SHOP: {
       lawExponent: { baseCost: 1, costGrowth: 1, perLevel: 0.005, max: 24, label: "法则指数", desc: "怪物 HP 指数基数 -0.005/级（上限 -0.12）" },
-      startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后起始关卡 +100/级" },
+      startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后起始关卡 +100/级，五项基础升级同步到起始关卡 -1 级" },
       allStats: { baseCost: 1, costGrowth: 1, perLevel: 1 / 3, max: 30, label: "全属性", desc: "全局伤害/金币 ×2 每 3 级（防平滑膨胀）" },
       newWorld: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 2, label: "新世界", desc: "解锁新世界主题与机制（奇点熔炉/法则终境）" },
       autoLeap: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 1, label: "自动跃迁", desc: "到达跃迁阈值且卡墙时自动跃迁" },

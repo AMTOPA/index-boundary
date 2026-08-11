@@ -5,7 +5,7 @@ import { Big, toBig } from "./bignum";
 import { CONFIG } from "./config";
 import { SKILL_IDS, SKILL_DEFS } from "./data/skills";
 import { TALENT_NODES } from "./data/talents";
-import type { EquipInstance } from "./types";
+import type { EquipInstance, UpgradeId } from "./types";
 
 export type SimStrategy = "equal" | "attack" | "gold" | "crit" | "aspd";
 
@@ -23,6 +23,10 @@ export interface SimResult {
   maxStage: number;
   dps: Big;
   gold: Big;
+  totalGold: Big;
+  upgradeLevels: Record<UpgradeId, number>;
+  talentAllocations: Record<string, number>;
+  talentKeystones: Record<string, string | undefined>;
   totalDamageMag: number;
   kills: number;
   bossKills: number;
@@ -50,8 +54,9 @@ const TALENT_PRIORITY: Record<SimStrategy, string[]> = {
     "auto_offline", "auto_skip", "greed_loot",
   ],
   gold: [
-    "greed_loot", "greed_pan", "greed_refine", "greed_keystone_compound",
-    "dest_sharp", "auto_offline", "auto_skip",
+    "greed_loot", "dest_sharp", "dest_crit", "greed_luck",
+    "greed_pan", "greed_refine", "greed_keystone_compound",
+    "auto_offline", "auto_skip",
   ],
   // 暴击流：暴击再暴击 Keystone 为核心
   crit: [
@@ -80,23 +85,33 @@ function autoEquip(eng: GameEngine): void {
   }
 }
 
-// 非退化策略：攻击优先 = 重攻击轻经济；金币优先 = 重经济保基础攻击；暴击/攻速 = 流派构筑
+const PURCHASE_PATTERNS: Record<"attack" | "gold", UpgradeId[]> = {
+  // 两种主题构筑都保留基础伤害、攻速、暴击与经济支撑，避免只堆单一属性造成假性卡关。
+  attack: ["attack", "aspd", "attack", "gold", "critDamage", "attack", "critChance", "aspd", "attack", "gold"],
+  gold: ["attack", "gold", "attack", "gold", "aspd", "gold", "critDamage", "attack", "critChance", "gold"],
+};
+
+function buyPattern(eng: GameEngine, pattern: UpgradeId[], passes = 4): void {
+  for (let pass = 0; pass < passes; pass++) {
+    let bought = 0;
+    for (const id of pattern) {
+      if (id === "critChance" && eng.derived.critChance >= 0.92) continue;
+      if (eng.buyUpgrade(id)) bought += 1;
+    }
+    if (bought === 0) break;
+  }
+}
+
+// 非退化策略：攻击流偏重直接伤害；金币流偏重经济，但都维持必要的伤害与攻速。
 function buyStrategy(eng: GameEngine, strategy: SimStrategy): void {
   if (strategy === "equal") {
-    // 活跃玩家的“自动升级+手动连点”：每个 0.5s 周期内尽量购买收益最高的升级
+    // 活跃玩家的“自动升级 + 手动连点”：每个 0.5 秒周期内尽量购买收益最高的升级。
     for (let k = 0; k < 30 && eng.smartBuy(); k++) { /* keep buying */ }
-  } else if (strategy === "attack") {
-    eng.buyUpgradeTimes("attack", 20);
-    eng.buyUpgradeTimes("aspd", 5);
-    eng.buyUpgradeTimes("gold", 8);
-    eng.buyUpgradeTimes("critDamage", 3);
-  } else if (strategy === "gold") {
-    eng.buyUpgradeTimes("gold", 10);
-    eng.buyUpgradeTimes("attack", 12);
-    eng.buyUpgradeTimes("aspd", 3);
+  } else if (strategy === "attack" || strategy === "gold") {
+    buyPattern(eng, PURCHASE_PATTERNS[strategy]);
   } else if (strategy === "crit") {
     eng.buyUpgradeTimes("attack", 14);
-    // 暴击率是渐近软上限：达到 ~92% 后边际收益骤降，理性玩家停止购买，转投攻击/暴伤
+    // 暴击率接近 92% 后边际收益明显降低，转投攻击与暴击伤害。
     if (eng.derived.critChance < 0.92) eng.buyUpgradeTimes("critChance", 4);
     eng.buyUpgradeTimes("critDamage", 16);
     eng.buyUpgradeTimes("aspd", 3);
@@ -217,6 +232,10 @@ export function runAutoPlayer(opts: SimOptions = {}): SimResult {
     maxStage: eng.state.statistics.allTimeMaxStage,
     dps: eng.derived.dps,
     gold: Big.fromTuple(eng.state.player.gold),
+    totalGold: Big.fromTuple(eng.state.statistics.totalGold),
+    upgradeLevels: { ...eng.state.player.upgrades },
+    talentAllocations: { ...eng.state.talents.allocations },
+    talentKeystones: { ...eng.state.talents.keystones },
     totalDamageMag: mag,
     kills: eng.state.statistics.totalKills,
     bossKills: eng.state.statistics.totalBossKills,

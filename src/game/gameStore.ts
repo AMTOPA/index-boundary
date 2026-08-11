@@ -1,12 +1,30 @@
-// 应用状态桥接：GameState store + DerivedStats store（与引擎分离）
 import { createStore } from "./store";
 import { createNewState } from "./engine";
-import type { GameState } from "./types";
+import type { DerivedStats, GameState } from "./types";
 import { computeDerived, emptyBuffs } from "./formulas";
-import type { DerivedStats } from "./types";
+
+/** The engine remains at 20 TPS, while React-facing state is capped at 10 FPS. */
+export const GAME_UI_PUBLISH_INTERVAL_MS = 100;
 
 export const gameStore = createStore<GameState>(createNewState());
 export const derivedStore = createStore<{ v: number; derived: DerivedStats }>({
   v: 0,
   derived: computeDerived(gameStore.getState(), emptyBuffs(), 0),
 });
+
+let lastGamePublishAt = -Infinity;
+
+/**
+ * Publish the mutable engine state to React subscribers without coupling engine TPS
+ * to render frequency. `force` is intended for user actions, lifecycle changes and loads.
+ */
+export function publishGameState(state: GameState, force = false, now = Date.now()): boolean {
+  if (!force && now - lastGamePublishAt < GAME_UI_PUBLISH_INTERVAL_MS) return false;
+  lastGamePublishAt = now;
+  gameStore.setState(state);
+  return true;
+}
+
+export function publishDerivedStats(derived: DerivedStats): void {
+  derivedStore.setState((current) => ({ v: current.v + 1, derived }));
+}

@@ -72,8 +72,8 @@ export function StatsPanel() {
   const previewMult = prestigeGlobalMult(prestige.energy + previewEnergy, prestige.purchases.singularityAmp ?? 0);
 
   return (
-    <div className="panel">
-      <h3>统计</h3>
+    <section className="panel stats-panel" aria-labelledby="stats-heading">
+      <h3 id="stats-heading">统计</h3>
       <div className="stat-grid">
         <div className="stat-item"><div className="k">当前 DPS</div><div className="v mono" style={{ color: "var(--accent)" }}>{formatBig(d.dps)}</div></div>
         <div className="stat-item"><div className="k">单次伤害</div><div className="v mono">{formatBig(d.damagePerHit)}</div></div>
@@ -146,6 +146,6 @@ export function StatsPanel() {
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

@@ -6,15 +6,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "test": "npm run test:unit && npm run test:smoke && npm run test:balance && npm run test:save && npm run test:ssr && npm run test:acceptance",
+    "start": "node scripts/start-standalone.mjs",
+    "test": "npm run test:quality && npm run test:unit && npm run test:smoke && npm run test:balance && npm run test:save && npm run test:ssr && npm run test:acceptance",
     "test:unit": "vitest run",
     "test:smoke": "tsx scripts/smoke.ts",
     "test:balance": "tsx scripts/balance.ts",
     "test:save": "tsx scripts/save-test.ts",
     "test:ssr": "tsx --tsconfig tsconfig.test.json scripts/ssr-render.ts",
     "test:acceptance": "tsx scripts/builds.ts && tsx scripts/walls.ts && tsx scripts/reclear.ts && tsx scripts/leap.ts && tsx scripts/law.ts && tsx scripts/offline-accept.ts && tsx scripts/season-accept.ts",
-    "test:api": "tsx scripts/api-smoke.ts"
+    "test:api": "tsx scripts/api-smoke.ts",
+    "test:quality": "tsx scripts/quality-accept.ts",
+    "test:standalone": "node scripts/standalone-smoke.mjs"
   },
   "dependencies": {
     "next": "^15.3.3",

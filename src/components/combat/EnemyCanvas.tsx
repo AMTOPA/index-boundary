@@ -3,6 +3,7 @@
 // 纯 Canvas 绘制，无任何美术资产（遵守全局规则：运行时零第三方依赖）
 import { useEffect, useRef } from "react";
 import { useGame } from "@/components/game/GameProvider";
+import { useReducedMotion } from "@/components/common/hooks";
 import type { BossAffix, EnemyKind, WorldId } from "@/game/types";
 
 interface Props {
@@ -19,44 +20,37 @@ const CY = SIZE / 2;
 
 export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Props) {
   const { engine } = useGame();
+  const reducedMotion = useReducedMotion();
   const ref = useRef<HTMLCanvasElement>(null);
   const flashUntil = useRef(0);
   const impact = useRef({ until: 0, strength: 0, duration: 190 });
-
-  useEffect(() => {
-    if (!engine) return;
-    return engine.onEvent((ev) => {
-      if (ev.type === "hit") {
-        const now = performance.now();
-        const strength = ev.crush ? 1 : ev.superCrit ? 0.82 : ev.crit ? 0.62 : 0.38;
-        flashUntil.current = now + (ev.crush ? 150 : ev.superCrit ? 125 : 90);
-        const duration = ev.crush ? 360 : ev.superCrit ? 280 : 190;
-        impact.current = { until: now + duration, strength, duration };
-      }
-    });
-  }, [engine]);
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    let raf = 0;
-    const t0 = performance.now();
 
-    const draw = (now: number) => {
-      const t = (now - t0) / 1000;
+    let visible = !document.hidden;
+    let raf = 0;
+    let settleTimer = 0;
+    let elapsed = 0;
+    let lastTick = performance.now();
+    let lastRender = 0;
+
+    const render = (now: number) => {
+      const t = reducedMotion ? 0 : elapsed;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.setLineDash([]);
       ctx.clearRect(0, 0, SIZE, SIZE);
       const flash = now < flashUntil.current;
       const impactProgress = impact.current.until > now
         ? 1 - (impact.current.until - now) / impact.current.duration
         : 0;
 
-      // Boss 能量光环（在主体下方）
-      if (isBoss) {
-        drawBossHalo(ctx, t, worldColor, affixes);
-      }
-
+      if (isBoss) drawBossHalo(ctx, t, worldColor, affixes);
       if (kind === "mimic") {
         drawMimic(ctx, t);
       } else {
@@ -65,38 +59,85 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
           case "mech_city": drawMechCity(ctx, t, worldColor, isBoss); break;
           case "star_factory": drawStarFactory(ctx, t, worldColor, isBoss); break;
           case "black_hole": drawBlackHole(ctx, t, worldColor, isBoss); break;
-          default: drawDataWastes(ctx, t, worldColor, isBoss);
+          case "singularity_furnace": drawSingularityFurnace(ctx, t, worldColor, isBoss); break;
+          case "law_terminus": drawLawTerminus(ctx, t, worldColor, isBoss); break;
+          case "nexus_frontier": drawNexusFrontier(ctx, t, worldColor, isBoss); break;
+          case "echo_frontier": drawEchoFrontier(ctx, t, worldColor, isBoss); break;
         }
       }
       if (kind === "elite") drawEliteAura(ctx, t);
-
-      // 词缀叠加特效
-      for (const a of affixes) drawAffixEffect(ctx, t, a);
-
-      // 受击白闪
-      if (impactProgress > 0) {
-        drawImpactPulse(ctx, impactProgress, worldColor, isBoss, impact.current.strength);
-      }
+      for (const affix of affixes) drawAffixEffect(ctx, t, affix);
+      if (impactProgress > 0) drawImpactPulse(ctx, impactProgress, worldColor, isBoss, impact.current.strength);
 
       if (flash) {
-        ctx.globalAlpha = 0.42 + impact.current.strength * 0.2;
+        ctx.globalAlpha = 0.34 + impact.current.strength * 0.18;
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(CX, CY, (isBoss ? 74 : 54), 0, Math.PI * 2);
+        ctx.arc(CX, CY, isBoss ? 72 : 54, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
-
-      raf = requestAnimationFrame(draw);
     };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [worldId, worldColor, isBoss, affixes, kind]);
+
+    const frame = (now: number) => {
+      raf = 0;
+      if (!visible || reducedMotion) return;
+      elapsed += Math.min(0.05, Math.max(0, (now - lastTick) / 1_000));
+      lastTick = now;
+      if (now - lastRender >= 1_000 / 30) {
+        render(now);
+        lastRender = now;
+      }
+      raf = requestAnimationFrame(frame);
+    };
+
+    const start = () => {
+      if (raf || reducedMotion || !visible) return;
+      lastTick = performance.now();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const onVisibilityChange = () => {
+      visible = !document.hidden;
+      if (!visible) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        return;
+      }
+      render(performance.now());
+      start();
+    };
+
+    const unsubscribe = engine?.onEvent((event) => {
+      if (event.type !== "hit") return;
+      const now = performance.now();
+      const strength = event.crush ? 1 : event.superCrit ? 0.82 : event.crit ? 0.62 : event.isClick ? 0.48 : 0.32;
+      flashUntil.current = now + (event.crush ? 140 : event.superCrit ? 115 : 78);
+      const duration = event.crush ? 330 : event.superCrit ? 250 : 170;
+      impact.current = { until: now + duration, strength, duration };
+      if (reducedMotion && visible) {
+        render(now);
+        window.clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(() => render(performance.now()), duration + 25);
+      }
+    });
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    render(performance.now());
+    start();
+
+    return () => {
+      unsubscribe?.();
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(settleTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [engine, worldId, worldColor, isBoss, affixes, kind, reducedMotion]);
 
   return <canvas className="enemy-canvas" width={SIZE} height={SIZE} ref={ref} aria-hidden="true" />;
 }
 
-// ---------- 工具 ----------
+// ---------- Drawing helpers ----------
 function poly(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, n: number, rot: number, close = true): void {
   ctx.beginPath();
   for (let i = 0; i < n; i++) {
@@ -283,6 +324,179 @@ function drawBlackHole(ctx: CanvasRenderingContext2D, t: number, color: string, 
 }
 
 // ---------- 特殊敌人 ----------
+function drawSingularityFurnace(ctx: CanvasRenderingContext2D, t: number, color: string, isBoss: boolean): void {
+  const radius = isBoss ? 68 : 52;
+  const bob = Math.sin(t * 2.4) * 3;
+  glow(ctx, CX, CY + bob, radius * 2, "#ff7a1a", 0.2 + Math.sin(t * 3) * 0.04);
+  ctx.save();
+  ctx.translate(CX, CY + bob);
+  ctx.rotate(Math.sin(t * 0.7) * 0.12);
+  const gradient = ctx.createLinearGradient(0, -radius, 0, radius);
+  gradient.addColorStop(0, "#fff2a8");
+  gradient.addColorStop(0.45, color);
+  gradient.addColorStop(1, "#8f2600");
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = "#ffd36a";
+  ctx.lineWidth = isBoss ? 3 : 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -radius);
+  ctx.lineTo(radius * 0.62, -8);
+  ctx.lineTo(radius * 0.36, radius * 0.78);
+  ctx.lineTo(0, radius);
+  ctx.lineTo(-radius * 0.36, radius * 0.78);
+  ctx.lineTo(-radius * 0.62, -8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,245,190,0.9)";
+  ctx.lineWidth = 2;
+  for (const direction of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, -radius * 0.82);
+    ctx.lineTo(direction * radius * 0.18, -radius * 0.2);
+    ctx.lineTo(direction * radius * 0.08, radius * 0.2);
+    ctx.lineTo(direction * radius * 0.28, radius * 0.68);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = "#ffd36a";
+  const motes = isBoss ? 8 : 5;
+  for (let index = 0; index < motes; index += 1) {
+    const angle = -t * 1.8 + (index / motes) * Math.PI * 2;
+    const orbit = radius * (1.2 + 0.12 * Math.sin(t * 4 + index));
+    ctx.beginPath();
+    ctx.arc(CX + Math.cos(angle) * orbit, CY + bob + Math.sin(angle) * orbit * 0.42, 2 + (index % 3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawLawTerminus(ctx: CanvasRenderingContext2D, t: number, color: string, isBoss: boolean): void {
+  const radius = isBoss ? 66 : 50;
+  const pulse = 1 + Math.sin(t * 2) * 0.025;
+  glow(ctx, CX, CY, radius * 1.9, "#ffffff", 0.16);
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.rotate(t * 0.16);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = "rgba(245,250,255,0.12)";
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-radius * pulse, -radius * pulse, radius * 2 * pulse, radius * 2 * pulse);
+  ctx.fillRect(-radius * pulse, -radius * pulse, radius * 2 * pulse, radius * 2 * pulse);
+  ctx.rotate(-t * 0.38);
+  poly(ctx, 0, 0, radius * 0.88, 3, -Math.PI / 2);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = isBoss ? 4 : 3;
+  ctx.stroke();
+  ctx.rotate(t * 0.58);
+  ctx.strokeStyle = "rgba(140,220,255,0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.56, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(CX - 5, CY - 5, 10, 10);
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  ctx.lineWidth = 1;
+  for (let index = -2; index <= 2; index += 1) {
+    const offset = index * radius * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(CX - radius * 1.18, CY + offset);
+    ctx.lineTo(CX + radius * 1.18, CY + offset);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(CX + offset, CY - radius * 1.18);
+    ctx.lineTo(CX + offset, CY + radius * 1.18);
+    ctx.stroke();
+  }
+}
+
+function drawNexusFrontier(ctx: CanvasRenderingContext2D, t: number, color: string, isBoss: boolean): void {
+  const radius = isBoss ? 70 : 54;
+  const bob = Math.sin(t * 1.8) * 3;
+  glow(ctx, CX, CY + bob, radius * 1.8, color, 0.17);
+  ctx.save();
+  ctx.translate(CX, CY + bob);
+  ctx.rotate(Math.sin(t * 0.55) * 0.16);
+  const prism = ctx.createLinearGradient(-radius, -radius, radius, radius);
+  prism.addColorStop(0, "rgba(255,255,255,0.86)");
+  prism.addColorStop(0.42, `${color}aa`);
+  prism.addColorStop(1, "rgba(178,107,255,0.28)");
+  ctx.fillStyle = prism;
+  ctx.strokeStyle = "#e9fbff";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -radius);
+  ctx.lineTo(radius * 0.86, radius * 0.62);
+  ctx.lineTo(-radius * 0.86, radius * 0.62);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, -radius);
+  ctx.lineTo(0, radius * 0.12);
+  ctx.lineTo(radius * 0.86, radius * 0.62);
+  ctx.moveTo(0, radius * 0.12);
+  ctx.lineTo(-radius * 0.86, radius * 0.62);
+  ctx.stroke();
+  ctx.restore();
+  const beamColors = ["#55f6ff", "#ff75d8", "#ffe66d"];
+  for (let index = 0; index < beamColors.length; index += 1) {
+    ctx.strokeStyle = beamColors[index];
+    ctx.globalAlpha = 0.62;
+    ctx.lineWidth = isBoss ? 4 : 3;
+    ctx.beginPath();
+    ctx.moveTo(CX + radius * 0.15, CY + bob + radius * 0.08);
+    ctx.lineTo(CX + radius * (1.5 + index * 0.12), CY + bob + (index - 1) * radius * 0.5);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawEchoFrontier(ctx: CanvasRenderingContext2D, t: number, color: string, isBoss: boolean): void {
+  const radius = isBoss ? 62 : 47;
+  const phases = [
+    { offset: -16, color: "#55f6ff", alpha: 0.24 },
+    { offset: 16, color: "#ff75d8", alpha: 0.24 },
+    { offset: 0, color, alpha: 0.86 },
+  ];
+  glow(ctx, CX, CY, radius * 2.2, "#b26bff", 0.18 + Math.sin(t * 2.4) * 0.04);
+  for (const phase of phases) {
+    ctx.save();
+    ctx.translate(CX + phase.offset * Math.sin(t * 1.3), CY + phase.offset * 0.3 * Math.cos(t * 1.7));
+    ctx.rotate(t * (phase.offset === 0 ? 0.34 : -0.22));
+    ctx.strokeStyle = phase.color;
+    ctx.globalAlpha = phase.alpha;
+    ctx.lineWidth = phase.offset === 0 ? 3 : 2;
+    poly(ctx, 0, 0, radius, 8, Math.PI / 8);
+    ctx.stroke();
+    poly(ctx, 0, 0, radius * 0.58, 4, Math.PI / 4);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  const gradient = ctx.createRadialGradient(CX - 8, CY - 10, 2, CX, CY, radius * 0.5);
+  gradient.addColorStop(0, "#ffffff");
+  gradient.addColorStop(0.35, "#55f6ff");
+  gradient.addColorStop(0.68, "#b26bff");
+  gradient.addColorStop(1, "rgba(255,117,216,0.16)");
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(CX, CY, radius * (0.4 + Math.sin(t * 3) * 0.035), 0, Math.PI * 2);
+  ctx.fill();
+  const rings = isBoss ? 4 : 3;
+  for (let ring = 0; ring < rings; ring += 1) {
+    const progress = (t * 0.38 + ring / rings) % 1;
+    ctx.globalAlpha = (1 - progress) * 0.4;
+    ctx.strokeStyle = ring % 2 ? "#ff75d8" : "#55f6ff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(CX, CY, radius * (0.7 + progress), radius * (0.22 + progress * 0.35), t * 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawMimic(ctx: CanvasRenderingContext2D, t: number): void {
   const bob = Math.sin(t * 2.2) * 3;
   const w = 84, h = 62;

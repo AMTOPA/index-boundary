@@ -64,6 +64,21 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     expect(eng.state.leap.cores).toBeGreaterThan(0);
   });
 
+  it("startStage keeps stage x+1 aligned with all base upgrades at level x", () => {
+    const st = leapReadyState(401);
+    st.leap.purchases.startStage = 3;
+    const eng = new GameEngine(st);
+    eng.leap();
+    expect(eng.state.combat.stage).toBe(301);
+    expect(eng.state.player.upgrades).toEqual({
+      attack: 300,
+      aspd: 300,
+      critChance: 300,
+      critDamage: 300,
+      gold: 300,
+    });
+  });
+
   it("世界核心商店价格 1/2/3/5/8/13（斐波那契）", () => {
     expect(leapShopCostFrom(0, "allStats")).toBe(1);
     expect(leapShopCostFrom(1, "allStats")).toBe(2);
@@ -164,6 +179,18 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     expect(eng.allocate("sing_keystone_gold")).toBe(true);
     const d = eng.derived;
     expect(d.globalMult.gt(Big.fromNumber(1))).toBe(true);
+  });
+
+  it("repairs legacy leap saves with zero base upgrades", () => {
+    const raw = createNewState(77);
+    raw.leap.totalLeaps = 1;
+    raw.leap.purchases.startStage = 3;
+    raw.combat.stage = 301;
+    raw.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+
+    const normalized = normalizeState(raw);
+    expect(normalized.combat.stage).toBe(301);
+    expect(Object.values(normalized.player.upgrades)).toEqual([300, 300, 300, 300, 300]);
   });
 
   it("normalize 旧档补齐 leap 字段", () => {

@@ -1,10 +1,19 @@
 "use client";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
-import { SKILL_DEFS, SKILL_IDS, skillCooldown, skillCoreCost, PASSIVE_DEFS, PASSIVE_IDS, passiveCoreCost } from "@/game/data/skills";
+import {
+  SKILL_DEFS,
+  SKILL_IDS,
+  skillCooldown,
+  skillCoreCost,
+  PASSIVE_DEFS,
+  PASSIVE_IDS,
+  passiveCoreCost,
+} from "@/game/data/skills";
 import { toBig } from "@/game/bignum";
 import { formatNumber } from "@/game/format";
 import type { PassiveId, SkillId } from "@/game/types";
+import styles from "./SkillBar.module.css";
 
 export function SkillBar() {
   const { engine } = useGame();
@@ -14,86 +23,131 @@ export function SkillBar() {
   const passives = useGameSelector((s) => s.skills.passives);
   if (!unlocked) return null;
 
-  const coreNum = toBig(cores).toNumber();
-  const activeIds = new Set(actives.map((s) => s.id));
+  const coreCount = toBig(cores).toNumber();
+  const activeIds = new Set(actives.map((skill) => skill.id));
   const locked = SKILL_IDS.filter((id) => !activeIds.has(id));
 
   return (
-    <div className="skill-bar">
-      <div className="skill-core-chip" title="技能核心：Boss 掉落，用于升级技能">
-        🔷 核心 {formatNumber(coreNum)}
+    <div className={`skill-bar ${styles.bar}`}>
+      <div className={`skill-core-chip ${styles.coreChip}`} title="技能核心由 Boss 掉落，用于升级主动与被动技能">
+        <span aria-hidden="true">🔷</span>
+        <span>技能核心</span>
+        <strong>{formatNumber(coreCount)}</strong>
       </div>
-      {actives.map((inst) => {
-        const def = SKILL_DEFS[inst.id];
-        const cd = skillCooldown(def, inst.level);
-        const pct = cd > 0 ? Math.min(1, inst.cdRemaining / cd) : 0;
-        const ready = inst.cdRemaining <= 0;
-        const upCost = skillCoreCost(inst.level);
-        return (
-          <div
-            key={inst.id}
-            className={`skill-btn ${ready ? "ready" : ""}`}
-            onClick={() => engine?.cast(inst.id as SkillId)}
-            title={`${def.name}：${def.desc}（Lv${inst.level}）`}
-          >
-            <span className="icon">{def.icon}</span>
-            <span>{def.name}</span>
-            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
-              {ready ? `Lv${inst.level} 就绪` : `${inst.cdRemaining.toFixed(0)}s`}
-            </span>
-            <span
-              className={`skill-up ${coreNum >= upCost ? "afford" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                engine?.upgradeSkill(inst.id as SkillId);
-              }}
-              title={`升级到 Lv${inst.level + 1}（消耗 ${upCost} 核心）`}
-            >
-              ▲{upCost}
-            </span>
-            {!ready && <span className="cd-overlay" style={{ height: `${pct * 100}%` }} />}
-          </div>
-        );
-      })}
-            <div className="passive-bar" title="被动技能：常驻效果，用技能核心升级">
-        {PASSIVE_IDS.map((id) => {
-          const def = PASSIVE_DEFS[id];
-          const lv = passives[id] ?? 0;
-          const upCost = passiveCoreCost(lv);
-          return (
-            <div key={id} className="passive-btn" title={`${def.name}：${def.desc}（Lv${lv}）`}>
-              <span className="icon">{def.icon}</span>
-              <span>{def.name}</span>
-              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Lv{lv}</span>
-              <span
-                className={`skill-up ${coreNum >= upCost ? "afford" : ""}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  engine?.upgradePassive(id as PassiveId);
-                }}
-                title={`升级到 Lv${lv + 1}（消耗 ${upCost} 核心）`}
+
+      <section className={styles.section} aria-labelledby="active-skills-heading">
+        <div className={styles.sectionHeading}>
+          <h4 id="active-skills-heading">主动技能</h4>
+          <span>释放与升级为独立按钮，避免误操作</span>
+        </div>
+        <div className={styles.skillGrid}>
+          {actives.map((instance) => {
+            const definition = SKILL_DEFS[instance.id];
+            const cooldown = skillCooldown(definition, instance.level);
+            const cooldownRatio = cooldown > 0 ? Math.min(1, instance.cdRemaining / cooldown) : 0;
+            const ready = instance.cdRemaining <= 0;
+            const upgradeCost = skillCoreCost(instance.level);
+            const canUpgrade = coreCount >= upgradeCost;
+            const status = instance.active
+              ? "生效中"
+              : ready
+                ? "就绪"
+                : `冷却 ${instance.cdRemaining.toFixed(0)} 秒`;
+
+            return (
+              <article key={instance.id} className={styles.skillCard}>
+                <button
+                  type="button"
+                  className={`skill-btn ${styles.castButton} ${ready ? "ready" : ""}`}
+                  style={ready ? { borderColor: definition.color } : undefined}
+                  disabled={!ready || !engine}
+                  onClick={() => engine?.cast(instance.id as SkillId)}
+                  title={`${definition.name}：${definition.desc}`}
+                  aria-label={`释放${definition.name}，等级 ${instance.level}，${status}`}
+                >
+                  <span className="icon" aria-hidden="true">{definition.icon}</span>
+                  <strong>{definition.name}</strong>
+                  <span className={styles.status}>{status}</span>
+                  {!ready && (
+                    <span
+                      className={`cd-overlay ${styles.cooldownOverlay}`}
+                      style={{ height: `${cooldownRatio * 100}%` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={`skill-up ${styles.upgradeButton} ${canUpgrade ? "afford" : ""}`}
+                  disabled={!canUpgrade || !engine}
+                  onClick={() => engine?.upgradeSkill(instance.id as SkillId)}
+                  title={`升级到 Lv${instance.level + 1}，消耗 ${upgradeCost} 核心`}
+                >
+                  <span>升级至 Lv{instance.level + 1}</span>
+                  <strong>消耗 {upgradeCost}</strong>
+                </button>
+              </article>
+            );
+          })}
+
+          {locked.map((id) => {
+            const definition = SKILL_DEFS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`skill-btn skill-locked ${styles.lockedCard}`}
+                onClick={() => engine?.unlockSkill(id as SkillId)}
+                disabled={!engine}
+                title={`解锁 ${definition.name}：${definition.desc}`}
               >
-                ▲{upCost}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {locked.map((id) => {
-        const def = SKILL_DEFS[id];
-        return (
-          <button
-            key={id}
-            className="skill-btn skill-locked"
-            onClick={() => engine?.unlockSkill(id as SkillId)}
-            title={`解锁 ${def.name}：${def.desc}`}
-          >
-            <span className="icon">{def.icon}</span>
-            <span>{def.name}</span>
-            <span style={{ fontSize: 10, color: "var(--accent)" }}>解锁</span>
-          </button>
-        );
-      })}
+                <span className="icon" aria-hidden="true">{definition.icon}</span>
+                <strong>{definition.name}</strong>
+                <span className={styles.lockedDescription}>{definition.desc}</span>
+                <span className={styles.unlockLabel}>免费解锁</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className={styles.section} aria-labelledby="passive-skills-heading">
+        <div className={styles.sectionHeading}>
+          <h4 id="passive-skills-heading">被动技能</h4>
+          <span>常驻生效</span>
+        </div>
+        <div className={`passive-bar ${styles.passiveGrid}`}>
+          {PASSIVE_IDS.map((id) => {
+            const definition = PASSIVE_DEFS[id];
+            const level = passives[id] ?? 0;
+            const upgradeCost = passiveCoreCost(level);
+            const canUpgrade = coreCount >= upgradeCost;
+
+            return (
+              <article key={id} className={`passive-btn ${styles.passiveCard}`} title={`${definition.name}：${definition.desc}`}>
+                <div className={styles.passiveIdentity}>
+                  <span className={`icon ${styles.passiveIcon}`} aria-hidden="true">{definition.icon}</span>
+                  <div>
+                    <strong>{definition.name}</strong>
+                    <span className={styles.passiveLevel}>Lv{level}</span>
+                  </div>
+                </div>
+                <p>{definition.desc}</p>
+                <button
+                  type="button"
+                  className={`skill-up ${styles.upgradeButton} ${canUpgrade ? "afford" : ""}`}
+                  disabled={!canUpgrade || !engine}
+                  onClick={() => engine?.upgradePassive(id as PassiveId)}
+                  title={`升级到 Lv${level + 1}，消耗 ${upgradeCost} 核心`}
+                >
+                  <span>升级至 Lv{level + 1}</span>
+                  <strong>消耗 {upgradeCost}</strong>
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

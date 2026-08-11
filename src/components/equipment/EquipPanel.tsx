@@ -1,16 +1,24 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { useGameSelector } from "@/components/common/hooks";
 import { ResourceChip } from "@/components/common/ResourceChip";
+import { InventoryContent } from "./InventoryPanel";
 import { formatNumber } from "@/game/format";
 import {
-  RARITY_LABEL, RARITY_COLOR, SLOT_LABEL, SLOT_ICON, AFFIX_LABEL, formatAffixValue,
-  rarityOrder, activeSets, equipScore,
+  RARITY_LABEL,
+  RARITY_COLOR,
+  SLOT_LABEL,
+  SLOT_ICON,
+  AFFIX_LABEL,
+  formatAffixValue,
+  activeSets,
+  equipScore,
 } from "@/game/data/equipment";
 import { CONFIG } from "@/game/config";
 import type { EquipSlot, Rarity, EquipInstance } from "@/game/types";
 import type { GameEngine } from "@/game/engine";
+import styles from "./EquipPanel.module.css";
 
 const SLOTS: EquipSlot[] = CONFIG.EQUIPMENT.SLOTS as unknown as EquipSlot[];
 
@@ -30,13 +38,13 @@ export function EquipPanel({ wide = false }: { wide?: boolean }) {
     return (
       <div className="panel">
         <h3>装备</h3>
-        <p style={{ fontSize: 13, color: "var(--text-dim)" }}>到达第 50 关解锁装备系统。</p>
+        <p className={styles.lockedHint}>到达第 50 关解锁装备系统。</p>
       </div>
     );
   }
 
   const tabs: { id: EquipTab; label: string }[] = [
-    { id: "equipped", label: `已装备 (${SLOTS.filter((s) => slots[s]).length})` },
+    { id: "equipped", label: `已装备 (${SLOTS.filter((slot) => slots[slot]).length})` },
     ...(wide ? [] : [{ id: "inventory" as EquipTab, label: `背包 (${inventory.length})` }]),
     { id: "craft", label: "制作 / 套装" },
   ];
@@ -48,16 +56,23 @@ export function EquipPanel({ wide = false }: { wide?: boolean }) {
         <ResourceChip icon="💠" label="碎片" value={fragments} tone="frag" />
       </div>
 
-      <div className="equip-tabs">
-        {tabs.map((t) => (
-          <button key={t.id} className={`mini-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
-            {t.label}
+      <div className={`equip-tabs ${styles.tabs}`} role="tablist" aria-label="装备功能">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className={`mini-btn ${styles.tabButton} ${tab === item.id ? "active" : ""}`}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
           </button>
         ))}
       </div>
 
       {tab === "equipped" && (
-        <div className="equip-list">
+        <div className="equip-list" role="tabpanel" aria-label="已装备物品">
           {SLOTS.map((slot) => {
             const item = slots[slot];
             if (!item) {
@@ -74,117 +89,76 @@ export function EquipPanel({ wide = false }: { wide?: boolean }) {
       )}
 
       {tab === "craft" && (
-        <div className="craft-section">
+        <div className="craft-section" role="tabpanel" aria-label="装备制作与套装">
           <h3>套装</h3>
-          {activeSets(slots).map((s) => (
-            <div key={s.id} className={`set-row ${s.active ? "active" : ""}`}>
-              <span>{s.active ? "●" : "○"} {s.name}</span>
-              <span className="set-desc">{s.desc}</span>
+          {activeSets(slots).map((set) => (
+            <div key={set.id} className={`set-row ${set.active ? "active" : ""}`}>
+              <span>{set.active ? "●" : "○"} {set.name}</span>
+              <span className="set-desc">{set.desc}</span>
             </div>
           ))}
-          <h3 style={{ marginTop: 10 }}>制作</h3>
-          <div className="craft-row">
-            {SLOTS.map((sl) => (
-              <button key={sl} className={`mini-btn ${craftSlot === sl ? "active" : ""}`} onClick={() => setCraftSlot(sl)}>
-                {SLOT_ICON[sl]}
-              </button>
-            ))}
-          </div>
-          <div className="craft-row">
-            {(Object.keys(RARITY_LABEL) as Rarity[]).map((r) => (
+          <h3 className={styles.craftHeading}>制作</h3>
+          <div className={`craft-row ${styles.choiceRow}`} aria-label="选择制作槽位">
+            {SLOTS.map((slot) => (
               <button
-                key={r}
-                className={`mini-btn rarity-tab ${craftRarity === r ? "active" : ""}`}
-                data-rarity={r}
-                style={{ color: RARITY_COLOR[r] }}
-                onClick={() => setCraftRarity(r)}
+                key={slot}
+                type="button"
+                className={`mini-btn ${styles.choiceButton} ${craftSlot === slot ? "active" : ""}`}
+                aria-pressed={craftSlot === slot}
+                aria-label={`制作${SLOT_LABEL[slot]}`}
+                onClick={() => setCraftSlot(slot)}
               >
-                {RARITY_LABEL[r]}
+                <span aria-hidden="true">{SLOT_ICON[slot]}</span>
+                <span>{SLOT_LABEL[slot]}</span>
               </button>
             ))}
           </div>
-          <div className="craft-row">
-            <span className="craft-cost">费用 {engine ? formatNumber(engine.craftCostOf(craftSlot, craftRarity)) : 0} 碎片</span>
-            <button className="mini-btn craft-go" disabled={!engine?.canCraft(craftSlot, craftRarity)} onClick={() => engine?.craft(craftSlot, craftRarity)}>
-              制作
+          <div className={`craft-row ${styles.choiceRow}`} aria-label="选择制作稀有度">
+            {(Object.keys(RARITY_LABEL) as Rarity[]).map((rarity) => (
+              <button
+                key={rarity}
+                type="button"
+                className={`mini-btn rarity-tab ${styles.choiceButton} ${craftRarity === rarity ? "active" : ""}`}
+                data-rarity={rarity}
+                style={{ color: RARITY_COLOR[rarity] }}
+                aria-pressed={craftRarity === rarity}
+                onClick={() => setCraftRarity(rarity)}
+              >
+                {RARITY_LABEL[rarity]}
+              </button>
+            ))}
+          </div>
+          <div className={`craft-row ${styles.craftSubmit}`}>
+            <span className="craft-cost">
+              {SLOT_LABEL[craftSlot]} · {RARITY_LABEL[craftRarity]} · 费用 {engine ? formatNumber(engine.craftCostOf(craftSlot, craftRarity)) : 0} 碎片
+            </span>
+            <button
+              type="button"
+              className={`mini-btn craft-go ${styles.primaryAction}`}
+              disabled={!engine?.canCraft(craftSlot, craftRarity)}
+              onClick={() => engine?.craft(craftSlot, craftRarity)}
+            >
+              制作装备
             </button>
           </div>
         </div>
       )}
 
-      {tab === "inventory" && <InventorySection engine={engine} />}
-    </div>
-  );
-}
-
-function InventorySection({ engine }: { engine: GameEngine | null }) {
-  const inventory = useGameSelector((s) => s.equipment.inventory);
-  const autoBreakdown = useGameSelector((s) => s.equipment.autoBreakdown);
-  const [invSort, setInvSort] = useState<"rarity" | "score" | "slot">("rarity");
-  const sorted = useMemo(() => {
-    return [...inventory].sort((a, b) => {
-      if (invSort === "score") return equipScore(b) - equipScore(a);
-      if (invSort === "slot") return SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot);
-      return rarityOrder(b.rarity) - rarityOrder(a.rarity);
-    });
-  }, [inventory, invSort]);
-  return (
-    <div className="inventory-section">
-      <div className="equip-toolbar" style={{ marginBottom: 6 }}>
-        <span className="equip-toolbar-label">自动分解 &lt;</span>
-        <select
-          className="equip-select"
-          value={autoBreakdown ?? ""}
-          onChange={(e) => engine?.setAutoBreakdown(e.target.value ? (e.target.value as Rarity) : null)}
-        >
-          <option value="">关闭</option>
-          {(Object.keys(RARITY_LABEL) as Rarity[]).map((r) => (
-            <option key={r} value={r}>{RARITY_LABEL[r]}</option>
-          ))}
-        </select>
-      </div>
-      <div className="inventory-head">
-        <h3>背包 ({inventory.length}/{CONFIG.EQUIPMENT.INVENTORY_CAP})</h3>
-        <select className="equip-select sort-select" value={invSort} onChange={(e) => setInvSort(e.target.value as "rarity" | "score" | "slot")}>
-          <option value="rarity">稀有度</option>
-          <option value="score">评分</option>
-          <option value="slot">槽位</option>
-        </select>
-      </div>
-      <div className="inventory">
-        {sorted.length === 0 && <span className="inventory-empty">暂无装备</span>}
-        {sorted.map((item) => (
-          <CompactInvCard key={item.uid} item={item} engine={engine} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CompactInvCard({ item, engine }: { item: EquipInstance; engine: GameEngine | null }) {
-  const rc = RARITY_COLOR[item.rarity];
-  return (
-    <div className="inv-card" data-rarity={item.rarity} title={`${RARITY_LABEL[item.rarity]} ${SLOT_LABEL[item.slot]} · 点击装备`}>
-      <button className="inv-card-equip" onClick={() => engine?.equipItem(item.uid)}>
-        <span className="inv-card-icon" style={{ color: rc }}>{SLOT_ICON[item.slot]}</span>
-        <span className="inv-card-name" style={{ color: rc }}>{RARITY_LABEL[item.rarity]}</span>
-        <span className="inv-card-meta">{SLOT_LABEL[item.slot]} +{item.level}{item.overclock ? ` ×${item.overclock}` : ""}</span>
-        <span className="inv-card-score">{equipScore(item).toFixed(1)}</span>
-      </button>
-      <button className="inv-card-break" title="分解" onClick={() => engine?.breakdown(item.uid)}>分解</button>
+      {tab === "inventory" && <InventoryContent engine={engine} embedded />}
     </div>
   );
 }
 
 function EquipCard({ slot, item, engine }: { slot: EquipSlot; item: EquipInstance; engine: GameEngine | null }) {
-  const rc = RARITY_COLOR[item.rarity];
+  const rarityColor = RARITY_COLOR[item.rarity];
   const [confirm, setConfirm] = useState(false);
+
   return (
-    <div className="equip-card equipped" data-rarity={item.rarity}>
+    <article className={`equip-card equipped ${styles.equipCard}`} data-rarity={item.rarity}>
       <div className="equip-card-top">
         <span className="equip-card-slot">{SLOT_ICON[slot]} <span>{SLOT_LABEL[slot]}</span></span>
         <span className="equip-card-badges">
-          <span className="badge rarity-badge" style={{ color: rc, borderColor: rc }}>{RARITY_LABEL[item.rarity]}</span>
+          <span className="badge rarity-badge" style={{ color: rarityColor, borderColor: rarityColor }}>{RARITY_LABEL[item.rarity]}</span>
           <span className="badge level-badge">+{item.level}</span>
           {item.overclock ? <span className="badge oc-badge">×{item.overclock} 超频</span> : null}
         </span>
@@ -192,53 +166,69 @@ function EquipCard({ slot, item, engine }: { slot: EquipSlot; item: EquipInstanc
 
       <div className="equip-card-main">
         <span className="equip-card-main-label">主词条 · {AFFIX_LABEL[item.main.stat]}</span>
-        <span className="equip-card-main-value" style={{ color: rc }}>×{item.main.mult.toFixed(1)}</span>
+        <span className="equip-card-main-value" style={{ color: rarityColor }}>×{item.main.mult.toFixed(1)}</span>
         <span className="equip-card-main-sub">强化 ×{(1 + item.level * CONFIG.EQUIPMENT.ENHANCE_MAIN_MULT).toFixed(2)}</span>
       </div>
 
       <div className="equip-card-affixes">
-        {item.affixes.map((af, i) => (
-          <span className="affix-chip" key={i}>
-            {AFFIX_LABEL[af.stat]} {formatAffixValue(af.stat, af.value)}
+        {item.affixes.map((affix, index) => (
+          <span className="affix-chip" key={`${affix.stat}-${index}`}>
+            {AFFIX_LABEL[affix.stat]} {formatAffixValue(affix.stat, affix.value)}
           </span>
         ))}
         {item.legendary && (
           <span className="affix-chip legendary-chip">✦ {item.legendary.label} ×{item.legendary.mult}</span>
         )}
-        {item.affixes.length === 0 && !item.legendary && (
-          <span className="affix-chip none">暂无副词条</span>
-        )}
+        {item.affixes.length === 0 && !item.legendary && <span className="affix-chip none">暂无副词条</span>}
       </div>
 
       <div className="equip-card-foot">
         <span className="equip-score">评分 {equipScore(item).toFixed(1)}</span>
         {confirm ? (
-          <div className="equip-actions confirm-row">
-            <span style={{ fontSize: 11, color: "var(--danger)" }}>确认分解？</span>
-            <button className="mini-btn" style={{ color: "var(--danger)" }} onClick={() => { engine?.breakdown(item.uid); setConfirm(false); }}>确认</button>
-            <button className="mini-btn" onClick={() => setConfirm(false)}>取消</button>
+          <div className={`equip-actions confirm-row ${styles.confirmActions}`} role="alert">
+            <span className={styles.dangerText}>确认分解已装备物品？</span>
+            <button
+              type="button"
+              className={`mini-btn ${styles.dangerText}`}
+              onClick={() => {
+                engine?.breakdown(item.uid);
+                setConfirm(false);
+              }}
+            >
+              确认
+            </button>
+            <button type="button" className="mini-btn" onClick={() => setConfirm(false)}>取消</button>
           </div>
         ) : (
-          <div className="equip-actions">
-            <button className="mini-btn equip-enhance" disabled={!engine?.canEnhance(slot) || item.level >= CONFIG.EQUIPMENT.MAX_ENHANCE}
-              onClick={() => engine?.enhance(slot)}>
+          <div className={`equip-actions ${styles.equipActions}`}>
+            <button
+              type="button"
+              className="mini-btn equip-enhance"
+              disabled={!engine?.canEnhance(slot) || item.level >= CONFIG.EQUIPMENT.MAX_ENHANCE}
+              onClick={() => engine?.enhance(slot)}
+            >
               强化 ({engine ? formatNumber(engine.enhanceCostOf(slot)) : 0})
             </button>
             {item.level >= CONFIG.EQUIPMENT.MAX_ENHANCE && (
-              <button className="mini-btn" style={{ color: "var(--gold)" }} disabled={!engine?.canOverclock(slot)} onClick={() => engine?.overclock(slot)}>
+              <button
+                type="button"
+                className={`mini-btn ${styles.goldText}`}
+                disabled={!engine?.canOverclock(slot)}
+                onClick={() => engine?.overclock(slot)}
+              >
                 超频 ({engine ? formatNumber(engine.overclockCostOf(slot)) : 0})
               </button>
             )}
             {item.affixes.length > 0 && (
-              <button className="mini-btn" disabled={!engine?.canReforge(item.uid)} onClick={() => engine?.reforge(item.uid)}>
+              <button type="button" className="mini-btn" disabled={!engine?.canReforge(item.uid)} onClick={() => engine?.reforge(item.uid)}>
                 重铸 ({engine ? formatNumber(engine.reforgeCostOf(item.uid)) : 0})
               </button>
             )}
-            <button className="mini-btn" onClick={() => engine?.unequip(slot)}>卸下</button>
-            <button className="mini-btn" style={{ color: "var(--danger)" }} onClick={() => setConfirm(true)}>分解</button>
+            <button type="button" className="mini-btn" onClick={() => engine?.unequip(slot)}>卸下</button>
+            <button type="button" className={`mini-btn ${styles.dangerText}`} onClick={() => setConfirm(true)}>分解</button>
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }

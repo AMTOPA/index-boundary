@@ -2,8 +2,12 @@
   "name": "指数边界 Boundless Exponent",
   "short_name": "指数边界",
   "description": "数值膨胀 / 放置 / 构筑 Web 游戏",
+  "lang": "zh-CN",
+  "id": ".",
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#060a14",
   "theme_color": "#060a14",
   "icons": [

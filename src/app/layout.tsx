@@ -1,16 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import PwaRegistrar from "@/components/common/PwaRegistrar";
 import "./globals.css";
 
-// basePath（部署到子路径时由构建期环境变量注入），静态资源路径需手动加前缀
+// 子路径部署（例如 /index-boundary）由构建期环境变量注入。
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const asset = (p: string) => `${BASE}${p}`;
+const asset = (path: string) => `${BASE}${path}`;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://amtopa.com";
 
 const TITLE = "指数边界 Boundless Exponent";
-const DESCRIPTION = "数值膨胀 / 放置 / 构筑 Web 游戏：突破更高关卡的异常数据体，用升级、装备、技能、天赋、重构与世界跳跃构筑自己的增长引擎。";
+const DESCRIPTION = "数值膨胀 / 放置 / 构筑 Web 游戏：突破更高关卡的异常数据体，用升级、装备、技能、天赋、重构与世界跃迁构筑自己的增长引擎。";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
+  applicationName: "指数边界",
   manifest: asset("/manifest.json"),
   icons: {
     icon: [
@@ -26,11 +30,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: "https://amtopa.com/index-boundary",
+    url: asset("/") || "/",
     siteName: "指数边界",
     type: "website",
     locale: "zh_CN",
-    images: [{ url: asset("/og-image.png"), width: 1200, height: 630, alt: "指数边界 Boundless Exponent" }],
+    images: [{ url: asset("/og-image.png"), width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: "summary_large_image",
@@ -43,15 +47,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#060a14",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <PwaRegistrar />
+      </body>
     </html>
   );
 }

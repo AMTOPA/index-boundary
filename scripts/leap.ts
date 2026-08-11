@@ -36,6 +36,12 @@ check("跃迁重置天赋", Object.keys(eng.state.talents.allocations).length ==
 check("跃迁重置重构", eng.state.prestige.energy === 0);
 check("跃迁保留统计（总伤不清零）", eng.state.statistics.totalDamage[1] === 120);
 
+const stStart = leapReady(106);
+stStart.leap.purchases.startStage = 3;
+const engStart = new GameEngine(stStart);
+engStart.leap();
+check("起始世界 Lv3 → 301 关且五项基础升级均为 300 级", engStart.state.combat.stage === 301 && Object.values(engStart.state.player.upgrades).every((lv) => lv === 300));
+
 // 2. 世界核心商店价格
 const fib = [1, 2, 3, 5, 8, 13];
 let fibOk = true;

@@ -1,0 +1,113 @@
+.panel {
+  display: grid;
+  gap: 18px;
+}
+
+.section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+
+.sectionHeading h3 {
+  margin: 0;
+}
+
+.sectionHeading span {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.grid.grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.card.card {
+  min-width: 0;
+  padding: 12px;
+  gap: 8px;
+}
+
+.name {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.description.description {
+  min-height: 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.actionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  white-space: normal;
+}
+
+.actionButton strong {
+  font-family: var(--font-mono);
+}
+
+.ownedTag {
+  white-space: nowrap;
+}
+
+.ownedStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 38px;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.actionButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    gap: 22px;
+  }
+
+  .sectionHeading h3,
+  .name {
+    font-size: 14px;
+  }
+
+  .sectionHeading span,
+  .description.description,
+  .ownedStatus {
+    font-size: 12px;
+  }
+
+  .grid.grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card.card {
+    padding: 14px;
+  }
+
+  .actionButton,
+  .ownedStatus {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}

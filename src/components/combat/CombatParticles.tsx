@@ -1,160 +1,253 @@
 "use client";
-// 战斗粒子层：命中火花 / 暴击 / 超暴击 / 碾压白闪 / 击杀爆裂 / Boss 击杀大爆发（Canvas，零依赖）
+
 import { useEffect, useRef } from "react";
 import { useGame } from "@/components/game/GameProvider";
+import { useReducedMotion } from "@/components/common/hooks";
+import styles from "./CombatVisuals.module.css";
 
 interface Particle {
-  x: number; y: number;
-  vx: number; vy: number;
-  life: number; maxLife: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
   color: string;
   size: number;
   kind: "spark" | "ring" | "shard";
 }
 
+const MAX_PARTICLES = 120;
+
 export function CombatParticles() {
   const { engine } = useGame();
-  const ref = useRef<HTMLCanvasElement>(null);
-  const parts = useRef<Particle[]>([]);
-  const MAX_PARTICLES = 150;
+  const reducedMotion = useReducedMotion();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    let W = 0, H = 0;
-    const resize = () => {
-      // 以父容器尺寸为准，并固定 canvas 的 CSS 尺寸，避免自身固有尺寸反馈放大
-      const rect = (canvas.parentElement ?? canvas).getBoundingClientRect();
-      W = Math.max(1, rect.width); H = Math.max(1, rect.height);
-      canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
+    const canvas = canvasRef.current;
+    if (!canvas || !engine) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
 
+    const particles: Particle[] = [];
+    let visible = !document.hidden;
     let raf = 0;
-    let last = performance.now();
+    let lastFrame = performance.now();
+    let width = 1;
+    let height = 1;
+    let lastAmbientSpark = 0;
+
+    const resize = () => {
+      const rect = (canvas.parentElement ?? canvas).getBoundingClientRect();
+      const dpr = Math.min(reducedMotion ? 1 : 1.75, window.devicePixelRatio || 1);
+      width = Math.max(1, rect.width);
+      height = Math.max(1, rect.height);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const clear = () => {
+      context.clearRect(0, 0, width, height);
+      context.globalAlpha = 1;
+      context.globalCompositeOperation = "source-over";
+    };
+
+    const drawParticle = (particle: Particle) => {
+      const progress = Math.max(0, particle.life / particle.maxLife);
+      context.globalAlpha = progress;
+      context.strokeStyle = particle.color;
+      context.fillStyle = particle.color;
+
+      if (particle.kind === "ring") {
+        context.lineWidth = Math.max(1, 3 * progress);
+        context.beginPath();
+        context.arc(particle.x, particle.y, reducedMotion ? particle.size : particle.size * (1.65 - progress), 0, Math.PI * 2);
+        context.stroke();
+        return;
+      }
+      if (particle.kind === "shard") {
+        context.save();
+        context.translate(particle.x, particle.y);
+        context.rotate(particle.vx * 0.012 + particle.life * 4);
+        context.fillRect(-particle.size / 2, -particle.size / 4, particle.size, particle.size / 2);
+        context.restore();
+        return;
+      }
+
+      context.lineWidth = Math.max(1, particle.size * progress);
+      context.beginPath();
+      context.moveTo(particle.x, particle.y);
+      context.lineTo(particle.x - particle.vx * 0.035, particle.y - particle.vy * 0.035);
+      context.stroke();
+      context.beginPath();
+      context.arc(particle.x, particle.y, Math.max(0.8, particle.size * progress * 0.65), 0, Math.PI * 2);
+      context.fill();
+    };
 
     const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      ctx.clearRect(0, 0, W, H);
-      ctx.globalCompositeOperation = "lighter";
-      const list = parts.current;
-      for (let i = list.length - 1; i >= 0; i--) {
-        const p = list[i];
-        p.life -= dt;
-        if (p.life <= 0) { list.splice(i, 1); continue; }
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vx *= 0.96;
-        p.vy *= 0.96;
-        const k = p.life / p.maxLife;
-        ctx.globalAlpha = Math.max(0, k);
-        ctx.strokeStyle = p.color;
-        ctx.fillStyle = p.color;
-        if (p.kind === "ring") {
-          ctx.lineWidth = 3 * k;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * (1.6 - k), 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (p.kind === "shard") {
-          ctx.save();
-          ctx.translate(p.x, p.y);
-          ctx.rotate(p.vx * 0.1);
-          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
-          ctx.restore();
-        } else if (p.kind === "spark") {
-          ctx.lineWidth = Math.max(1, p.size * k);
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, Math.max(0.8, p.size * k * 0.65), 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * k, 0, Math.PI * 2);
-          ctx.fill();
+      raf = 0;
+      if (!visible) return;
+      const dt = Math.min(0.04, Math.max(0, (now - lastFrame) / 1_000));
+      lastFrame = now;
+      clear();
+      context.globalCompositeOperation = "lighter";
+
+      for (let index = particles.length - 1; index >= 0; index -= 1) {
+        const particle = particles[index];
+        particle.life -= dt;
+        if (particle.life <= 0) {
+          particles.splice(index, 1);
+          continue;
         }
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vx *= reducedMotion ? 0.8 : 0.955;
+        particle.vy *= reducedMotion ? 0.8 : 0.955;
+        drawParticle(particle);
       }
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
+
+      context.globalAlpha = 1;
+      context.globalCompositeOperation = "source-over";
+      if (particles.length > 0) raf = requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (raf || !visible || particles.length === 0) return;
+      lastFrame = performance.now();
       raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
 
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, []);
-
-  useEffect(() => {
-    if (!engine) return;
-    const spawn = (p: Partial<Particle> & { kind: Particle["kind"]; color: string; x: number; y: number }) => {
-      parts.current.push({ maxLife: 0.6, life: 0.6, vx: 0, vy: 0, size: 4, ...p } as Particle);
-      if (parts.current.length > MAX_PARTICLES) {
-        parts.current.splice(0, parts.current.length - MAX_PARTICLES);
+    const spawn = (particle: Particle) => {
+      if (!visible) return;
+      if (reducedMotion) {
+        particle.vx = 0;
+        particle.vy = 0;
+        particle.life = Math.min(particle.life, 0.18);
+        particle.maxLife = Math.min(particle.maxLife, 0.18);
       }
+      particles.push(particle);
+      if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);
+      start();
     };
-    const center = (): { x: number; y: number } => {
-      const rect = ref.current?.getBoundingClientRect();
-      if (!rect) return { x: 0, y: 0 };
-      return { x: rect.width / 2, y: rect.height * 0.42 };
-    };
-    const burst = (n: number, color: string, speed: number, kind: Particle["kind"] = "spark", size = 4) => {
-      const c = center();
-      for (let i = 0; i < n; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const v = speed * (0.4 + Math.random() * 0.8);
+
+    const center = () => ({ x: width / 2, y: height * 0.43 });
+    const burst = (
+      count: number,
+      color: string,
+      speed: number,
+      kind: Particle["kind"] = "spark",
+      size = 4,
+    ) => {
+      const origin = center();
+      const actualCount = reducedMotion ? Math.min(3, Math.ceil(count / 8)) : count;
+      for (let index = 0; index < actualCount; index += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = speed * (0.45 + Math.random() * 0.7);
+        const life = 0.38 + Math.random() * 0.42;
         spawn({
-          x: c.x + (Math.random() - 0.5) * 40,
-          y: c.y + (Math.random() - 0.5) * 30,
-          vx: Math.cos(a) * v,
-          vy: Math.sin(a) * v - 20,
+          x: origin.x + (Math.random() - 0.5) * 38,
+          y: origin.y + (Math.random() - 0.5) * 28,
+          vx: Math.cos(angle) * velocity,
+          vy: Math.sin(angle) * velocity - 18,
           color,
-          size: size * (0.6 + Math.random() * 0.8),
-          kind,
-          maxLife: 0.4 + Math.random() * 0.5,
-          life: 0.4 + Math.random() * 0.5,
+          size: size * (0.65 + Math.random() * 0.7),
+          kind: reducedMotion && kind === "shard" ? "ring" : kind,
+          maxLife: life,
+          life,
         });
       }
     };
 
-    return engine.onEvent((ev) => {
-      switch (ev.type) {
+    const spawnRing = (color: string, size: number, life: number) => {
+      const origin = center();
+      spawn({
+        ...origin,
+        vx: 0,
+        vy: 0,
+        color,
+        size,
+        kind: "ring",
+        maxLife: life,
+        life,
+      });
+    };
+
+    resize();
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas.parentElement ?? canvas);
+
+    const onVisibilityChange = () => {
+      visible = !document.hidden;
+      if (!visible) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        return;
+      }
+      start();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const unsubscribe = engine.onEvent((event) => {
+      if (!visible) return;
+      switch (event.type) {
         case "hit": {
-          const c = center();
-          spawn({ x: c.x + (Math.random() - 0.5) * 50, y: c.y + (Math.random() - 0.5) * 40, vx: 0, vy: -30, color: "#dfe8ff", size: 3, kind: "spark", maxLife: 0.3, life: 0.3 });
-          if (ev.crit) burst(6, "#ffb52e", 130);
-          if (ev.superCrit) { burst(16, "#b26bff", 180, "shard", 6); spawn({ x: c.x, y: c.y, color: "#b26bff", size: 40, kind: "ring", maxLife: 0.45, life: 0.45 }); }
-          if (ev.crush) {
-            burst(14, "#ffffff", 220);
-            spawn({ x: c.x, y: c.y, color: "#ffffff", size: 70, kind: "ring", maxLife: 0.5, life: 0.5 });
+          const now = performance.now();
+          const origin = center();
+          if (event.isClick || event.crit || event.superCrit || event.crush || now - lastAmbientSpark > 110) {
+            lastAmbientSpark = now;
+            spawn({
+              x: origin.x + (Math.random() - 0.5) * 42,
+              y: origin.y + (Math.random() - 0.5) * 34,
+              vx: (Math.random() - 0.5) * 45,
+              vy: -35,
+              color: event.isClick ? "#8eeaff" : "#dfe8ff",
+              size: event.isClick ? 4 : 2.5,
+              kind: "spark",
+              maxLife: 0.28,
+              life: 0.28,
+            });
+          }
+          if (event.crit) burst(event.isClick ? 8 : 5, "#ffb52e", 125);
+          if (event.superCrit) {
+            burst(14, "#b26bff", 175, "shard", 6);
+            spawnRing("#b26bff", 42, 0.42);
+          }
+          if (event.crush) {
+            burst(14, "#ffffff", 210);
+            spawnRing("#ffffff", 68, 0.48);
           }
           break;
         }
         case "kill":
-          burst(12, "#3ddc84", 150);
+          burst(event.boss ? 8 : 10, "#3ddc84", 135);
           break;
         case "bossKill":
-          burst(32, "#ffd93d", 260, "shard", 7);
-          burst(20, "#b26bff", 200);
-          spawn({ x: center().x, y: center().y, color: "#ffd93d", size: 100, kind: "ring", maxLife: 0.7, life: 0.7 });
+          burst(26, "#ffd93d", 235, "shard", 7);
+          burst(14, "#b26bff", 185);
+          spawnRing("#ffd93d", 98, 0.68);
           break;
         case "bossFail":
-          burst(16, "#ff6b6b", 180);
+          burst(12, "#ff6b6b", 165);
+          spawnRing("#ff6b6b", 72, 0.5);
           break;
         default:
           break;
       }
     });
-  }, [engine]);
 
-  return <canvas className="combat-particles" ref={ref} aria-hidden="true" />;
+    return () => {
+      unsubscribe();
+      if (raf) cancelAnimationFrame(raf);
+      particles.length = 0;
+      clear();
+      resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [engine, reducedMotion]);
+
+  return <canvas className={`${styles.particleCanvas} combat-particles`} ref={canvasRef} aria-hidden="true" />;
 }
-

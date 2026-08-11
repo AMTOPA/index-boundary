@@ -24,6 +24,7 @@ export function TalentPanel() {
   const keystones = useGameSelector((s) => s.talents.keystones);
   const presets = useGameSelector((s) => s.talents.presets);
   const [confirmTree, setConfirmTree] = useState<TreeId | null>(null);
+  const [activeTree, setActiveTree] = useState<TreeId>("destruction");
 
   const leapUnlocked = useGameSelector((s) => s.meta.unlocks.includes("leap"));
   const trees = useMemo(() => (Object.keys(TALENT_TREES) as TreeId[]).filter((t) => t !== "singularity" || leapUnlocked), [leapUnlocked]);
@@ -65,6 +66,24 @@ export function TalentPanel() {
         </span>
       </div>
 
+      <div className="talent-tree-tabs" role="tablist" aria-label="天赋树">
+        {trees.map((tree) => (
+          <button
+            key={tree}
+            type="button"
+            role="tab"
+            id={`talent-tab-${tree}`}
+            aria-controls={`talent-tree-${tree}`}
+            aria-selected={activeTree === tree}
+            className={`mini-btn ${activeTree === tree ? "active" : ""}`}
+            onClick={() => setActiveTree(tree)}
+          >
+            <span aria-hidden="true">{TREE_ICON[tree]}</span>
+            {TALENT_TREES[tree].name}
+          </button>
+        ))}
+      </div>
+
       <div className="presets">
         <h3>构筑预设</h3>
         <p className="presets-hint">保存当前天赋方案，随时切换（加载需足够天赋点）。</p>
@@ -95,7 +114,14 @@ export function TalentPanel() {
         const chosen = keystones[tree];
         const invested = treePoints({ allocations }, tree);
         return (
-          <div className="talent-tree" data-tree={tree} key={tree}>
+          <section
+            className={`talent-tree ${activeTree === tree ? "is-active" : ""}`}
+            data-tree={tree}
+            key={tree}
+            id={`talent-tree-${tree}`}
+            role="tabpanel"
+            aria-labelledby={`talent-tab-${tree}`}
+          >
             <div className="talent-tree-head">
               <div className="talent-tree-title">
                 <span className="talent-tree-icon">{TREE_ICON[tree]}</span>
@@ -148,7 +174,7 @@ export function TalentPanel() {
                 );
               })}
             </div>
-          </div>
+          </section>
         );
       })}
 

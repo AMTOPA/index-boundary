@@ -1,79 +1,135 @@
 "use client";
-// 动态星空背景：漂移星尘 + 随世界色调变化的星云（Canvas，零依赖）
+
 import { useEffect, useRef } from "react";
+import { useReducedMotion } from "@/components/common/hooks";
+
+const STAR_COUNT = 90;
+const FRAME_INTERVAL_MS = 1_000 / 30;
 
 export function Starfield({ tint }: { tint: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    let W = 0;
-    let H = 0;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const dpr = Math.min(reducedMotion ? 1 : 1.5, window.devicePixelRatio || 1);
+    let width = 0;
+    let height = 0;
     let raf = 0;
+    let elapsed = 0;
+    let lastFrame = 0;
+    let visible = !document.hidden;
 
-    const resize = () => {
-      W = window.innerWidth;
-      H = window.innerHeight;
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
-
-    const stars = Array.from({ length: 110 }, (_, i) => ({
-      accent: i % 11 === 0,
+    const stars = Array.from({ length: STAR_COUNT }, (_, index) => ({
+      accent: index % 11 === 0,
       x: Math.random(),
       y: Math.random(),
-      r: 0.4 + Math.random() * 1.4,
-      tw: Math.random() * Math.PI * 2,
-      sp: 0.0002 + Math.random() * 0.0009,
+      radius: 0.4 + Math.random() * 1.4,
+      twinkle: Math.random() * Math.PI * 2,
+      speed: 0.0002 + Math.random() * 0.0009,
     }));
-    let t = 0;
 
-    const draw = () => {
-      t += 0.016;
-      ctx.clearRect(0, 0, W, H);
-      for (const s of stars) {
-        s.y += s.sp;
-        if (s.y > 1.02) { s.y = -0.02; s.x = Math.random(); }
-        const a = 0.25 + 0.45 * (0.5 + 0.5 * Math.sin(s.tw + t * 2.2));
-        ctx.globalAlpha = Math.max(0, a);
-        ctx.fillStyle = s.accent ? tint : "#dfe8ff";
-        ctx.beginPath();
-        ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
-        ctx.fill();
-        if (s.r > 1.35) {
-          ctx.globalAlpha = Math.min(0.45, a * 0.62);
-          ctx.fillRect(s.x * W - s.r * 2.4, s.y * H - 0.35, s.r * 4.8, 0.7);
-          ctx.fillRect(s.x * W - 0.35, s.y * H - s.r * 2.4, 0.7, s.r * 4.8);
+    const render = (advance: boolean) => {
+      if (advance && !reducedMotion) elapsed += 0.033;
+      context.clearRect(0, 0, width, height);
+
+      for (const star of stars) {
+        if (advance && !reducedMotion) {
+          star.y += star.speed * 2;
+          if (star.y > 1.02) {
+            star.y = -0.02;
+            star.x = Math.random();
+          }
+        }
+        const alpha = reducedMotion
+          ? 0.38
+          : 0.25 + 0.45 * (0.5 + 0.5 * Math.sin(star.twinkle + elapsed * 2.2));
+        context.globalAlpha = Math.max(0, alpha);
+        context.fillStyle = star.accent ? tint : "#dfe8ff";
+        context.beginPath();
+        context.arc(star.x * width, star.y * height, star.radius, 0, Math.PI * 2);
+        context.fill();
+        if (star.radius > 1.35) {
+          context.globalAlpha = Math.min(0.45, alpha * 0.62);
+          context.fillRect(star.x * width - star.radius * 2.4, star.y * height - 0.35, star.radius * 4.8, 0.7);
+          context.fillRect(star.x * width - 0.35, star.y * height - star.radius * 2.4, 0.7, star.radius * 4.8);
         }
       }
-      ctx.globalAlpha = 1;
-      // 星云色调（低透明度，跟随世界色）
-      const g = ctx.createRadialGradient(W * 0.5, H * 0.18, 0, W * 0.5, H * 0.18, Math.max(W, H) * 0.65);
-      g.addColorStop(0, `${tint}26`);
-      g.addColorStop(0.6, `${tint}0d`);
-      g.addColorStop(1, "transparent");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      const horizon = ctx.createLinearGradient(0, H * 0.52, 0, H);
+
+      context.globalAlpha = 1;
+      const nebula = context.createRadialGradient(
+        width * 0.5,
+        height * 0.18,
+        0,
+        width * 0.5,
+        height * 0.18,
+        Math.max(width, height) * 0.65,
+      );
+      nebula.addColorStop(0, `${tint}26`);
+      nebula.addColorStop(0.6, `${tint}0d`);
+      nebula.addColorStop(1, "transparent");
+      context.fillStyle = nebula;
+      context.fillRect(0, 0, width, height);
+
+      const horizon = context.createLinearGradient(0, height * 0.52, 0, height);
       horizon.addColorStop(0, "transparent");
       horizon.addColorStop(1, "rgba(3,7,16,0.28)");
-      ctx.fillStyle = horizon;
-      ctx.fillRect(0, H * 0.52, W, H * 0.48);
-      raf = requestAnimationFrame(draw);
+      context.fillStyle = horizon;
+      context.fillRect(0, height * 0.52, width, height * 0.48);
     };
-    draw();
+
+    const resize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      render(false);
+    };
+
+    const frame = (now: number) => {
+      raf = 0;
+      if (!visible || reducedMotion) return;
+      if (now - lastFrame >= FRAME_INTERVAL_MS) {
+        render(true);
+        lastFrame = now;
+      }
+      raf = requestAnimationFrame(frame);
+    };
+
+    const start = () => {
+      if (raf || !visible || reducedMotion) return;
+      lastFrame = performance.now();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const onVisibilityChange = () => {
+      visible = !document.hidden;
+      if (!visible) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        return;
+      }
+      render(false);
+      start();
+    };
+
+    resize();
+    start();
     window.addEventListener("resize", resize);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [tint]);
+  }, [tint, reducedMotion]);
 
   return <canvas className="starfield" ref={ref} aria-hidden="true" />;
 }

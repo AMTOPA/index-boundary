@@ -1,16 +1,17 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { GameEngine, type OfflineResult } from "@/game/engine";
-import { gameStore, derivedStore } from "@/game/gameStore";
+import { gameStore, publishDerivedStats, publishGameState } from "@/game/gameStore";
 import { worldForStage } from "@/game/data/worlds";
 import { loadGame, saveGame } from "@/game/save";
-import { initAudio, playSfx } from "@/game/audio";
+import { initAudio, playSfx, setAudioEnabled } from "@/game/audio";
 import { initCloud, uploadSave, fetchCloudSave, leaderboardMetrics, submitScore } from "@/game/cloud";
 import type { GameEvent, GameState } from "@/game/types";
 import { CONFIG } from "@/game/config";
 import { OfflineModal } from "@/components/common/OfflineModal";
 
 interface ToastItem { id: number; text: string; kind: string }
+type GameSettings = GameState["meta"]["settings"];
 interface GameCtx {
   engine: GameEngine | null;
   toasts: ToastItem[];
@@ -20,11 +21,13 @@ interface GameCtx {
   offline: OfflineResult | null;
   worldFlash: { name: string; color: string } | null;
   reload: (state: GameState) => void;
+  updateSettings: (patch: Partial<GameSettings>) => void;
 }
 const Ctx = createContext<GameCtx>({
   engine: null, toasts: [], pushToast: () => {}, unlockCard: null, milestoneFlash: null, offline: null,
   worldFlash: null,
   reload: () => {},
+  updateSettings: () => {},
 });
 export const useGame = () => useContext(Ctx);
 
@@ -53,6 +56,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   }, []);
 
+  const updateSettings = useCallback((patch: Partial<GameSettings>) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.state.meta.settings = { ...eng.state.meta.settings, ...patch };
+    setAudioEnabled(eng.state.meta.settings.sound);
+    syncReducedMotion(eng.state.meta.settings.reduceMotion);
+    publishGameState(eng.state, true);
+    saveGame(eng.state);
+  }, []);
+
   const stopEngine = useCallback(() => {
     const eng = engineRef.current;
     if (eng) saveGame(eng.state);
@@ -66,8 +79,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     stopEngine();
     setEngine(null);
     setOffline(null);
-    initAudio();
-
     let state: GameState | null = initialState ?? null;
     if (!state) {
       const loaded = loadGame();
@@ -84,6 +95,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     const eng = new GameEngine(state ?? undefined);
     engineRef.current = eng;
+    setAudioEnabled(eng.state.meta.settings.sound);
+    syncReducedMotion(eng.state.meta.settings.reduceMotion);
 
     const unsub = eng.onEvent((ev: GameEvent) => {
       switch (ev.type) {
@@ -167,22 +180,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     const off = eng.handleOffline(Date.now());
     if (off) setOffline(off);
-    gameStore.setState(eng.state);
-    derivedStore.setState({ v: derivedStore.getState().v + 1, derived: eng.derived });
+    publishGameState(eng.state, true);
+    publishDerivedStats(eng.derived);
     setEngine(eng);
 
-    const tickIv = window.setInterval(() => {
-      eng.tick(1 / CONFIG.TICK_RATE);
-      gameStore.setState(eng.state);
-    }, 1000 / CONFIG.TICK_RATE);
-    cleanupRef.current.push(() => window.clearInterval(tickIv));
+    let tickTimer: number | null = null;
+    let suspendedAt: number | null = null;
+
+    const stopTicking = () => {
+      if (tickTimer !== null) window.clearInterval(tickTimer);
+      tickTimer = null;
+    };
+    const startTicking = () => {
+      if (tickTimer !== null || document.hidden) return;
+      tickTimer = window.setInterval(() => {
+        eng.tick(1 / CONFIG.TICK_RATE);
+        publishGameState(eng.state);
+      }, 1000 / CONFIG.TICK_RATE);
+    };
+    startTicking();
+    cleanupRef.current.push(stopTicking);
 
     const derivedIv = window.setInterval(() => {
-      derivedStore.setState({ v: derivedStore.getState().v + 1, derived: eng.derived });
+      if (!document.hidden) publishDerivedStats(eng.derived);
     }, 500);
     cleanupRef.current.push(() => window.clearInterval(derivedIv));
 
-    // 世界主题切换庆祝（监听 store 中当前世界 id 变化）
+    // Show a world transition only when the published world id actually changes.
     const worldUnsub = gameStore.subscribe(
       (s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0, s.nexus?.entered ?? false, s.echo?.entered ?? false).id,
       (id, prev) => {
@@ -195,15 +219,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
     cleanupRef.current.push(worldUnsub);
 
     const saveIv = window.setInterval(() => {
+      if (document.hidden) return;
       eng.state.meta.lastSeenAt = Date.now();
       saveGame(eng.state);
     }, CONFIG.SAVE_INTERVAL_MS);
     cleanupRef.current.push(() => window.clearInterval(saveIv));
 
-    const cloudIv = window.setInterval(() => void uploadSave(eng.state), 5000);
+    const cloudIv = window.setInterval(() => {
+      if (!document.hidden) void uploadSave(eng.state);
+    }, 5000);
     cleanupRef.current.push(() => window.clearInterval(cloudIv));
 
     const lbIv = window.setInterval(() => {
+      if (document.hidden) return;
       void (async () => {
         const m = leaderboardMetrics(eng.state);
         await submitScore(eng.state, "stage", m.stage, m.stage);
@@ -214,30 +242,75 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }, 60000);
     cleanupRef.current.push(() => window.clearInterval(lbIv));
 
-    const onHide = () => { eng.state.meta.lastSeenAt = Date.now(); saveGame(eng.state); void uploadSave(eng.state); };
-    const onUnload = () => { eng.state.meta.lastSeenAt = Date.now(); saveGame(eng.state); };
+    const persistSuspendedState = (upload: boolean) => {
+      if (suspendedAt === null) suspendedAt = Date.now();
+      eng.state.meta.lastSeenAt = suspendedAt;
+      publishGameState(eng.state, true);
+      saveGame(eng.state);
+      if (upload) void uploadSave(eng.state);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopTicking();
+        persistSuspendedState(true);
+        return;
+      }
+
+      const resumed = eng.handleOffline(Date.now());
+      suspendedAt = null;
+      if (resumed) setOffline(resumed);
+      publishGameState(eng.state, true);
+      publishDerivedStats(eng.derived);
+      startTicking();
+    };
+    const onPageHide = () => {
+      stopTicking();
+      persistSuspendedState(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.code === "Space" && !isTyping(e.target)) {
         e.preventDefault();
         eng.click();
+        publishGameState(eng.state, true);
+        publishDerivedStats(eng.derived);
       }
     };
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("beforeunload", onUnload);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onVisibilityChange);
     window.addEventListener("keydown", onKey);
     cleanupRef.current.push(() => {
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("beforeunload", onUnload);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onVisibilityChange);
       window.removeEventListener("keydown", onKey);
     });
 
-    // 首次交互解锁音频
-    const onFirstInteract = () => { initAudio(); };
-    window.addEventListener("pointerdown", onFirstInteract, { once: true });
-    cleanupRef.current.push(() => window.removeEventListener("pointerdown", onFirstInteract));
+    if (document.hidden) {
+      stopTicking();
+      persistSuspendedState(false);
+    }
   }, [pushToast, stopEngine]);
 
   const reload = useCallback((state: GameState) => { void start(state); }, [start]);
+
+  useEffect(() => {
+    let listening = true;
+    const removeListeners = () => {
+      if (!listening) return;
+      listening = false;
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+    const unlockAudio = () => {
+      void initAudio().then((unlocked) => {
+        if (unlocked) removeListeners();
+      });
+    };
+    window.addEventListener("pointerdown", unlockAudio, true);
+    window.addEventListener("keydown", unlockAudio, true);
+    return removeListeners;
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -249,7 +322,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [start, stopEngine]);
 
   return (
-    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, worldFlash, reload }}>
+    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, worldFlash, reload, updateSettings }}>
       {children}
       {offline && <OfflineModal result={offline} onClose={() => setOffline(null)} />}
       <div className="toast-wrap">
@@ -337,4 +410,9 @@ function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+}
+
+function syncReducedMotion(reduceMotion: boolean): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.reduceMotion = reduceMotion ? "true" : "false";
 }
