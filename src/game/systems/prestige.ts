@@ -4,6 +4,7 @@ import { CONFIG } from "../config";
 import type { GameState, PrestigeUpgradeId, SkillId } from "../types";
 import { prestigeEnergy } from "../formulas";
 import { SKILL_DEFS } from "../data/skills";
+import { isHigherResetBlocked } from "./reset-guard";
 
 export interface PrestigeResult {
   energyGained: number;
@@ -23,7 +24,7 @@ export function prestigeStageRequirement(state: GameState): number {
 }
 
 export function canPrestige(state: GameState): boolean {
-  if (state.meta.activeChallenge !== null || state.meta.activeModifiers.length > 0) return false;
+  if (isHigherResetBlocked(state)) return false;
   return state.combat.stage >= prestigeStageRequirement(state)
     && prestigeEnergy(Big.fromTuple(state.statistics.runDamage)) > 0;
 }

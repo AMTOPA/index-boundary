@@ -49,6 +49,33 @@ export function makeSave(state: GameState): SaveFile {
   return { format: "index-boundary-save", version, timestamp, checksum: fnv1a(body), state };
 }
 
+function hadLegacyHigherLayerReset(state: Record<string, any>): boolean {
+  return Number(state.leap?.totalLeaps ?? 0) > 0
+    || Number(state.laws?.totalRewrites ?? 0) > 0
+    || Boolean(state.nexus?.unlocked || state.nexus?.entered)
+    || Boolean(state.echo?.unlocked || state.echo?.entered);
+}
+
+function repairLegacyLayerGates(state: Record<string, any>, sourceVersion: number): Record<string, any> {
+  if (sourceVersion >= 7) return state;
+  const leap = (state.leap ?? {}) as Record<string, any>;
+  leap.nextRequiredStage = CONFIG.LEAP.STAGE;
+  state.leap = leap;
+  // v6 无法区分“刚跨层”与“跨层后已重推”；统一回到基础门槛是一次性防卡墙补偿。
+  if (hadLegacyHigherLayerReset(state)) {
+    const prestige = (state.prestige ?? {}) as Record<string, any>;
+    prestige.nextRequiredStage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.prestige = prestige;
+  }
+  return state;
+}
+
+function normalizeLeapStageRequirement(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return CONFIG.LEAP.STAGE;
+  return Math.min(CONFIG.LEAP.MAX_STAGE_REQUIREMENT, Math.max(CONFIG.LEAP.STAGE, Math.floor(numeric)));
+}
+
 // ---------------- 版本迁移 ----------------
 // 迁移链：v1 → v2 → v3 …
 const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, unknown>> = {
@@ -93,6 +120,8 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     s.items = items;
     return s;
   },
+  // v6 -> v7: dynamic leap gate plus a one-time anti-wall repair for legacy higher-layer saves.
+  6: (s) => repairLegacyLayerGates(s, 6),
 
 };
 
@@ -111,7 +140,9 @@ export function migrateState(raw: Record<string, unknown>, fromVersion: number):
 // 合并缺失字段（向前兼容，坏档自愈）
 export function normalizeState(raw: unknown): GameState {
   const base = createNewState(0);
-  const r = (raw ?? {}) as Record<string, any>;
+  const input = (raw ?? {}) as Record<string, any>;
+  const sourceVersion = Number.isFinite(input.meta?.version) ? Number(input.meta.version) : 1;
+  const r = repairLegacyLayerGates(input, sourceVersion);
   const state: GameState = { ...base, ...r };
   state.meta = { ...base.meta, ...(r.meta ?? {}) };
   state.player = { ...base.player, ...(r.player ?? {}) };
@@ -142,6 +173,7 @@ export function normalizeState(raw: unknown): GameState {
   state.prestige.nextRequiredStage = Math.min(CONFIG.PRESTIGE.MAX_STAGE_REQUIREMENT, Math.max(CONFIG.PRESTIGE.BASE_STAGE, Math.floor(state.prestige.nextRequiredStage)));
   state.leap = { ...base.leap, ...(r.leap ?? {}) };
   state.leap.purchases = { ...(r.leap?.purchases ?? {}) };
+  state.leap.nextRequiredStage = normalizeLeapStageRequirement(state.leap.nextRequiredStage);
   state.laws = { ...base.laws, ...(r.laws ?? {}) };
   state.laws.purchases = { ...(r.laws?.purchases ?? {}) };
   state.nexus = { ...base.nexus, ...(r.nexus ?? {}) };

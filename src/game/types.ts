@@ -160,6 +160,7 @@ export interface LeapState {
   cores: number;
   totalCoresEarned: number;
   totalLeaps: number;
+  nextRequiredStage: number; // 当前高层周期内的下一次跃迁门槛
   lastLeapMaxStage: number; // 旧存档兼容与统计字段，不再参与核心奖励计算
   purchases: Partial<Record<LeapUpgradeId, number>>;
 }

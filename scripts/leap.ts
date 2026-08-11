@@ -33,7 +33,7 @@ check("跃迁后关卡回到 1（起始世界 Lv0）", eng.state.combat.stage ==
 check("跃迁重置升级", eng.state.player.upgrades.attack === 0);
 check("跃迁重置装备", Object.keys(eng.state.equipment.slots).length === 0);
 check("跃迁重置天赋", Object.keys(eng.state.talents.allocations).length === 0);
-check("跃迁重置重构", eng.state.prestige.energy === 0);
+check("跃迁重置重构及其门槛", eng.state.prestige.energy === 0 && eng.state.prestige.nextRequiredStage === CONFIG.PRESTIGE.BASE_STAGE);
 check("跃迁保留统计（总伤不清零）", eng.state.statistics.totalDamage[1] === 120);
 
 const stStart = leapReady(106);
@@ -48,13 +48,13 @@ let fibOk = true;
 fib.forEach((v, i) => { if (leapShopCostFrom(i, "allStats") !== v) fibOk = false; });
 check("商店价格 1/2/3/5/8/13（斐波那契）", fibOk);
 
-// 3. 固定额外核心门槛 + 全属性每级 ×1.3
+// 3. 阶梯核心奖励 + 全属性每级 ×1.3
 const atBonusThreshold = leapReady(107);
 atBonusThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE;
-check("15000 关仍为 1 核心", leapCores(atBonusThreshold) === 1);
-const aboveBonusThreshold = leapReady(108);
-aboveBonusThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE + 1;
-check("15001 关获得 2 核心", leapCores(aboveBonusThreshold) === 2);
+check("15000 关获得 2 核心", leapCores(atBonusThreshold) === 2);
+const higherBonusThreshold = leapReady(108);
+higherBonusThreshold.combat.stage = 18000;
+check("18000 关获得 5 核心", leapCores(higherBonusThreshold) === 5);
 check("全属性 Lv1 → ×1.3", Math.abs(leapAllStatsMult(1).toNumber() - 1.3) < 1e-9);
 check("全属性 Lv3 → ×2.197", Math.abs(leapAllStatsMult(3).toNumber() - Math.pow(1.3, 3)) < 1e-9);
 
@@ -97,8 +97,8 @@ const stAuto = leapReady(105);
 const engAuto = new GameEngine(stAuto);
 engAuto.leap(); // 1 core
 engAuto.buyLeapUpgrade("autoLeap"); // cost 1
-engAuto.state.combat.stage = CONFIG.LEAP.STAGE;
-engAuto.state.statistics.allTimeMaxStage = CONFIG.LEAP.STAGE;
+engAuto.state.combat.stage = engAuto.leapRequiredStage();
+engAuto.state.statistics.allTimeMaxStage = engAuto.leapRequiredStage();
 engAuto.state.combat.enemyHp = [1, 60];
 const leapsBefore = engAuto.state.leap.totalLeaps;
 engAuto.tick(1 / CONFIG.TICK_RATE);

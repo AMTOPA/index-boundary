@@ -4,6 +4,7 @@ import { Big } from "../bignum";
 import { CONFIG } from "../config";
 import type { GameState, EchoUpgradeId } from "../types";
 import { fib } from "./leap";
+import { isHigherResetBlocked } from "./reset-guard";
 
 // 回响增幅：全局伤害 ×1.5/级（独立乘区）
 export function echoDmgMult(state: GameState): Big {
@@ -50,7 +51,7 @@ export function echoReady(state: GameState): boolean {
 }
 
 export function canEnterEcho(state: GameState): boolean {
-  return !state.echo?.entered && echoReady(state);
+  return !isHigherResetBlocked(state) && !state.echo?.entered && echoReady(state);
 }
 
 // 跨入超维回响：消耗印记，进入第 5 维度

@@ -30,7 +30,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 6,
+  SAVE_VERSION: 7,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -360,8 +360,11 @@ export const CONFIG = {
   // 世界跃迁（第二层重置）：10000 关解锁，跨世界线洗牌，获得世界核心
   LEAP: {
     STAGE: 10000, // 解锁跃迁的关卡
+    STAGE_PER_LEAP: 500,
+    MAX_STAGE_REQUIREMENT: 15000,
     CORE_PER_LEAP: 1,
-    CORE_BONUS_STAGE: 15000, // 本次世界线关卡 > 15000 → 额外 +1 核心
+    CORE_BONUS_STAGE: 15000, // 达到 15000 关，首次额外 +1 核心
+    CORE_BONUS_STEP: 1000, // 此后每推进 1000 关再额外 +1，无上限
     SHOP: {
       lawExponent: { baseCost: 1, costGrowth: 1, perLevel: 0.005, max: 24, label: "法则指数", desc: "怪物 HP 指数基数 -0.005/级（上限 -0.12）" },
       startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后起始关卡 +100/级，五项基础升级同步到起始关卡 -1 级" },

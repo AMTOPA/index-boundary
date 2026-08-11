@@ -30,18 +30,20 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     expect(eng.state.leap.cores).toBe(1);
   });
 
-  it("额外核心要求本次世界线严格超过 15000 关", () => {
-    const below = leapReadyState(201);
-    below.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE - 1;
-    expect(leapCores(below)).toBe(1);
-
-    const atThreshold = leapReadyState(202);
-    atThreshold.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE;
-    expect(leapCores(atThreshold)).toBe(1);
-
-    const above = leapReadyState(203);
-    above.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE + 1;
-    expect(leapCores(above)).toBe(2);
+  it("15000 关起额外获得核心，之后每 1000 关继续增加且无上限", () => {
+    const state = leapReadyState(201);
+    state.combat.stage = CONFIG.LEAP.CORE_BONUS_STAGE - 1;
+    expect(leapCores(state)).toBe(1);
+    state.combat.stage = 15_000;
+    expect(leapCores(state)).toBe(2);
+    state.combat.stage = 16_000;
+    expect(leapCores(state)).toBe(3);
+    state.combat.stage = 17_000;
+    expect(leapCores(state)).toBe(4);
+    state.combat.stage = 18_000;
+    expect(leapCores(state)).toBe(5);
+    state.combat.stage = 100_000;
+    expect(leapCores(state)).toBe(87);
   });
 
   it("额外核心不再依赖历史最高关或上次跃迁关", () => {
@@ -68,6 +70,7 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     st.talents.points = 10;
     st.talents.allocations.dest_sharp = 2;
     st.prestige.energy = 50;
+    st.prestige.nextRequiredStage = 5900;
     st.prestige.purchases.startPower = 3;
     const eng = new GameEngine(st);
     eng.leap();
@@ -80,6 +83,8 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     expect(eng.state.talents.points).toBe(0);
     expect(Object.keys(eng.state.talents.allocations).length).toBe(0);
     expect(eng.state.prestige.energy).toBe(0);
+    expect(eng.state.prestige.nextRequiredStage).toBe(CONFIG.PRESTIGE.BASE_STAGE);
+    expect(eng.state.leap.nextRequiredStage).toBe(CONFIG.LEAP.STAGE + CONFIG.LEAP.STAGE_PER_LEAP);
     expect(Object.keys(eng.state.prestige.purchases).length).toBe(0);
     expect(eng.state.statistics.totalDamage[1]).toBe(0); // 保留统计（本局伤害已清零，总伤在测试中为 0）
     expect(eng.state.meta.achievements).toContain("first_crit");
@@ -241,8 +246,8 @@ describe("V12 内容：世界跃迁（第二层）+ 世界核心 + 奇点天赋�
     eng.buyLeapUpgrade("autoLeap"); // cost 1 -> cores 剩 1
     expect(eng.state.leap.purchases.autoLeap).toBe(1);
     // 重新到达跃迁阈值
-    eng.state.combat.stage = CONFIG.LEAP.STAGE;
-    eng.state.statistics.allTimeMaxStage = CONFIG.LEAP.STAGE;
+    eng.state.combat.stage = eng.leapRequiredStage();
+    eng.state.statistics.allTimeMaxStage = eng.leapRequiredStage();
     // 让击杀时间超墙：降低 DPS 模拟卡墙
     eng.state.combat.enemyHp = [1, 60]; // 1e60
     const before = eng.state.leap.totalLeaps;

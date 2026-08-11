@@ -4,6 +4,7 @@ import { CONFIG } from "../config";
 import type { GameState, LawId } from "../types";
 import { fib } from "./leap";
 import { nexusShardGainMult } from "./nexus";
+import { isHigherResetBlocked } from "./reset-guard";
 
 // 重写获得碎片：floor(maxStage/10000) - 2（30000 → 1，50000 → 3，100000 → 8）
 // 本次最大关卡 ≥ 上次 ×2 → 碎片翻倍
@@ -18,7 +19,9 @@ export function lawShards(state: GameState): number {
 }
 
 export function canRewriteLaw(state: GameState): boolean {
-  return state.meta.unlocks.includes("lawRewrite") && state.combat.stage >= CONFIG.LAWS.REWRITE_STAGE;
+  return !isHigherResetBlocked(state)
+    && state.meta.unlocks.includes("lawRewrite")
+    && state.combat.stage >= CONFIG.LAWS.REWRITE_STAGE;
 }
 
 // 补丁价格：costBase + fib(level+1) - 1 → costBase=1: 1,2,3,5,8,13…
@@ -105,8 +108,9 @@ export function applyLawRewrite(state: GameState, shardsGained: number): void {
   state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
   state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
   state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
+  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
   // ---- 重置第二层跃迁的已购升级（保留未花费的核心）----
+  state.leap.nextRequiredStage = CONFIG.LEAP.STAGE;
   state.leap.purchases = {};
   state.statistics.runDamage = [0, 0];
   // 保留：成就/统计/世界核心/法则碎片/工具/元数据

@@ -3,30 +3,36 @@ import { Big, toBig } from "../bignum";
 import { CONFIG } from "../config";
 import type { GameState, LeapUpgradeId } from "../types";
 import { SKILL_DEFS } from "../data/skills";
+import { isHigherResetBlocked } from "./reset-guard";
 
 export interface LeapResult {
   coresGained: number;
 }
 
 // 本轮世界线超过固定门槛时获得额外核心；不再随上次最高关翻倍抬高门槛。
-export function hasLeapCoreBonusAtStage(stage: number): boolean {
-  return stage > CONFIG.LEAP.CORE_BONUS_STAGE;
+export function leapBonusCoresForStage(stage: number): number {
+  const safeStage = Number.isFinite(stage) ? Math.max(1, Math.floor(stage)) : 1;
+  if (safeStage < CONFIG.LEAP.CORE_BONUS_STAGE) return 0;
+  return 1 + Math.floor((safeStage - CONFIG.LEAP.CORE_BONUS_STAGE) / CONFIG.LEAP.CORE_BONUS_STEP);
 }
 
 export function leapCoresForStage(stage: number): number {
-  return CONFIG.LEAP.CORE_PER_LEAP + (hasLeapCoreBonusAtStage(stage) ? 1 : 0);
-}
-
-export function hasLeapCoreBonus(state: GameState): boolean {
-  return hasLeapCoreBonusAtStage(state.combat.stage);
+  return CONFIG.LEAP.CORE_PER_LEAP + leapBonusCoresForStage(stage);
 }
 
 export function leapCores(state: GameState): number {
   return leapCoresForStage(state.combat.stage);
 }
 
+export function leapStageRequirement(state: GameState): number {
+  const stored = Math.floor(state.leap.nextRequiredStage || CONFIG.LEAP.STAGE);
+  return Math.min(CONFIG.LEAP.MAX_STAGE_REQUIREMENT, Math.max(CONFIG.LEAP.STAGE, stored));
+}
+
 export function canLeap(state: GameState): boolean {
-  return state.meta.unlocks.includes("leap") && state.combat.stage >= CONFIG.LEAP.STAGE;
+  return !isHigherResetBlocked(state)
+    && state.meta.unlocks.includes("leap")
+    && state.combat.stage >= leapStageRequirement(state);
 }
 
 // Fibonacci 价格：level n（0 起）→ fib(n+2)：1,2,3,5,8,13…
@@ -92,7 +98,11 @@ export function applyLeap(state: GameState, coresGained: number): void {
   l.cores += coresGained;
   l.totalCoresEarned += coresGained;
   l.totalLeaps += 1;
-  l.lastLeapMaxStage = state.statistics.allTimeMaxStage;
+  l.lastLeapMaxStage = state.combat.stage;
+  l.nextRequiredStage = Math.min(
+    CONFIG.LEAP.MAX_STAGE_REQUIREMENT,
+    leapStageRequirement(state) + CONFIG.LEAP.STAGE_PER_LEAP,
+  );
 
   // ---- 彻底洗牌：重置升级/金币/关卡/装备/技能/天赋/重构 ----
   const startStage = leapStartStage(state);
@@ -126,7 +136,7 @@ export function applyLeap(state: GameState, coresGained: number): void {
   state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
   state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
   state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
+  state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
   state.statistics.runDamage = [0, 0];
   // 保留：成就/统计/世界核心/元数据解锁/工具（永久基础设施）
 }

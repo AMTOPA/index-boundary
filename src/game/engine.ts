@@ -25,7 +25,7 @@ import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate, canConvertOverflow as sysCanConvertOverflow, convertOverflow as sysConvertOverflow } from "./systems/talents";
 import { talentNodeById, TALENT_TREES } from "./data/talents";
 import { applyPrestige, computePrestige, buyPrestigeUpgrade, canBuy, canPrestige as sysCanPrestige, prestigeStageRequirement } from "./systems/prestige";
-import { applyLeap, canLeap as sysCanLeap, leapCores, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
+import { applyLeap, canLeap as sysCanLeap, leapCores, leapStageRequirement, buyLeapUpgrade as sysBuyLeapUpgrade, leapShopCost, canBuyLeap as sysCanBuyLeap } from "./systems/leap";
 import { applyLawRewrite, canRewriteLaw as sysCanRewriteLaw, lawShards, buyLawPatch as sysBuyLawPatch, lawShopCost as sysLawShopCost, canBuyLaw as sysCanBuyLaw } from "./systems/law";
 import { checkAchievement, ACHIEVEMENTS } from "./data/achievements";
 import { SKILL_DEFS, SKILL_IDS, skillCoreCost, passiveCoreCost, PASSIVE_IDS, skillEffect } from "./data/skills";
@@ -81,7 +81,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       ],
     },
     prestige: { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} },
-    leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
+    leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, nextRequiredStage: CONFIG.LEAP.STAGE, lastLeapMaxStage: 1, purchases: {} },
     laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
     nexus: { unlocked: false, entered: false, dimension: 0, purchases: {}, bossAutoAttack: false },
     echo: { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} },
@@ -1103,6 +1103,9 @@ export class GameEngine {
   }
 
   // ---------------- 世界跃迁（第二层重置）----------------
+  leapRequiredStage(): number {
+    return leapStageRequirement(this.state);
+  }
   canLeap(): boolean {
     return sysCanLeap(this.state);
   }
@@ -1243,7 +1246,8 @@ export class GameEngine {
     state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
     state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
+    state.leap.nextRequiredStage = CONFIG.LEAP.STAGE;
     state.statistics.runDamage = [0, 0];
   }
 
@@ -1262,7 +1266,8 @@ export class GameEngine {
     state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
     state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
-    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: state.prestige.nextRequiredStage, purchases: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
+    state.leap.nextRequiredStage = CONFIG.LEAP.STAGE;
     state.statistics.runDamage = [0, 0];
   }
 

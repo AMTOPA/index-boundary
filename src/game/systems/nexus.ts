@@ -4,6 +4,7 @@ import { Big, toBig } from "../bignum";
 import { CONFIG } from "../config";
 import type { GameState, NexusUpgradeId } from "../types";
 import { fib } from "./leap";
+import { isHigherResetBlocked } from "./reset-guard";
 
 // 彼岸增幅：全局伤害 ×1.5/级（独立乘区）
 export function nexusDmgMult(state: GameState): Big {
@@ -37,7 +38,7 @@ export function nexusReady(state: GameState): boolean {
 }
 
 export function canEnterNexus(state: GameState): boolean {
-  return !state.nexus?.entered && nexusReady(state);
+  return !isHigherResetBlocked(state) && !state.nexus?.entered && nexusReady(state);
 }
 
 // 跨入彼岸：消耗碎片，进入第 4 维度

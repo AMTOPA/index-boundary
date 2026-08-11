@@ -5,14 +5,14 @@ import { useGameSelector } from "@/components/common/hooks";
 import { formatNumber, formatBigPrecise } from "@/game/format";
 import { CONFIG } from "@/game/config";
 import type { LeapUpgradeId } from "@/game/types";
-import { leapShopCostFrom, leapCoresForStage, leapAllStatsMult, hasLeapCoreBonusAtStage } from "@/game/systems/leap";
+import { leapShopCostFrom, leapCoresForStage, leapAllStatsMult } from "@/game/systems/leap";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 const SHOP_ORDER: LeapUpgradeId[] = ["lawExponent", "startStage", "allStats", "newWorld", "autoLeap"];
 
 export function LeapPanel() {
   const { engine } = useGame();
-  const unlocked = useGameSelector((s) => s.meta.unlocks.includes("leap"));
+  const unlocked = useGameSelector((s) => s.meta.unlocks.includes("leap") || s.meta.discoveries.includes("leap"));
   const stage = useGameSelector((s) => s.combat.stage);
   const cores = useGameSelector((s) => s.leap.cores);
   const totalLeaps = useGameSelector((s) => s.leap.totalLeaps);
@@ -29,7 +29,7 @@ export function LeapPanel() {
       <div className="panel">
         <h3>世界跃迁（第二层）</h3>
         <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
-          推进到第 {CONFIG.LEAP.STAGE} 关解锁世界跃迁。跃迁 = 跨世界线：重置升级/装备/技能/天赋/重构，保留成就、统计与世界核心。
+          首次推进到第 {CONFIG.LEAP.STAGE} 关解锁世界跃迁。跃迁会重置升级/装备/技能/天赋/重构及其门槛，保留成就、统计与世界核心。
         </p>
       </div>
     );
@@ -43,9 +43,14 @@ export function LeapPanel() {
     autoLeap: autoLeapLv,
   };
   const canLeap = engine?.canLeap() ?? false;
+  const requiredStage = engine?.leapRequiredStage() ?? CONFIG.LEAP.STAGE;
+  const nextRequiredStage = Math.min(CONFIG.LEAP.MAX_STAGE_REQUIREMENT, requiredStage + CONFIG.LEAP.STAGE_PER_LEAP);
   const previewCores = leapCoresForStage(stage);
+  const bonusCores = previewCores - CONFIG.LEAP.CORE_PER_LEAP;
+  const nextBonusStage = bonusCores === 0
+    ? CONFIG.LEAP.CORE_BONUS_STAGE
+    : CONFIG.LEAP.CORE_BONUS_STAGE + bonusCores * CONFIG.LEAP.CORE_BONUS_STEP;
   const allStatsMult = leapAllStatsMult(allStatsLv);
-  const hasCoreBonus = hasLeapCoreBonusAtStage(stage);
   const hpGrowth = Math.max(1.05, CONFIG.HP_GROWTH - lawLv * CONFIG.LEAP.SHOP.lawExponent.perLevel);
 
   return (
@@ -65,25 +70,25 @@ export function LeapPanel() {
         <div>跃迁次数：<span className="mono">{totalLeaps}</span></div>
         <div>世界核心升级「全属性」<span className="mono">Lv{allStatsLv}</span>：全局伤害与金币 <span className="mono">×{formatBigPrecise(allStatsMult)}</span>（每级 ×{CONFIG.LEAP.SHOP.allStats.perLevel}，乘算叠加）</div>
         {lawLv > 0 && <div>法则指数：怪物 HP 成长 <span className="mono">{CONFIG.HP_GROWTH} → {hpGrowth.toFixed(3)}</span></div>}
+        <div>
+          本次门槛：<span className="mono" style={{ color: stage >= requiredStage ? "var(--green)" : "var(--danger)" }}>{formatNumber(stage)} / {formatNumber(requiredStage)} 关</span>
+          {requiredStage < CONFIG.LEAP.MAX_STAGE_REQUIREMENT && <span style={{ color: "var(--text-dim)" }}>（成功后提升至 {formatNumber(nextRequiredStage)} 关）</span>}
+        </div>
         {canLeap && (
           <div style={{ marginTop: 4, color: "var(--green)" }}>
             跃迁可获得 <span className="mono">+{previewCores}</span> 世界核心
           </div>
         )}
         <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          计算方式：基础 <span className="mono">+{CONFIG.LEAP.CORE_PER_LEAP}</span>
-          {hasCoreBonus ? (
-            <span>；本次世界线已到第 {formatNumber(stage)} 关，超过 {formatNumber(CONFIG.LEAP.CORE_BONUS_STAGE)} 关 → 额外 <span className="mono" style={{ color: "var(--green)" }}>+1</span></span>
-          ) : (
-            <span>；本次世界线需超过 {formatNumber(CONFIG.LEAP.CORE_BONUS_STAGE)} 关才能额外 +1（当前 {formatNumber(stage)}，至少到达 {formatNumber(CONFIG.LEAP.CORE_BONUS_STAGE + 1)} 关）</span>
-          )}
+          奖励规则：基础 <span className="mono">+{CONFIG.LEAP.CORE_PER_LEAP}</span>；达到 <span className="mono">{formatNumber(CONFIG.LEAP.CORE_BONUS_STAGE)}</span> 关后额外 +1，之后每推进 <span className="mono">{formatNumber(CONFIG.LEAP.CORE_BONUS_STEP)}</span> 关再 +1，无上限。
+          <br />当前额外 <span className="mono" style={{ color: bonusCores > 0 ? "var(--green)" : "inherit" }}>+{bonusCores}</span>；到第 <span className="mono">{formatNumber(nextBonusStage)}</span> 关时奖励提升为 +{previewCores + 1} 核心。
         </div>
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-dim)" }}>
-          跃迁将重置：关卡、金币、升级、装备、技能、天赋、重构（保留：成就、统计、世界核心与已购升级）。
+          跃迁将重置：关卡、金币、升级、装备、技能、天赋、重构及重构门槛（回到 500 关）；保留成就、统计、世界核心与已购升级。
         </div>
           </div>
           <button className={`btn primary leap-action ${canLeap ? "leap-ready" : ""}`} disabled={!canLeap} onClick={() => setConfirm(true)}>
-            跨越世界线（跃迁）
+            {canLeap ? "跨越世界线（跃迁）" : `还需到达第 ${formatNumber(requiredStage)} 关`}
           </button>
         </section>
 
@@ -122,7 +127,7 @@ export function LeapPanel() {
           <p style={{ fontSize: 13, lineHeight: 1.7 }}>
             将获得 <span className="mono" style={{ color: "var(--super)" }}>{previewCores}</span> 世界核心。
             <br />
-            本世界线的升级、装备、技能、天赋、重构将被完全重置，保留成就/统计与已购世界核心升级。
+            本世界线的升级、装备、技能、天赋、重构将被完全重置；下次重构门槛回到 500 关，保留成就/统计与已购世界核心升级。
           </p>
         </ConfirmModal>
       )}
