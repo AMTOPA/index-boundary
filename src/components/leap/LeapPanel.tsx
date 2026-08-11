@@ -48,6 +48,14 @@ export function LeapPanel() {
             跃迁可获得 <span className="mono">+{previewCores}</span> 世界核心
           </div>
         )}
+        <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
+          计算方式：基础 <span className="mono">+{CONFIG.LEAP.CORE_PER_LEAP}</span>
+          {state.statistics.allTimeMaxStage >= (state.leap.lastLeapMaxStage || 1) * CONFIG.LEAP.CORE_DOUBLE_MULT ? (
+            <span>，本次最高关 {formatNumber(state.statistics.allTimeMaxStage)} ≥ 上次跃迁关 {formatNumber(state.leap.lastLeapMaxStage || 1)} ×{CONFIG.LEAP.CORE_DOUBLE_MULT} → 额外 <span className="mono" style={{ color: "var(--green)" }}>+1</span></span>
+          ) : (
+            <span>，需本次最高关 ≥ {formatNumber((state.leap.lastLeapMaxStage || 1) * CONFIG.LEAP.CORE_DOUBLE_MULT)}（当前 {formatNumber(state.statistics.allTimeMaxStage)}）才能额外 +1</span>
+          )}
+        </div>
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-dim)" }}>
           跃迁将重置：关卡、金币、升级、装备、技能、天赋、重构（保留：成就、统计、世界核心与已购升级）。
         </div>

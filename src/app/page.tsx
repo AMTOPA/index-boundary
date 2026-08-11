@@ -60,7 +60,7 @@ function Shell() {
   const [mobileView, setMobileView] = useState<MobileView>("combat");
   const wide = useWideLayout();
   const selectTab = (t: PanelTab) => { setTab(t); setMobileView("panel"); };
-  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0, s.nexus?.entered ?? false).color);
+  const worldTint = useGameSelector((s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0, s.nexus?.entered ?? false, s.echo?.entered ?? false).color);
   return (
     <>
       <Starfield tint={worldTint} />

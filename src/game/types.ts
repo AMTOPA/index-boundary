@@ -17,11 +17,12 @@ export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startS
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
 export type LawId = "critExp" | "goldBoost" | "apsCap" | "goldToDmg";
 export type NexusUpgradeId = "nexusDmg" | "nexusGold" | "nexusShardGain" | "nexusBossAuto" | "nexusOverflow";
+export type EchoUpgradeId = "echoDmg" | "echoGold" | "echoSealGain" | "echoOverflow";
 export type BossAffix = "armor" | "regen" | "antiCrit" | "rage" | "harden" | "deflect" | "time" | "shield" | "void";
 export type EnemyKind = "normal" | "elite" | "mimic";
 export type VoidTarget = "crit" | "click" | "skill" | "gold";
 export type SetBonusKind = "aspdMult" | "critDmgAdd" | "goldPool" | "bossDmgMult";
-export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus" | "nexus_frontier";
+export type WorldId = "data_wastes" | "mech_city" | "star_factory" | "black_hole" | "singularity_furnace" | "law_terminus" | "nexus_frontier" | "echo_frontier";
 export type ScoreSubmitKind = "stage" | "mag" | "prestige" | "season";
 
 // 词条属性（加池型用 % 表达，独立乘区用 × 表达）
@@ -170,6 +171,16 @@ export interface NexusState {
   bossAutoAttack: boolean; // 进入彼岸后 Boss 自动攻击（也可用碎片提前购买）
 }
 
+// 第 5 维度「超维回响」：进入彼岸后，收集足够「回响印记」进入；货币 = 回响印记
+export interface EchoState {
+  unlocked: boolean; // 是否已解锁（彼岸已进入 + 回响印记达标）
+  entered: boolean; // 是否已进入第五维度「超维回响」
+  dimension: number; // 0=未进入 1=超维回响 2+=更高维度（预留）
+  seals: number; // 当前持有回响印记
+  totalSealsEarned: number; // 累计获得（里程碑/统计）
+  purchases: Partial<Record<EchoUpgradeId, number>>; // 回响商店已购升级
+}
+
 export interface ItemState {
   consumables: Partial<Record<ItemId, number>>;
   tools: Partial<Record<ToolId, boolean>>;
@@ -220,6 +231,7 @@ export interface GameState {
   leap: LeapState;
   laws: LawState;
   nexus: NexusState;
+  echo: EchoState;
   items: ItemState;
   statistics: StatisticsState;
   daily: DailyState;
@@ -245,6 +257,8 @@ export type GameEvent =
   | { type: "leap"; cores: number }
   | { type: "lawRewrite"; shards: number }
   | { type: "nexusEnter"; dimension: number }
+  | { type: "echoSeal"; gained: number }
+  | { type: "echoEnter"; dimension: number }
   | { type: "talentOverflow"; residue: number }
   | { type: "drop"; rarity: Rarity; slot: EquipSlot }
   | { type: "autoBreakdown"; count: number; shards: number }
@@ -286,6 +300,8 @@ export interface DerivedStats {
   globalMult: Big;
   nexusMult: Big; // 第 4 维度「法则彼岸」独立伤害倍率
   nexusGoldMult: Big; // 第 4 维度「法则彼岸」独立金币倍率
+  echoMult: Big; // 第 5 维度「超维回响」独立伤害倍率
+  echoGoldMult: Big; // 第 5 维度「超维回响」独立金币倍率
   critLayersExtra: number;
   leapGlobalMult: Big; // 世界核心全属性全局倍率
   hpGrowth: number; // 生效的怪物 HP 指数基数（法则指数/奇点影响）

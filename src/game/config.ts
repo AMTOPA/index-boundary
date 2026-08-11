@@ -1,5 +1,5 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, EchoUpgradeId, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
 
 export interface SetDef {
@@ -13,7 +13,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 4,
+  SAVE_VERSION: 5,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -358,6 +358,23 @@ export const CONFIG = {
       nexusBossAuto: { perLevel: 1, max: 1, costBase: 5, label: "Boss 自动攻击", desc: "进入彼岸自动获得；也可提前用少量碎片购买" },
       nexusOverflow: { perLevel: 0.5, max: 6, costBase: 1, label: "溢出洪流", desc: "溢出收益 ×1.5/级（上限 ×11.4）" },
     } as Record<NexusUpgradeId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
+  },
+
+  // 第 5 维度「超维回响」：进入彼岸后，收集足够回响印记解锁（不看关卡）
+  ECHO: {
+    ENTRY_SEALS: 120, // 解锁门槛：累计回响印记 >= 120（不看关卡）
+    ENTRY_COST: 60, // 进入消耗的回响印记
+    SEAL_MIN_STAGE: 100000, // 彼岸世界从此关卡起，击杀 Boss/精英掉落回响印记
+    STAGE_START: 200000, // 超维回响世界主题起始关卡
+    BOSS_SEAL_BASE: 1, // 彼岸 Boss 基础掉落印记
+    BOSS_SEAL_PER_LOG: 1, // 关卡每高 10 倍（log10）额外 +1 印记
+    ELITE_SEAL: 1, // 彼岸精英掉落印记
+    SHOP: {
+      echoDmg: { perLevel: 0.5, max: 10, costBase: 1, label: "回响增幅", desc: "全局伤害 ×1.5/级（独立乘区，上限 ×57.7）" },
+      echoGold: { perLevel: 0.5, max: 10, costBase: 1, label: "回响金流", desc: "金币收益 ×1.5/级（独立乘区，上限 ×57.7）" },
+      echoSealGain: { perLevel: 0.25, max: 8, costBase: 1, label: "印记洪流", desc: "回响印记获取 ×1.25/级（上限 ×5.96）" },
+      echoOverflow: { perLevel: 0.5, max: 6, costBase: 1, label: "回响溢流", desc: "溢出收益 ×1.5/级（上限 ×11.4）" },
+    } as Record<EchoUpgradeId, { perLevel: number; max: number; costBase: number; label: string; desc: string }>,
   },
 
   // 解锁节奏（关卡）

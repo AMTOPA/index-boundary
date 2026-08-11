@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { GameEngine, type OfflineResult } from "@/game/engine";
 import { gameStore, derivedStore } from "@/game/gameStore";
+import { worldForStage } from "@/game/data/worlds";
 import { loadGame, saveGame } from "@/game/save";
 import { initAudio, playSfx } from "@/game/audio";
 import { initCloud, uploadSave, fetchCloudSave, leaderboardMetrics, submitScore } from "@/game/cloud";
@@ -17,10 +18,12 @@ interface GameCtx {
   unlockCard: string | null;
   milestoneFlash: number | null;
   offline: OfflineResult | null;
+  worldFlash: { name: string; color: string } | null;
   reload: (state: GameState) => void;
 }
 const Ctx = createContext<GameCtx>({
   engine: null, toasts: [], pushToast: () => {}, unlockCard: null, milestoneFlash: null, offline: null,
+  worldFlash: null,
   reload: () => {},
 });
 export const useGame = () => useContext(Ctx);
@@ -36,6 +39,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [lawFlash, setLawFlash] = useState<number | null>(null);
   const [prestigeFlash, setPrestigeFlash] = useState<number | null>(null);
   const [nexusFlash, setNexusFlash] = useState<number | null>(null);
+  const [echoFlash, setEchoFlash] = useState<number | null>(null);
+  const [worldFlash, setWorldFlash] = useState<{ name: string; color: string } | null>(null);
   const [offline, setOffline] = useState<OfflineResult | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -123,6 +128,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
           setNexusFlash(ev.dimension);
           window.setTimeout(() => setNexusFlash((v) => (v === ev.dimension ? null : v)), 3000);
           break;
+        case "echoSeal":
+          pushToast("+" + ev.gained + " 回响印记（彼岸 Boss/精英掉落）", "energy");
+          break;
+        case "echoEnter":
+          playSfx("unlock");
+          setEchoFlash(ev.dimension);
+          window.setTimeout(() => setEchoFlash((v) => (v === ev.dimension ? null : v)), 3000);
+          break;
         case "talentOverflow":
           pushToast("天赋残辉 +1（溢出天赋点自动转化），全局倍率提升", "energy");
           break;
@@ -168,6 +181,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       derivedStore.setState({ v: derivedStore.getState().v + 1, derived: eng.derived });
     }, 500);
     cleanupRef.current.push(() => window.clearInterval(derivedIv));
+
+    // 世界主题切换庆祝（监听 store 中当前世界 id 变化）
+    const worldUnsub = gameStore.subscribe(
+      (s) => worldForStage(s.combat.stage, s.leap?.purchases?.newWorld ?? 0, s.nexus?.entered ?? false, s.echo?.entered ?? false).id,
+      (id, prev) => {
+        if (!prev || id === prev) return;
+        const def = worldForStage(eng.state.combat.stage, eng.state.leap?.purchases?.newWorld ?? 0, eng.state.nexus?.entered ?? false, eng.state.echo?.entered ?? false);
+        setWorldFlash({ name: def.name, color: def.color });
+        window.setTimeout(() => setWorldFlash((v) => (v && v.name === def.name ? null : v)), 2600);
+      }
+    );
+    cleanupRef.current.push(worldUnsub);
 
     const saveIv = window.setInterval(() => saveGame(eng.state), CONFIG.SAVE_INTERVAL_MS);
     cleanupRef.current.push(() => window.clearInterval(saveIv));
@@ -221,7 +246,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [start, stopEngine]);
 
   return (
-    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, reload }}>
+    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, worldFlash, reload }}>
       {children}
       {offline && <OfflineModal result={offline} onClose={() => setOffline(null)} />}
       <div className="toast-wrap">
@@ -280,6 +305,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
             <div className="nexus-title">法则彼岸</div>
             <div className="leap-sub">第 4 维度 · 新的法则货币：法则碎片</div>
             <div className="leap-cores">Boss 自动攻击 已激活</div>
+          </div>
+        </div>
+      )}
+      {echoFlash !== null && (
+        <div className="echo-flash">
+          <div className="echo-rings"><span /><span /><span /><span /></div>
+          <div className="leap-inner">
+            <div className="echo-title">超维回响</div>
+            <div className="leap-sub">第 5 维度 · 新的法则货币：回响印记</div>
+            <div className="leap-cores">更高维度的法则展开</div>
+          </div>
+        </div>
+      )}
+      {worldFlash && (
+        <div className="world-flash" style={{ "--world": worldFlash.color } as React.CSSProperties}>
+          <div className="world-flash-inner">
+            <div className="world-flash-label">进入新世界</div>
+            <div className="world-flash-name">{worldFlash.name}</div>
           </div>
         </div>
       )}

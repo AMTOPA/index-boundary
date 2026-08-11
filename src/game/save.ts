@@ -69,6 +69,13 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     }
     return s;
   },
+  // v4 → v5：第 5 维度「超维回响」状态（缺省由 normalizeState 兜底）
+  4: (s) => {
+    if (!s.echo) {
+      s.echo = { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} };
+    }
+    return s;
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>, fromVersion: number): Record<string, unknown> {
@@ -115,6 +122,8 @@ export function normalizeState(raw: unknown): GameState {
   state.laws.purchases = { ...(r.laws?.purchases ?? {}) };
   state.nexus = { ...base.nexus, ...(r.nexus ?? {}) };
   state.nexus.purchases = { ...(r.nexus?.purchases ?? {}) };
+  state.echo = { ...base.echo, ...(r.echo ?? {}) };
+  state.echo.purchases = { ...(r.echo?.purchases ?? {}) };
   state.items = { ...base.items, ...(r.items ?? {}) };
   state.items.consumables = { ...(r.items?.consumables ?? {}) };
   state.items.tools = { ...(r.items?.tools ?? {}) };

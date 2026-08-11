@@ -12,12 +12,13 @@ import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { LeapPanel } from "@/components/leap/LeapPanel";
 import { LawPanel } from "@/components/law/LawPanel";
 import { NexusPanel } from "@/components/nexus/NexusPanel";
+import { EchoPanel } from "@/components/echo/EchoPanel";
 
 const SHOP_ORDER: PrestigeUpgradeId[] = ["startPower", "goldKeep", "fastSkip", "startSkill", "singularityAmp"];
 const CHALLENGE_ORDER: ChallengeId[] = ["no_crit", "slow_universe", "poverty", "durable", "skill_slow"];
 const SEASON_TIER_ORDER: SeasonTierId[] = ["bronze", "silver", "gold"];
 
-type PanelTab = "prestige" | "challenge" | "season" | "leap" | "law" | "nexus";
+type PanelTab = "prestige" | "challenge" | "season" | "leap" | "law" | "nexus" | "echo";
 const TABS: { id: PanelTab; label: string }[] = [
   { id: "prestige", label: "重构" },
   { id: "challenge", label: "挑战" },
@@ -25,6 +26,7 @@ const TABS: { id: PanelTab; label: string }[] = [
   { id: "leap", label: "跃迁" },
   { id: "law", label: "法则" },
   { id: "nexus", label: "彼岸" },
+  { id: "echo", label: "回响" },
 ];
 
 export function PrestigePanel() {
@@ -242,6 +244,7 @@ export function PrestigePanel() {
       {tab === "leap" && <LeapPanel />}
       {tab === "law" && <LawPanel />}
       {tab === "nexus" && <NexusPanel />}
+      {tab === "echo" && <EchoPanel />}
 
       {confirm && (
         <ConfirmModal

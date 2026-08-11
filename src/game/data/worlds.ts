@@ -8,6 +8,7 @@ export interface WorldDef {
   enemyStyle: string;
   bossPool: BossAffix[];
   requiresNexus?: boolean; // 第 4 维度：进入「法则彼岸」后开放
+  requiresEcho?: boolean; // 第 5 维度：进入「超维回响」后开放
   requiresLeap?: number; // 需要的「新世界」升级等级（0/缺省=基础世界）
 }
 
@@ -71,13 +72,23 @@ export const WORLDS: WorldDef[] = [
     bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
     requiresNexus: true,
   },
+  {
+    id: "echo_frontier",
+    name: "超维回响",
+    stageRange: [200001, 1000000],
+    color: "#ff6ec7",
+    enemyStyle: "虹彩回响体",
+    bossPool: ["armor", "regen", "antiCrit", "rage", "harden", "deflect", "time", "shield", "void"],
+    requiresEcho: true,
+  },
 ];
 
-export function worldForStage(stage: number, newWorldLevel = 0, nexusEntered = false): WorldDef {
+export function worldForStage(stage: number, newWorldLevel = 0, nexusEntered = false, echoEntered = false): WorldDef {
   let w = WORLDS[0];
   for (const world of WORLDS) {
     const need = world.requiresLeap ?? 0;
     if (world.requiresNexus && !nexusEntered) continue;
+    if (world.requiresEcho && !echoEntered) continue;
     if (stage >= world.stageRange[0] && newWorldLevel >= need) w = world;
   }
   return w;

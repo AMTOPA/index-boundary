@@ -2,7 +2,7 @@
 import { Big, toBig, type BigTuple } from "./bignum";
 import { CONFIG } from "./config";
 import type {
-  BossAffix, ChallengeId, DailyQuestType, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, NexusUpgradeId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
+  BossAffix, ChallengeId, DailyQuestType, EchoUpgradeId, EquipInstance, EquipSlot, GameEvent, GameEventListener, GameState, ItemId, NexusUpgradeId, PassiveId, Rarity, SeasonTierId, SkillId, ToolId, TreeId, UpgradeId, VoidTarget,
 } from "./types";
 import { Rng } from "./rng";
 import {
@@ -20,6 +20,7 @@ import {
 } from "./systems/equipment";
 import { castSkill, tickSkills, upgradeSkill as sysUpgradeSkill, upgradePassive as sysUpgradePassive, canUpgradePassive as sysCanUpgradePassive } from "./systems/skills";
 import { canEnterNexus as sysCanEnterNexus, enterNexus as sysEnterNexus, buyNexusUpgrade as sysBuyNexusUpgrade, nexusShopCost as sysNexusShopCost, canBuyNexus as sysCanBuyNexus } from "./systems/nexus";
+import { canEnterEcho as sysCanEnterEcho, enterEcho as sysEnterEcho, buyEchoUpgrade as sysBuyEchoUpgrade, echoShopCost as sysEchoShopCost, canBuyEcho as sysCanBuyEcho, echoSealsForBoss, echoSealsForElite, echoSealGainMult } from "./systems/echo";
 import { dailyGoldMag, ensureDaily } from "./systems/daily";
 import { allocate as sysAllocate, resetTree as sysResetTree, canAllocate, canConvertOverflow as sysCanConvertOverflow, convertOverflow as sysConvertOverflow } from "./systems/talents";
 import { talentNodeById, TALENT_TREES } from "./data/talents";
@@ -82,6 +83,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, lastLeapMaxStage: 1, purchases: {} },
     laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
     nexus: { unlocked: false, entered: false, dimension: 0, purchases: {}, bossAutoAttack: false },
+    echo: { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} },
     items: { consumables: {}, tools: {} },
     statistics: {
       totalDamage: [0, 0], runDamage: [0, 0], totalGold: [0, 0], totalKills: 0, totalBossKills: 0,
@@ -123,6 +125,7 @@ export class GameEngine {
   private autoUpgradeTimer = 0;
   private talentOverflowTimer = 0;
   private nexusCheckTimer = 0;
+  private echoCheckTimer = 0;
   // 自动分解统计（供 UI 节流 emit 提示）
   private autoBreakdownCount = 0;
   private autoBreakdownShards = 0;
@@ -191,6 +194,13 @@ export class GameEngine {
     if (this.dailyTimer <= 0) {
       this.dailyTimer = 5;
       ensureDaily(this.state);
+    }
+    // 维度解锁检查（每 2s）：法则彼岸 / 超维回响
+    this.nexusCheckTimer -= dt;
+    if (this.nexusCheckTimer <= 0) {
+      this.nexusCheckTimer = 2;
+      this.checkNexusUnlock();
+      this.checkEchoUnlock();
     }
     // 自动重构：卡墙且可重构时自动执行（每 10s 检查一次）
     // 自动跃迁：到达跃迁阈值且卡墙时自动执行（世界核心升级解锁）
@@ -450,6 +460,16 @@ export class GameEngine {
         this.dropItem(item);
       this.maybeAutoEquip();
         this.emit({ type: "drop", rarity: item.rarity, slot: item.slot });
+      }
+    }
+    // 第 5 维度：彼岸世界击杀 Boss/精英掉落回响印记（累计达标解锁「超维回响」）
+    if (this.state.nexus?.entered && stage >= CONFIG.ECHO.SEAL_MIN_STAGE && (isBoss || kind === "elite")) {
+      const base = isBoss ? echoSealsForBoss(stage) : echoSealsForElite(stage);
+      if (base > 0) {
+        const gained = Math.max(1, Math.floor(base * echoSealGainMult(this.state)));
+        this.state.echo.seals += gained;
+        this.state.echo.totalSealsEarned += gained;
+        this.emit({ type: "echoSeal", gained });
       }
     }
     this.advanceStage(crush);
@@ -1099,6 +1119,14 @@ export class GameEngine {
       this.emit({ type: "unlock", key: "nexus", label: "法则彼岸（第 4 维度）" });
     }
   }
+  // 超维回响解锁：彼岸已进入 + 累计回响印记达标
+  private checkEchoUnlock(): void {
+    if (this.state.echo.unlocked) return;
+    if (this.state.nexus?.entered && this.state.echo.totalSealsEarned >= CONFIG.ECHO.ENTRY_SEALS) {
+      this.state.echo.unlocked = true;
+      this.emit({ type: "unlock", key: "echo", label: "超维回响（第 5 维度）" });
+    }
+  }
   canEnterNexus(): boolean {
     return sysCanEnterNexus(this.state);
   }
@@ -1125,9 +1153,55 @@ export class GameEngine {
   canBuyNexus(id: NexusUpgradeId): boolean {
     return sysCanBuyNexus(this.state, id);
   }
+  // ---------------- 超维回响（第 5 维度）----------------
+  canEnterEcho(): boolean {
+    return sysCanEnterEcho(this.state);
+  }
+  enterEcho(): { dimension: number } | null {
+    if (!this.canEnterEcho()) return null;
+    if (!sysEnterEcho(this.state)) return null;
+    this.buffs = emptyBuffs();
+    this.attackCounter = 0;
+    this.attackBudget = 0;
+    this.resetRunForEcho();
+    this.spawnEnemy();
+    this.recomputeDerived();
+    this.emit({ type: "echoEnter", dimension: this.state.echo.dimension });
+    return { dimension: this.state.echo.dimension };
+  }
+  buyEchoUpgrade(id: EchoUpgradeId): boolean {
+    const ok = sysBuyEchoUpgrade(this.state, id);
+    if (ok) this.recomputeDerived();
+    return ok;
+  }
+  echoShopCost(id: EchoUpgradeId): number {
+    return sysEchoShopCost(this.state, id);
+  }
+  canBuyEcho(id: EchoUpgradeId): boolean {
+    return sysCanBuyEcho(this.state, id);
+  }
   // 跨入彼岸：重置第三层以下的一切（关卡/金币/升级/装备/技能/天赋/重构），
   // 保留：统计/成就/世界核心已购升级/法则补丁/法则碎片（货币）/工具/彼岸状态
   private resetRunForNexus(): void {
+    const state = this.state;
+    state.combat = {
+      stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
+      bossTimer: -1, combo: 0, comboTimer: 0, crushStreak: 0, skipMode: false,
+      lastHitWasCrit: false, lastHitWasSuper: false, lastHitWasCrush: false,
+      enemyKind: "normal", bossShieldHits: 0, bossVoidTarget: null,
+    };
+    state.player.gold = [0, 0];
+    state.player.upgrades = { attack: 0, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+    state.equipment = { slots: {}, inventory: [], fragments: [0, 0], autoBreakdown: null };
+    state.skills = { actives: [], passives: { rhythm: 0, focus: 0, greed: 0 }, cores: [0, 0] };
+    state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
+    state.prestige = { energy: 0, totalEnergyEarned: 0, purchases: {} };
+    state.statistics.runDamage = [0, 0];
+  }
+
+  // 跨入超维回响：重置第二层以下的一切（关卡/金币/升级/装备/技能/天赋/重构），
+  // 保留：统计/成就/世界核心升级/法则补丁/法则碎片/彼岸已购/回响印记（货币）/工具
+  private resetRunForEcho(): void {
     const state = this.state;
     state.combat = {
       stage: 1, enemyHp: [0, 0], enemyMaxHp: [0, 0], isBoss: false, bossAffixes: [],
