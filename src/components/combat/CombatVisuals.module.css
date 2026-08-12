@@ -11,14 +11,13 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 49%, transparent 0 150px, color-mix(in srgb, var(--world-color) 13%, transparent) 151px 152px, transparent 153px 230px, color-mix(in srgb, var(--world-color) 7%, transparent) 231px 232px, transparent 233px),
-    linear-gradient(90deg, transparent 0 49.92%, color-mix(in srgb, var(--world-color) 8%, transparent) 50%, transparent 50.08%),
-    linear-gradient(0deg, transparent 0 49.92%, color-mix(in srgb, var(--world-color) 6%, transparent) 50%, transparent 50.08%),
-    linear-gradient(color-mix(in srgb, var(--world-color) 3.5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--world-color) 3.5%, transparent) 1px, transparent 1px);
-  background-size: auto, auto, auto, 42px 42px, 42px 42px;
-  mask-image: radial-gradient(ellipse at center, black 0 18%, rgba(0,0,0,0.7) 48%, transparent 84%);
-  opacity: 0.82;
+    radial-gradient(circle at 50% 49%, transparent 0 154px, color-mix(in srgb, var(--world-color) 12%, transparent) 155px 156px, transparent 157px),
+    linear-gradient(90deg, transparent 0 49.94%, color-mix(in srgb, var(--world-color) 7%, transparent) 50%, transparent 50.06%),
+    linear-gradient(color-mix(in srgb, var(--world-color) 2.6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--world-color) 2.6%, transparent) 1px, transparent 1px);
+  background-size: auto, auto, 48px 48px, 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 0 20%, rgba(0,0,0,0.55) 48%, transparent 82%);
+  opacity: 0.62;
 }
 
 .arenaFrame {
@@ -57,7 +56,7 @@
 
 .damageLayer {
   position: absolute;
-  inset: 50px 0 58px;
+  inset: 72px 4% 92px;
   z-index: 8;
   overflow: hidden;
   pointer-events: none;
@@ -74,7 +73,6 @@
   border-radius: 9px;
   background: linear-gradient(180deg, rgba(5, 12, 24, 0.82), rgba(2, 7, 16, 0.62));
   box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28), inset 0 1px rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(3px);
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 900;
@@ -161,13 +159,15 @@
   z-index: 5;
   color: #ffe66d;
   font-family: var(--font-sans);
-  font-size: clamp(20px, 4vw, 30px);
-  padding: 8px 15px 9px;
+  font-size: clamp(15px, 2vw, 19px);
+  padding: 7px 14px 8px;
   border-color: rgba(255, 230, 109, 0.62);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(65, 44, 5, 0.94), rgba(17, 10, 1, 0.84));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38), 0 0 24px rgba(255, 181, 46, 0.18), inset 0 1px rgba(255, 246, 192, 0.18);
-  letter-spacing: 0.08em;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 206, 91, 0.12) 14%, rgba(39, 24, 4, 0.94) 31% 69%, rgba(255, 206, 91, 0.12) 86%, transparent),
+    linear-gradient(180deg, rgba(65, 44, 5, 0.9), rgba(17, 10, 1, 0.82));
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.34), 0 0 20px rgba(255, 181, 46, 0.16), inset 0 1px rgba(255, 246, 192, 0.16);
+  letter-spacing: 0.07em;
   text-shadow: -1px -1px 0 #130b00, 1px -1px 0 #130b00, -1px 1px 0 #130b00, 1px 1px 0 #130b00, 0 0 12px #fff2a8, 0 0 28px rgba(255, 181, 46, 0.95);
   animation-name: bossFinish;
 }
@@ -193,22 +193,22 @@
 }
 
 @keyframes impactDrift {
-  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.55); filter: brightness(1.8); }
-  15% { opacity: 1; transform: translate(-50%, -2px) scale(1.2); filter: brightness(1.15); }
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.55); }
+  15% { opacity: 1; transform: translate(-50%, -2px) scale(1.2); }
   35% { transform: translate(-50%, -8px) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -62px) scale(1.08); filter: brightness(1); }
+  100% { opacity: 0; transform: translate(-50%, -62px) scale(1.08); }
 }
 
 @keyframes bossFinish {
-  0% { opacity: 0; transform: translate(-50%, 12px) scale(0.5); filter: brightness(2); }
-  18% { opacity: 1; transform: translate(-50%, 0) scale(1.12); filter: brightness(1.4); }
-  52% { opacity: 1; transform: translate(-50%, -4px) scale(1); filter: brightness(1); }
-  100% { opacity: 0; transform: translate(-50%, -34px) scale(1.04); }
+  0% { opacity: 0; transform: translate(-50%, 12px) scale(0.5); }
+  16% { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+  58% { opacity: 1; transform: translate(-50%, -3px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -24px) scale(1.02); }
 }
 
 @media (max-width: 560px) {
   .damageLayer {
-    inset: 46px 0 54px;
+    inset: 64px 0 82px;
   }
 
   .auto { font-size: 11px; }

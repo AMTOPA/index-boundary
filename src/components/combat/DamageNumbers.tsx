@@ -25,16 +25,16 @@ interface DamageBucket {
   timer: number;
 }
 
-const AGGREGATION_WINDOW_MS = 240;
-const MAX_VISIBLE = 6;
-const BOSS_DURATION_MS = 1_150;
+const AGGREGATION_WINDOW_MS = 280;
+const MAX_VISIBLE = 5;
+const BOSS_DURATION_MS = 860;
 const LANES: Record<DamageVariant, ReadonlyArray<Readonly<{ x: number; y: number }>>> = {
-  auto: [{ x: 18, y: 48 }, { x: 82, y: 50 }, { x: 22, y: 61 }, { x: 78, y: 63 }],
-  manual: [{ x: 42, y: 69 }, { x: 58, y: 70 }],
-  crit: [{ x: 31, y: 37 }, { x: 50, y: 33 }, { x: 69, y: 38 }],
-  super: [{ x: 41, y: 27 }, { x: 59, y: 27 }],
-  crush: [{ x: 50, y: 21 }],
-  boss: [{ x: 50, y: 8 }],
+  auto: [{ x: 25, y: 50 }, { x: 75, y: 51 }, { x: 28, y: 62 }, { x: 72, y: 63 }],
+  manual: [{ x: 43, y: 68 }, { x: 57, y: 68 }],
+  crit: [{ x: 35, y: 38 }, { x: 50, y: 35 }, { x: 65, y: 38 }],
+  super: [{ x: 42, y: 29 }, { x: 58, y: 29 }],
+  crush: [{ x: 50, y: 24 }],
+  boss: [{ x: 50, y: 10 }],
 };
 const VARIANT_PRIORITY: Record<DamageVariant, number> = {
   auto: 0,
@@ -147,7 +147,8 @@ export function DamageNumbers() {
 
       const damage = toBig(event.damage);
       const now = performance.now();
-      if (now < bossActiveUntil && (event.crush || event.superCrit || event.crit || event.isClick)) return;
+      // Keep the boss-finish banner as the only focus during its short display.
+      if (now < bossActiveUntil) return;
       if (event.crush || event.superCrit) {
         const variant: DamageVariant = event.crush ? "crush" : "super";
         show({ text: formatBig(damage), label: event.crush ? "\u78be\u538b" : "\u8d85\u66b4\u51fb", variant, ...positionFor(variant), duration: event.crush ? 1_050 : 980 });

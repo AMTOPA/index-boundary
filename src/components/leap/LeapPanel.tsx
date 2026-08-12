@@ -11,7 +11,7 @@ import { ConfirmModal } from "@/components/common/ConfirmModal";
 const SHOP_ORDER: LeapUpgradeId[] = ["lawExponent", "startStage", "allStats", "newWorld", "autoLeap"];
 
 export function LeapPanel() {
-  const { engine } = useGame();
+  const { engine, updateAutoLeapRule } = useGame();
   const unlocked = useGameSelector((s) => s.meta.unlocks.includes("leap") || s.meta.discoveries.includes("leap"));
   const stage = useGameSelector((s) => s.combat.stage);
   const cores = useGameSelector((s) => s.leap.cores);
@@ -22,6 +22,7 @@ export function LeapPanel() {
   const allStatsLv = useGameSelector((s) => s.leap.purchases.allStats ?? 0);
   const newWorldLv = useGameSelector((s) => s.leap.purchases.newWorld ?? 0);
   const autoLeapLv = useGameSelector((s) => s.leap.purchases.autoLeap ?? 0);
+  const autoRule = useGameSelector((s) => s.leap.autoRule);
   const [confirm, setConfirm] = useState(false);
 
   if (!unlocked) {
@@ -52,6 +53,13 @@ export function LeapPanel() {
     : CONFIG.LEAP.CORE_BONUS_STAGE + bonusCores * CONFIG.LEAP.CORE_BONUS_STEP;
   const allStatsMult = leapAllStatsMult(allStatsLv);
   const hpGrowth = Math.max(1.05, CONFIG.HP_GROWTH - lawLv * CONFIG.LEAP.SHOP.lawExponent.perLevel);
+  const advancedAutoLeap = autoLeapLv > 0 && totalLeaps >= 3;
+  const autoRuleStatus = engine?.autoLeapRuleStatus() ?? {
+    stage: stage >= autoRule.minStage,
+    cores: previewCores >= autoRule.minCores,
+    leaps: totalLeaps >= autoRule.minTotalLeaps,
+    previewCores,
+  };
 
   return (
     <div className="panel leap-panel">
@@ -113,6 +121,52 @@ export function LeapPanel() {
           </div>
         );
           })}
+        </section>
+
+        <section className="auto-leap-card">
+          <div className="leap-section-label">高级自动跃迁策略</div>
+          {autoLeapLv <= 0 ? (
+            <p className="auto-leap-locked">先在世界核心商店购买「自动跃迁」。基础版会在达到硬门槛并确认卡墙后执行。</p>
+          ) : !advancedAutoLeap ? (
+            <div className="auto-leap-locked">
+              <strong>基础自动跃迁已启用</strong>
+              <span>累计跃迁达到 3 次后解锁策略阈值；当前 {totalLeaps} / 3 次。</span>
+            </div>
+          ) : (
+            <>
+              <div className="auto-leap-summary">
+                <div><span>当前关卡</span><strong className={autoRuleStatus.stage ? "is-met" : ""}>{formatNumber(stage)}</strong></div>
+                <div><span>预计世界核心</span><strong className={autoRuleStatus.cores ? "is-met" : ""}>+{autoRuleStatus.previewCores}</strong></div>
+                <div><span>累计跃迁</span><strong className={autoRuleStatus.leaps ? "is-met" : ""}>{totalLeaps}</strong></div>
+              </div>
+              <label className="auto-leap-toggle">
+                <input
+                  type="checkbox"
+                  checked={autoRule.enabled}
+                  onChange={(event) => updateAutoLeapRule({ enabled: event.target.checked })}
+                />
+                <span>{autoRule.enabled ? "策略监控已启用" : "策略已暂停"}</span>
+              </label>
+              <div className="auto-leap-controls">
+                <label>
+                  <span>当前关卡至少</span>
+                  <input type="number" min="0" step="100" value={autoRule.minStage} onChange={(event) => updateAutoLeapRule({ minStage: Number(event.target.value) })} />
+                  <i className={autoRuleStatus.stage ? "is-met" : ""}>{autoRuleStatus.stage ? "已满足" : "未满足"}</i>
+                </label>
+                <label>
+                  <span>预计核心至少</span>
+                  <input type="number" min="1" step="1" value={autoRule.minCores} onChange={(event) => updateAutoLeapRule({ minCores: Number(event.target.value) })} />
+                  <i className={autoRuleStatus.cores ? "is-met" : ""}>{autoRuleStatus.cores ? "已满足" : "未满足"}</i>
+                </label>
+                <label>
+                  <span>累计跃迁至少</span>
+                  <input type="number" min="3" step="1" value={autoRule.minTotalLeaps} onChange={(event) => updateAutoLeapRule({ minTotalLeaps: Number(event.target.value) })} />
+                  <i className={autoRuleStatus.leaps ? "is-met" : ""}>{autoRuleStatus.leaps ? "已满足" : "未满足"}</i>
+                </label>
+              </div>
+              <p className="auto-leap-note">以上条件需要同时满足，并且仍需达到本次跃迁硬门槛。可用“预计核心 ≥ X”继续推进更深关卡后再自动跃迁。</p>
+            </>
+          )}
         </section>
       </div>
 

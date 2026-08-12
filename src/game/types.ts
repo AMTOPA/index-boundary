@@ -22,6 +22,12 @@ export interface AutoPrestigeRule {
   comparator: ThresholdComparator;
   value: number;
 }
+export interface AutoLeapRule {
+  enabled: boolean;
+  minStage: number;
+  minCores: number;
+  minTotalLeaps: number;
+}
 export type PrestigeUpgradeId = "startPower" | "goldKeep" | "fastSkip" | "startSkill" | "singularityAmp";
 export type LeapUpgradeId = "lawExponent" | "startStage" | "allStats" | "newWorld" | "autoLeap";
 export type LawId = "critExp" | "goldBoost" | "apsCap" | "goldToDmg";
@@ -167,6 +173,7 @@ export interface LeapState {
   nextRequiredStage: number; // 当前高层周期内的下一次跃迁门槛
   lastLeapMaxStage: number; // 旧存档兼容与统计字段，不再参与核心奖励计算
   purchases: Partial<Record<LeapUpgradeId, number>>;
+  autoRule: AutoLeapRule;
 }
 
 export interface LawState {

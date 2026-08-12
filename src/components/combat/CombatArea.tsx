@@ -111,7 +111,7 @@ export function CombatArea() {
           {enemyKind === "mimic" && <div className="boss-name" style={{ color: "var(--gold)" }}>宝箱怪</div>}
         </div>
         <div className="hp-bar">
-          <div className={`hp-fill ${isBoss ? "boss" : ""}`} style={{ width: `${pct}%` }} />
+          <div className={`hp-fill ${isBoss ? "boss" : ""}`} style={{ transform: `scaleX(${pct / 100})` }} />
         </div>
         <div className="hp-text mono">
           {formatBig(hp)} / {formatBig(maxHp)}

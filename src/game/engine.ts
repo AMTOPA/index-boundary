@@ -82,7 +82,10 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       ],
     },
     prestige: { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} },
-    leap: { cores: 0, totalCoresEarned: 0, totalLeaps: 0, nextRequiredStage: CONFIG.LEAP.STAGE, lastLeapMaxStage: 1, purchases: {} },
+    leap: {
+      cores: 0, totalCoresEarned: 0, totalLeaps: 0, nextRequiredStage: CONFIG.LEAP.STAGE, lastLeapMaxStage: 1, purchases: {},
+      autoRule: { enabled: true, minStage: 0, minCores: 1, minTotalLeaps: 3 },
+    },
     laws: { shards: 0, totalShardsEarned: 0, totalRewrites: 0, lastRewriteMaxStage: 1, purchases: {} },
     nexus: { unlocked: false, entered: false, dimension: 0, purchases: {}, bossAutoAttack: false },
     echo: { unlocked: false, entered: false, dimension: 0, seals: 0, totalSealsEarned: 0, purchases: {} },
@@ -237,9 +240,10 @@ export class GameEngine {
     if ((this.state.leap?.purchases?.autoLeap ?? 0) >= 1 && this.canLeap()) {
       const advancedAutoLeap = this.state.leap.totalLeaps >= 3;
       const killTime = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
-      if (advancedAutoLeap || (Number.isFinite(killTime) && killTime > CONFIG.LEAP.AUTO_WALL_SEC)) {
-        this.leap();
-      }
+      const shouldLeap = advancedAutoLeap
+        ? this.matchesAutoLeapRule()
+        : Number.isFinite(killTime) && killTime > CONFIG.LEAP.AUTO_WALL_SEC;
+      if (shouldLeap) this.leap();
     }
     this.autoPrestigeTimer -= dt;
     if (this.autoPrestigeTimer <= 0) {
@@ -1580,6 +1584,33 @@ export class GameEngine {
     }
     return true;
   }
+  setAutoLeapRule(rule: Partial<GameState["leap"]["autoRule"]>): void {
+    const current = this.state.leap.autoRule;
+    const clampWhole = (value: number, fallback: number, minimum: number) => Number.isFinite(value) ? Math.max(minimum, Math.floor(value)) : fallback;
+    this.state.leap.autoRule = {
+      enabled: typeof rule.enabled === "boolean" ? rule.enabled : current.enabled,
+      minStage: clampWhole(rule.minStage ?? current.minStage, current.minStage, 0),
+      minCores: clampWhole(rule.minCores ?? current.minCores, current.minCores, 1),
+      minTotalLeaps: clampWhole(rule.minTotalLeaps ?? current.minTotalLeaps, current.minTotalLeaps, 3),
+    };
+  }
+  autoLeapRuleStatus(): { stage: boolean; cores: boolean; leaps: boolean; previewCores: number } {
+    const rule = this.state.leap.autoRule;
+    const previewCores = leapCores(this.state);
+    return {
+      stage: this.state.combat.stage >= rule.minStage,
+      cores: previewCores >= rule.minCores,
+      leaps: this.state.leap.totalLeaps >= rule.minTotalLeaps,
+      previewCores,
+    };
+  }
+  private matchesAutoLeapRule(): boolean {
+    const rule = this.state.leap.autoRule;
+    if (!rule.enabled) return false;
+    const status = this.autoLeapRuleStatus();
+    return status.stage && status.cores && status.leaps;
+  }
+
   setAutoPrestigeRule(rule: Partial<GameState["items"]["autoPrestigeRule"]>): void {
     const current = this.state.items.autoPrestigeRule;
     const metric = rule.metric && ["stage", "energy", "multRatio"].includes(rule.metric) ? rule.metric : current.metric;

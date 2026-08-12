@@ -22,12 +22,14 @@ interface GameCtx {
   worldFlash: { name: string; color: string } | null;
   reload: (state: GameState) => void;
   updateSettings: (patch: Partial<GameSettings>) => void;
+  updateAutoLeapRule: (patch: Partial<GameState["leap"]["autoRule"]>) => void;
 }
 const Ctx = createContext<GameCtx>({
   engine: null, toasts: [], pushToast: () => {}, unlockCard: null, milestoneFlash: null, offline: null,
   worldFlash: null,
   reload: () => {},
   updateSettings: () => {},
+  updateAutoLeapRule: () => {},
 });
 export const useGame = () => useContext(Ctx);
 
@@ -62,6 +64,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     eng.state.meta.settings = { ...eng.state.meta.settings, ...patch };
     setAudioEnabled(eng.state.meta.settings.sound);
     syncReducedMotion(eng.state.meta.settings.reduceMotion);
+    publishGameState(eng.state, true);
+    saveGame(eng.state);
+  }, []);
+
+  const updateAutoLeapRule = useCallback((patch: Partial<GameState["leap"]["autoRule"]>) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.setAutoLeapRule(patch);
     publishGameState(eng.state, true);
     saveGame(eng.state);
   }, []);
@@ -322,7 +332,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [start, stopEngine]);
 
   return (
-    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, worldFlash, reload, updateSettings }}>
+    <Ctx.Provider value={{ engine, toasts, pushToast, unlockCard, milestoneFlash, offline, worldFlash, reload, updateSettings, updateAutoLeapRule }}>
       {children}
       {offline && <OfflineModal result={offline} onClose={() => setOffline(null)} />}
       <div className="toast-wrap">

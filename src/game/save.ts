@@ -182,6 +182,17 @@ export function normalizeState(raw: unknown): GameState {
   state.leap = { ...base.leap, ...(r.leap ?? {}) };
   state.leap.purchases = { ...(r.leap?.purchases ?? {}) };
   state.leap.nextRequiredStage = normalizeLeapStageRequirement(state.leap.nextRequiredStage);
+  const rawAutoLeapRule = r.leap?.autoRule ?? {};
+  const normalizeRuleWhole = (value: unknown, fallback: number, minimum: number) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(minimum, Math.floor(numeric)) : fallback;
+  };
+  state.leap.autoRule = {
+    enabled: typeof rawAutoLeapRule.enabled === "boolean" ? rawAutoLeapRule.enabled : base.leap.autoRule.enabled,
+    minStage: normalizeRuleWhole(rawAutoLeapRule.minStage, base.leap.autoRule.minStage, 0),
+    minCores: normalizeRuleWhole(rawAutoLeapRule.minCores, base.leap.autoRule.minCores, 1),
+    minTotalLeaps: normalizeRuleWhole(rawAutoLeapRule.minTotalLeaps, base.leap.autoRule.minTotalLeaps, 3),
+  };
   state.laws = { ...base.laws, ...(r.laws ?? {}) };
   state.laws.purchases = { ...(r.laws?.purchases ?? {}) };
   state.nexus = { ...base.nexus, ...(r.nexus ?? {}) };
