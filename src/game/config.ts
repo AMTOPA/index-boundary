@@ -1,6 +1,13 @@
 // ============ 契约文件：全部数值常量集中于此（改一处即调难度） ============
-import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, EchoUpgradeId, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
+import type { AffixStat, ChallengeId, ChallengePermKind, DailyQuestType, EchoUpgradeId, ItemId, LawId, LeapUpgradeId, NexusUpgradeId, Rarity, SeasonTierId, SetBonusKind, ToolId } from "./types";
 import type { BigTuple } from "./bignum";
+
+export interface ConsumableShopConfig {
+  gold: BigTuple;
+  minStage?: number;
+  requiredUnlock?: string;
+  goldFraction: number;
+}
 
 export interface ToolTierConfig {
   gold: BigTuple;
@@ -30,7 +37,7 @@ export interface SetDef {
 export const CONFIG = {
   // 存档
   SAVE_KEY: "index-boundary-save",
-  SAVE_VERSION: 7,
+  SAVE_VERSION: 8,
   SAVE_INTERVAL_MS: 10_000,
   TICK_RATE: 20, // 逻辑 TPS
   SAVE_BACKUP_SLOTS: 3,
@@ -325,6 +332,10 @@ export const CONFIG = {
   // Talents
   TALENT_POINTS_FROM_BOSS_FIRST_KILL: 1,
   TALENT_POINTS_FROM_ACHIEVEMENT: 1,
+  TALENT_POINTS_PER_PRESTIGE: 1,
+  TALENT_STAGE_MILESTONE: 2000,
+  CHALLENGE_TALENT_CAP_PER_CYCLE: 6,
+  CHALLENGE_TALENT_TOTAL_CAP_PER_CYCLE: 30,
   // 天赋溢出转化：天赋全满后，每 CHUNK 点溢出天赋点自动转化为 1 点天赋残辉（永久全局 ×1.1）
   TALENT_OVERFLOW: {
     CHUNK: 5,
@@ -335,6 +346,11 @@ export const CONFIG = {
   // 道具
   CONSUMABLE_DURATION_SEC: 300, // 超频芯片/黄金协议 5 分钟
   CONSUMABLE_STACK_CAP: 99,
+  CONSUMABLE_SHOP: {
+    overclock_chip: { gold: [1, 8], goldFraction: 0.005, minStage: 100 },
+    gold_protocol: { gold: [1, 12], goldFraction: 0.01, minStage: 200 },
+    singularity_battery: { gold: [1, 16], goldFraction: 0.02, minStage: 300, requiredUnlock: "skills" },
+  } as Record<ItemId, ConsumableShopConfig>,
 
   // 重构（第一层重置）
   PRESTIGE: {
@@ -367,10 +383,10 @@ export const CONFIG = {
     CORE_BONUS_STEP: 1000, // 此后每推进 1000 关再额外 +1，无上限
     SHOP: {
       lawExponent: { baseCost: 1, costGrowth: 1, perLevel: 0.005, max: 24, label: "法则指数", desc: "怪物 HP 指数基数 -0.005/级（上限 -0.12）" },
-      startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后起始关卡 +100/级，五项基础升级同步到起始关卡 -1 级" },
+      startStage: { baseCost: 1, costGrowth: 1, perLevel: 100, max: 50, label: "起始世界", desc: "跃迁后及之后每次重构：起始关卡 +100/级，五项基础升级同步到起始关卡 -1 级" },
       allStats: { baseCost: 1, costGrowth: 1, perLevel: 1.3, max: 30, label: "全属性", desc: "每级使全局伤害与金币 ×1.3，乘算叠加" },
       newWorld: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 2, label: "新世界", desc: "解锁新世界主题与机制（奇点熔炉/法则终境）" },
-      autoLeap: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 1, label: "自动跃迁", desc: "到达跃迁阈值且卡墙时自动跃迁" },
+      autoLeap: { baseCost: 1, costGrowth: 1, perLevel: 1, max: 1, label: "自动跃迁", desc: "购买后卡墙自动跃迁；累计跃迁 ≥3 次后升级为达到门槛立即跃迁" },
     } as Record<LeapUpgradeId, { baseCost: number; costGrowth: number; perLevel: number; max: number; label: string; desc: string }>,
     AUTO_WALL_SEC: 8, // 自动跃迁：卡墙判定秒数
   },

@@ -57,3 +57,8 @@ export function useReducedMotion(): boolean {
 
   return savedPreference || systemPreference;
 }
+
+
+export function useAnimationFps(): 30 | 60 | 120 {
+  return useGameSelector((state) => state.meta.settings.animationFps ?? 60);
+}

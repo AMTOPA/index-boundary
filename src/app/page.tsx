@@ -157,7 +157,7 @@ function SettingsNavigation({ activeTab, onChange }: { activeTab: SettingsTab; o
               onClick={() => onChange(item.id)}
             >
               <span aria-hidden="true">{locked ? "❓" : item.icon}</span>
-              <span>{locked ? "???" : item.label}</span>
+              <span>{locked ? "?" : item.label}</span>
             </button>
           );
         })}

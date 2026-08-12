@@ -32,6 +32,7 @@ import { SKILL_DEFS, SKILL_IDS, skillCoreCost, passiveCoreCost, PASSIVE_IDS, ski
 import { worldForStage, BOSS_AFFIX_LABEL, ELITE_AFFIX_POOL } from "./data/worlds";
 import { equipScore } from "./data/equipment";
 import { ITEM_DEFS, TOOL_DEFS } from "./data/items";
+import { challengeCycleTalentRemaining, challengeTalentPotential, resetTalentRewardCycle } from "./systems/talent-rewards";
 
 export interface OfflineResult {
   goldGained: Big;
@@ -53,7 +54,7 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
       discoveries: [],
       achievements: [],
       milestonesSeen: [],
-      settings: { sound: true, reduceMotion: false },
+      settings: { sound: true, reduceMotion: false, animationFps: 60 },
       lastScoreSubmit: { stage: undefined, mag: undefined, prestige: undefined, season: undefined },
       cloudSyncedAt: 0,
       activeChallenge: null,
@@ -99,11 +100,11 @@ export function createNewState(seed = (Date.now() >>> 0)): GameState {
     },
     daily: { date: "", quests: [], goldEarned: [0, 0], bestStage: 1 },
     challenges: {
-      no_crit: { best: 0, claimed: false },
-      slow_universe: { best: 0, claimed: false },
-      poverty: { best: 0, claimed: false },
-      durable: { best: 0, claimed: false },
-      skill_slow: { best: 0, claimed: false },
+      no_crit: { best: 0, claimed: false, cycleBest: 0, cycleTalentRewarded: 0, runRewardClaimed: false },
+      slow_universe: { best: 0, claimed: false, cycleBest: 0, cycleTalentRewarded: 0, runRewardClaimed: false },
+      poverty: { best: 0, claimed: false, cycleBest: 0, cycleTalentRewarded: 0, runRewardClaimed: false },
+      durable: { best: 0, claimed: false, cycleBest: 0, cycleTalentRewarded: 0, runRewardClaimed: false },
+      skill_slow: { best: 0, claimed: false, cycleBest: 0, cycleTalentRewarded: 0, runRewardClaimed: false },
     },
     season: {
       unlocked: false,
@@ -234,8 +235,9 @@ export class GameEngine {
     // 自动重构：卡墙且可重构时自动执行（每 10s 检查一次）
     // 自动跃迁：到达跃迁阈值且卡墙时自动执行（世界核心升级解锁）
     if ((this.state.leap?.purchases?.autoLeap ?? 0) >= 1 && this.canLeap()) {
-      const kt = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
-      if (Number.isFinite(kt) && kt > CONFIG.LEAP.AUTO_WALL_SEC) {
+      const advancedAutoLeap = this.state.leap.totalLeaps >= 3;
+      const killTime = toBig(this.state.combat.enemyHp).div(this.derived.dps).toNumber();
+      if (advancedAutoLeap || (Number.isFinite(killTime) && killTime > CONFIG.LEAP.AUTO_WALL_SEC)) {
         this.leap();
       }
     }
@@ -468,7 +470,7 @@ export class GameEngine {
       // 首次 Boss 击杀 → 天赋点
       if (!this.state.meta.unlocks.includes("first_boss_reward")) {
         this.state.meta.unlocks.push("first_boss_reward");
-        this.state.talents.points += CONFIG.TALENT_POINTS_FROM_BOSS_FIRST_KILL;
+        this.grantTalentPoints(CONFIG.TALENT_POINTS_FROM_BOSS_FIRST_KILL);
       }
     } else if (kind === "elite") {
       this.state.statistics.totalEliteKills += 1;
@@ -568,12 +570,14 @@ export class GameEngine {
     if (chId) {
       const prog = this.state.challenges[chId];
       if (next > prog.best) prog.best = next;
+      if (!prog.runRewardClaimed && next > prog.cycleBest) prog.cycleBest = next;
     }
     if (this.state.meta.activeModifiers.length > 0) {
       const mods = this.state.meta.activeModifiers;
       for (const m of mods) {
         const prog = this.state.challenges[m];
         if (next > prog.best) prog.best = next;
+        if (!prog.runRewardClaimed && next > prog.cycleBest) prog.cycleBest = next;
       }
       const s = this.state.season;
       if (next > s.bestStage) s.bestStage = next;
@@ -1003,6 +1007,19 @@ export class GameEngine {
     return ok;
   }
   // ---------------- 天赋溢出转化 ----------------
+  private grantTalentPoints(amount: number): void {
+    const safeAmount = Math.max(0, Math.floor(amount));
+    if (safeAmount <= 0) return;
+    this.state.talents.points += safeAmount;
+    let residueGained = 0;
+    while (sysCanConvertOverflow(this.state)) residueGained += sysConvertOverflow(this.state);
+    if (residueGained > 0) {
+      this.recomputeDerived();
+      for (let i = 0; i < residueGained; i += 1) {
+        this.emit({ type: "talentOverflow", residue: this.state.talents.residue });
+      }
+    }
+  }
   canConvertTalentOverflow(): boolean {
     return sysCanConvertOverflow(this.state);
   }
@@ -1080,18 +1097,22 @@ export class GameEngine {
     if (!discovered) return false;
     return sysCanPrestige(this.state);
   }
-  prestige(): { energyGained: number } | null {
+  prestige(): { energyGained: number; talentGained: number } | null {
     if (!this.canPrestige()) return null;
+    const reachedStage = this.state.combat.stage;
     const result = computePrestige(this.state);
     if (result.energyGained <= 0) return null;
     applyPrestige(this.state, result.energyGained, result.goldKept);
+    const talentGained = CONFIG.TALENT_POINTS_PER_PRESTIGE + Math.floor(reachedStage / CONFIG.TALENT_STAGE_MILESTONE);
+    resetTalentRewardCycle(this.state);
+    this.grantTalentPoints(talentGained);
     this.buffs = emptyBuffs();
     this.attackCounter = 0;
     this.attackBudget = 0;
     this.spawnEnemy();
     this.recomputeDerived();
     this.emit({ type: "prestige", energyGained: result.energyGained });
-    return { energyGained: result.energyGained };
+    return { energyGained: result.energyGained, talentGained };
   }
   buyPrestigeUpgrade(id: Parameters<typeof buyPrestigeUpgrade>[1]): boolean {
     const ok = buyPrestigeUpgrade(this.state, id);
@@ -1113,6 +1134,7 @@ export class GameEngine {
     if (!this.canLeap()) return null;
     const cores = leapCores(this.state);
     applyLeap(this.state, cores);
+    resetTalentRewardCycle(this.state);
     this.buffs = emptyBuffs();
     this.attackCounter = 0;
     this.attackBudget = 0;
@@ -1141,6 +1163,7 @@ export class GameEngine {
     if (!this.canRewriteLaw()) return null;
     const shards = lawShards(this.state);
     applyLawRewrite(this.state, shards);
+    resetTalentRewardCycle(this.state);
     this.buffs = emptyBuffs();
     this.attackCounter = 0;
     this.attackBudget = 0;
@@ -1188,6 +1211,7 @@ export class GameEngine {
     this.attackCounter = 0;
     this.attackBudget = 0;
     this.resetRunForNexus();
+    resetTalentRewardCycle(this.state);
     this.spawnEnemy();
     this.recomputeDerived();
     this.emit({ type: "nexusEnter", dimension: this.state.nexus.dimension });
@@ -1215,6 +1239,7 @@ export class GameEngine {
     this.attackCounter = 0;
     this.attackBudget = 0;
     this.resetRunForEcho();
+    resetTalentRewardCycle(this.state);
     this.spawnEnemy();
     this.recomputeDerived();
     this.emit({ type: "echoEnter", dimension: this.state.echo.dimension });
@@ -1248,6 +1273,8 @@ export class GameEngine {
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
     state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
     state.leap.nextRequiredStage = CONFIG.LEAP.STAGE;
+    state.leap.purchases = {};
+    state.laws.purchases = {};
     state.statistics.runDamage = [0, 0];
   }
 
@@ -1268,6 +1295,9 @@ export class GameEngine {
     state.talents = { ...state.talents, points: 0, allocations: {}, keystones: {} };
     state.prestige = { energy: 0, totalEnergyEarned: 0, nextRequiredStage: CONFIG.PRESTIGE.BASE_STAGE, purchases: {} };
     state.leap.nextRequiredStage = CONFIG.LEAP.STAGE;
+    state.leap.purchases = {};
+    state.laws.purchases = {};
+    state.nexus.purchases = {};
     state.statistics.runDamage = [0, 0];
   }
 
@@ -1277,8 +1307,10 @@ export class GameEngine {
     if (this.state.meta.activeModifiers.length > 0) this.state.meta.activeModifiers = [];
     this.resetRunForChallenge();
     this.state.meta.activeChallenge = id;
-    const prog = this.state.challenges[id];
-    this.state.challenges[id] = { best: Math.max(1, prog.best), claimed: prog.claimed };
+    const progress = this.state.challenges[id];
+    progress.best = Math.max(1, progress.best);
+    progress.cycleBest = 1;
+    progress.runRewardClaimed = false;
     this.recomputeDerived();
     this.emit({ type: "challengeStart", id });
     return true;
@@ -1288,7 +1320,7 @@ export class GameEngine {
     this.state.meta.activeChallenge = null;
     this.recomputeDerived();
   }
-  // ---------------- 试炼赛季（Roguelite 挑战赛季） ----------------
+  // ---------------- 试炼赛季（多 Debuff 挑战） ----------------
   isSeasonUnlocked(): boolean {
     return CONFIG.SEASON.UNLOCK_CHALLENGES.every((id) => this.state.challenges[id]?.claimed);
   }
@@ -1297,17 +1329,19 @@ export class GameEngine {
   }
   startSeason(mods: ChallengeId[]): boolean {
     const unique = new Set(mods);
-    const valid =
-      mods.length >= 1 &&
-      mods.length <= CONFIG.SEASON.MAX_MODIFIERS &&
-      unique.size === mods.length &&
-      mods.every((m) => CONFIG.CHALLENGES[m]);
+    const valid = mods.length >= 1 && mods.length <= CONFIG.SEASON.MAX_MODIFIERS
+      && unique.size === mods.length && mods.every((id) => Boolean(CONFIG.CHALLENGES[id]));
     if (!valid || !this.isSeasonUnlocked()) return false;
     if (this.state.meta.activeChallenge) this.state.meta.activeChallenge = null;
     this.state.meta.activeModifiers = [...mods];
     this.state.season.unlocked = true;
     this.state.season.lastModifiers = [...mods];
-    this.recomputeDerived(); // 让 enemyHpMult 等修饰符先生效
+    for (const id of mods) {
+      const progress = this.state.challenges[id];
+      progress.cycleBest = 1;
+      progress.runRewardClaimed = false;
+    }
+    this.recomputeDerived();
     this.resetRunForChallenge();
     this.emit({ type: "seasonStart", modifiers: mods });
     return true;
@@ -1329,7 +1363,7 @@ export class GameEngine {
     const def = CONFIG.SEASON.TIERS[tier];
     this.state.season.claimedTiers.push(tier);
     this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(def.rewardCores)).toTuple();
-    this.state.talents.points += def.rewardTalent;
+    this.grantTalentPoints(def.rewardTalent);
     this.state.laws.shards += def.rewardShards;
     this.state.laws.totalShardsEarned += def.rewardShards;
     this.emit({ type: "seasonClaim", tier });
@@ -1338,19 +1372,48 @@ export class GameEngine {
   challengeBest(id: ChallengeId): number {
     return this.state.challenges[id]?.best ?? 0;
   }
+  challengeCycleTalentRemaining(): number {
+    return challengeCycleTalentRemaining(this.state);
+  }
+  challengeRunReward(id: ChallengeId): number {
+    const progress = this.state.challenges[id];
+    if (!progress || progress.runRewardClaimed) return 0;
+    const reached = Math.max(progress.cycleBest, this.state.meta.activeChallenge === id || this.state.meta.activeModifiers.includes(id) ? progress.best : 0);
+    if (reached < CONFIG.CHALLENGES[id].target) return 0;
+    return challengeTalentPotential(this.state, [id]);
+  }
+  activeChallengeRewardPreview(): number {
+    const ids = this.state.meta.activeChallenge ? [this.state.meta.activeChallenge] : this.state.meta.activeModifiers;
+    const eligible = ids.filter((id) => {
+      const progress = this.state.challenges[id];
+      return progress && !progress.runRewardClaimed && progress.cycleBest >= CONFIG.CHALLENGES[id].target;
+    });
+    return challengeTalentPotential(this.state, eligible);
+  }
   canClaimChallenge(id: ChallengeId): boolean {
-    const prog = this.state.challenges[id];
-    if (!prog || prog.claimed) return false;
-    return prog.best >= CONFIG.CHALLENGES[id].target;
+    return this.challengeRunReward(id) > 0;
   }
   claimChallenge(id: ChallengeId): boolean {
-    if (!this.canClaimChallenge(id)) return false;
-    this.state.challenges[id].claimed = true;
+    const talentReward = this.challengeRunReward(id);
+    if (talentReward <= 0) return false;
+    const progress = this.state.challenges[id];
     const def = CONFIG.CHALLENGES[id];
-    this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(def.rewardCores)).toTuple();
-    this.state.talents.points += def.rewardTalent;
+    const firstClear = !progress.claimed;
+    progress.runRewardClaimed = true;
+    progress.cycleTalentRewarded += talentReward;
+    if (firstClear) {
+      progress.claimed = true;
+      this.state.skills.cores = toBig(this.state.skills.cores).add(Big.fromNumber(def.rewardCores)).toTuple();
+    }
+    this.grantTalentPoints(talentReward);
     this.emit({ type: "challengeClaim", id });
     return true;
+  }
+  claimActiveChallengeRewards(): number {
+    const ids = this.state.meta.activeChallenge ? [this.state.meta.activeChallenge] : [...this.state.meta.activeModifiers];
+    let claimed = 0;
+    for (const id of ids) if (this.claimChallenge(id)) claimed += 1;
+    return claimed;
   }
   private resetRunForChallenge(): void {
     const state = this.state;
@@ -1400,9 +1463,47 @@ export class GameEngine {
     this.updateDailyQuest("gold", Math.max(0, mag));
   }
   // ---------------- 道具 ----------------
+  consumableCount(id: ItemId): number {
+    return Math.min(CONFIG.CONSUMABLE_STACK_CAP, Math.max(0, Math.floor(this.state.items.consumables[id] ?? 0)));
+  }
+  consumableCost(id: ItemId): BigTuple {
+    const def = CONFIG.CONSUMABLE_SHOP[id];
+    const proportional = toBig(this.state.player.gold).mul(Big.fromNumber(def.goldFraction));
+    return Big.max(Big.fromTuple(def.gold), proportional).toTuple();
+  }
+  consumablePurchaseReasons(id: ItemId): string[] {
+    const def = CONFIG.CONSUMABLE_SHOP[id];
+    const reasons: string[] = [];
+    if (def.minStage && this.state.combat.stage < def.minStage) reasons.push(`需达到第 ${def.minStage} 关`);
+    if (def.requiredUnlock && !this.isUnlocked(def.requiredUnlock) && !this.state.meta.discoveries.includes(def.requiredUnlock)) {
+      reasons.push(`需先发现${def.requiredUnlock === "skills" ? "技能" : def.requiredUnlock}`);
+    }
+    if (this.consumableCount(id) >= CONFIG.CONSUMABLE_STACK_CAP) reasons.push(`库存已达 ${CONFIG.CONSUMABLE_STACK_CAP}`);
+    if (this.consumableCount(id) <= 0) reasons.push("库存不足");
+    return reasons;
+  }
+  canBuyConsumable(id: ItemId): boolean {
+    return this.consumablePurchaseReasons(id).length === 0;
+  }
+  buyConsumable(id: ItemId): boolean {
+    if (!this.canBuyConsumable(id)) return false;
+    const cost = this.consumableCost(id);
+    this.state.player.gold = toBig(this.state.player.gold).sub(Big.fromTuple(cost)).toTuple();
+    this.state.items.consumables[id] = this.consumableCount(id) + 1;
+    return true;
+  }
+  consumableUseReasons(id: ItemId): string[] {
+    const reasons: string[] = [];
+    if (this.consumableCount(id) <= 0) reasons.push("库存不足");
+    if (id === "singularity_battery" && this.state.skills.actives.every((skill) => skill.cdRemaining <= 0)) reasons.push("当前没有需要恢复的技能冷却");
+    return reasons;
+  }
+  canCastConsumable(id: ItemId): boolean {
+    return this.consumableUseReasons(id).length === 0;
+  }
   castConsumable(id: ItemId): boolean {
-    const count = this.state.items.consumables[id] ?? 0;
-    if (count <= 0) return false;
+    if (!this.canCastConsumable(id)) return false;
+    const count = this.consumableCount(id);
     this.state.items.consumables[id] = count - 1;
     const def = ITEM_DEFS[id];
     if (id === "overclock_chip") {
@@ -1536,7 +1637,7 @@ export class GameEngine {
         this.emit({ type: "achievement", id: def.id });
       }
     }
-    if (gained > 0) this.state.talents.points += gained;
+    if (gained > 0) this.grantTalentPoints(gained);
   }
 
   private checkMilestones(): void {

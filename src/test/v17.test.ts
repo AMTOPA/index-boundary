@@ -151,6 +151,253 @@ describe("V17 contract: 特殊模式禁止高层重置", () => {
   });
 });
 
+
+describe("V18 contract: 分层增益继承", () => {
+  it("重构会继承当前跃迁层的起始世界，并与起始力量叠加", () => {
+    const state = createNewState(1801);
+    state.meta.unlocks.push("prestige", "leap");
+    state.leap.purchases = { startStage: 1, allStats: 2, lawExponent: 1, newWorld: 1 };
+    state.prestige.purchases.startPower = 2;
+    state.prestige.nextRequiredStage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.combat.stage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.statistics.runDamage = [1, 30];
+    const engine = new GameEngine(state);
+
+    expect(engine.prestige()).not.toBeNull();
+    expect(engine.state.combat.stage).toBe(101);
+    expect(engine.state.player.upgrades).toEqual({
+      attack: 120,
+      aspd: 100,
+      critChance: 100,
+      critDamage: 100,
+      gold: 100,
+    });
+    expect(engine.state.leap.purchases).toEqual({ startStage: 1, allStats: 2, lawExponent: 1, newWorld: 1 });
+    expect(engine.derived.leapGlobalMult.toNumber()).toBeCloseTo(Math.pow(1.3, 2), 8);
+  });
+
+  it("无起始世界时重构仍维持原有的 1 关起步规则", () => {
+    const state = createNewState(1802);
+    state.meta.unlocks.push("prestige");
+    state.prestige.purchases.startPower = 2;
+    state.combat.stage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.statistics.runDamage = [1, 30];
+    const engine = new GameEngine(state);
+
+    expect(engine.prestige()).not.toBeNull();
+    expect(engine.state.combat.stage).toBe(1);
+    expect(engine.state.player.upgrades).toEqual({ attack: 20, aspd: 0, critChance: 0, critDamage: 0, gold: 0 });
+  });
+
+  it("进入彼岸会清空重构、跃迁和法则已购增益，但保留货币与彼岸层", () => {
+    const state = createNewState(1803);
+    state.combat.stage = CONFIG.NEXUS.ENTRY_STAGE;
+    state.leap.cores = 9;
+    state.leap.purchases = { newWorld: CONFIG.NEXUS.REQUIRED_NEW_WORLD, startStage: 3, allStats: 4 };
+    state.laws.shards = CONFIG.NEXUS.ENTRY_SHARDS + 10;
+    state.laws.purchases = { critExp: 3, goldBoost: 2 };
+    state.prestige.energy = 200;
+    state.prestige.purchases.startPower = 5;
+    const engine = new GameEngine(state);
+
+    expect(engine.enterNexus()).not.toBeNull();
+    expect(engine.state.leap.cores).toBe(9);
+    expect(engine.state.laws.shards).toBe(CONFIG.NEXUS.ENTRY_SHARDS + 10 - CONFIG.NEXUS.ENTRY_COST);
+    expect(engine.state.prestige.purchases).toEqual({});
+    expect(engine.state.leap.purchases).toEqual({});
+    expect(engine.state.laws.purchases).toEqual({});
+    expect(engine.state.nexus.entered).toBe(true);
+  });
+
+  it("进入回响会清空重构、跃迁、法则和彼岸已购增益，但保留货币与回响层", () => {
+    const state = createNewState(1804);
+    state.nexus.entered = true;
+    state.nexus.purchases = { nexusDmg: 3, nexusGold: 2 };
+    state.combat.stage = CONFIG.ECHO.ENTRY_STAGE;
+    state.echo.totalSealsEarned = CONFIG.ECHO.ENTRY_SEALS;
+    state.echo.seals = CONFIG.ECHO.ENTRY_COST + 20;
+    state.leap.cores = 8;
+    state.leap.purchases = { startStage: 2, allStats: 3 };
+    state.laws.shards = 40;
+    state.laws.purchases = { critExp: 2 };
+    state.prestige.energy = 100;
+    state.prestige.purchases.startPower = 4;
+    const engine = new GameEngine(state);
+
+    expect(engine.enterEcho()).not.toBeNull();
+    expect(engine.state.leap.cores).toBe(8);
+    expect(engine.state.laws.shards).toBe(40);
+    expect(engine.state.echo.seals).toBe(20);
+    expect(engine.state.prestige.purchases).toEqual({});
+    expect(engine.state.leap.purchases).toEqual({});
+    expect(engine.state.laws.purchases).toEqual({});
+    expect(engine.state.nexus.purchases).toEqual({});
+    expect(engine.state.echo.entered).toBe(true);
+  });
+
+  it("法则层增益经过重构与跃迁仍存在，再次法则重写时也保留", () => {
+    const state = createNewState(1810);
+    state.meta.unlocks.push("prestige", "leap", "lawRewrite");
+    state.laws.purchases = { critExp: 3, goldBoost: 2 };
+    state.combat.stage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.statistics.runDamage = [1, 30];
+    const engine = new GameEngine(state);
+
+    expect(engine.prestige()).not.toBeNull();
+    expect(engine.state.laws.purchases).toEqual({ critExp: 3, goldBoost: 2 });
+
+    engine.state.meta.unlocks.push("leap");
+    engine.state.combat.stage = engine.leapRequiredStage();
+    expect(engine.leap()).not.toBeNull();
+    expect(engine.state.laws.purchases).toEqual({ critExp: 3, goldBoost: 2 });
+
+    engine.state.meta.unlocks.push("lawRewrite");
+    engine.state.combat.stage = CONFIG.LAWS.REWRITE_STAGE;
+    engine.state.statistics.allTimeMaxStage = CONFIG.LAWS.REWRITE_STAGE;
+    expect(engine.rewriteLaw()).not.toBeNull();
+    expect(engine.state.laws.purchases).toEqual({ critExp: 3, goldBoost: 2 });
+  });
+
+  it("彼岸层增益经过重构、跃迁与法则重写仍存在", () => {
+    const state = createNewState(1811);
+    state.meta.unlocks.push("prestige", "leap", "lawRewrite");
+    state.nexus.entered = true;
+    state.nexus.purchases = { nexusDmg: 3, nexusGold: 2 };
+    state.combat.stage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.statistics.runDamage = [1, 30];
+    const engine = new GameEngine(state);
+
+    expect(engine.prestige()).not.toBeNull();
+    expect(engine.state.nexus.purchases).toEqual({ nexusDmg: 3, nexusGold: 2 });
+    engine.state.meta.unlocks.push("leap");
+    engine.state.combat.stage = engine.leapRequiredStage();
+    expect(engine.leap()).not.toBeNull();
+    expect(engine.state.nexus.purchases).toEqual({ nexusDmg: 3, nexusGold: 2 });
+    engine.state.meta.unlocks.push("lawRewrite");
+    engine.state.combat.stage = CONFIG.LAWS.REWRITE_STAGE;
+    engine.state.statistics.allTimeMaxStage = CONFIG.LAWS.REWRITE_STAGE;
+    expect(engine.rewriteLaw()).not.toBeNull();
+    expect(engine.state.nexus.purchases).toEqual({ nexusDmg: 3, nexusGold: 2 });
+  });
+
+  it("回响层增益经过所有低层重置仍存在", () => {
+    const state = createNewState(1812);
+    state.meta.unlocks.push("prestige", "leap", "lawRewrite");
+    state.nexus.entered = true;
+    state.echo.entered = true;
+    state.echo.purchases = { echoDmg: 3, echoGold: 2 };
+    state.combat.stage = CONFIG.PRESTIGE.BASE_STAGE;
+    state.statistics.runDamage = [1, 30];
+    const engine = new GameEngine(state);
+
+    expect(engine.prestige()).not.toBeNull();
+    expect(engine.state.echo.purchases).toEqual({ echoDmg: 3, echoGold: 2 });
+    engine.state.meta.unlocks.push("leap");
+    engine.state.combat.stage = engine.leapRequiredStage();
+    expect(engine.leap()).not.toBeNull();
+    expect(engine.state.echo.purchases).toEqual({ echoDmg: 3, echoGold: 2 });
+    engine.state.meta.unlocks.push("lawRewrite");
+    engine.state.combat.stage = CONFIG.LAWS.REWRITE_STAGE;
+    engine.state.statistics.allTimeMaxStage = CONFIG.LAWS.REWRITE_STAGE;
+    expect(engine.rewriteLaw()).not.toBeNull();
+    expect(engine.state.echo.purchases).toEqual({ echoDmg: 3, echoGold: 2 });
+  });
+
+  it("v7 旧档会修复跃迁起始世界未在重构后生效的问题", () => {
+    const raw = createNewState(1805);
+    raw.meta.version = 7;
+    raw.leap.purchases.startStage = 2;
+    raw.prestige.purchases.startPower = 3;
+    raw.prestige.totalEnergyEarned = 10;
+    raw.combat.stage = 1;
+    raw.player.upgrades = { attack: 30, aspd: 0, critChance: 0, critDamage: 0, gold: 0 };
+
+    const normalized = normalizeState(raw);
+    expect(normalized.combat.stage).toBe(201);
+    expect(normalized.player.upgrades).toEqual({
+      attack: 230,
+      aspd: 200,
+      critChance: 200,
+      critDamage: 200,
+      gold: 200,
+    });
+    expect(normalized.meta.version).toBe(CONFIG.SAVE_VERSION);
+  });
+
+  it("真实 v7 导入链会补齐跃迁基线且保留购买记录", () => {
+    const state = createNewState(1813);
+    state.meta.version = 7;
+    state.leap.purchases = { startStage: 1, allStats: 2 };
+    state.prestige.purchases.startPower = 2;
+    state.prestige.totalEnergyEarned = 10;
+    state.combat.stage = 12;
+    state.player.upgrades = { attack: 35, aspd: 5, critChance: 0, critDamage: 0, gold: 0 };
+    const version = 7;
+    const timestamp = 1_786_528_800_000;
+    const body = JSON.stringify(state) + String(version) + String(timestamp);
+    const imported = importSave(JSON.stringify({
+      format: "index-boundary-save",
+      version,
+      timestamp,
+      checksum: fnv1a(body),
+      state,
+    }));
+
+    expect(imported).not.toBeNull();
+    expect(imported!.combat.stage).toBe(101);
+    expect(imported!.player.upgrades).toEqual({ attack: 120, aspd: 100, critChance: 100, critDamage: 100, gold: 100 });
+    expect(imported!.leap.purchases).toEqual({ startStage: 1, allStats: 2 });
+    expect(imported!.meta.version).toBe(CONFIG.SAVE_VERSION);
+  });
+
+  it("v7 已进入高维的旧档不会被迁移不可逆删除购买记录", () => {
+    const nexus = createNewState(1806);
+    nexus.meta.version = 7;
+    nexus.nexus.entered = true;
+    nexus.leap.purchases = { allStats: 4 };
+    nexus.laws.purchases = { critExp: 3 };
+    nexus.nexus.purchases = { nexusDmg: 2 };
+    const normalizedNexus = normalizeState(nexus);
+    expect(normalizedNexus.leap.purchases).toEqual({ allStats: 4 });
+    expect(normalizedNexus.laws.purchases).toEqual({ critExp: 3 });
+    expect(normalizedNexus.nexus.purchases).toEqual({ nexusDmg: 2 });
+
+    const echo = createNewState(1807);
+    echo.meta.version = 7;
+    echo.nexus.entered = true;
+    echo.echo.entered = true;
+    echo.leap.purchases = { allStats: 4 };
+    echo.laws.purchases = { critExp: 3 };
+    echo.nexus.purchases = { nexusDmg: 2 };
+    echo.echo.purchases = { echoDmg: 1 };
+    const normalizedEcho = normalizeState(echo);
+    expect(normalizedEcho.leap.purchases).toEqual({ allStats: 4 });
+    expect(normalizedEcho.laws.purchases).toEqual({ critExp: 3 });
+    expect(normalizedEcho.nexus.purchases).toEqual({ nexusDmg: 2 });
+    expect(normalizedEcho.echo.purchases).toEqual({ echoDmg: 1 });
+  });
+
+  it("v7 旧错误重构档即使已推进和升级，也只增不减地补齐跃迁基线", () => {
+    const raw = createNewState(1808);
+    raw.meta.version = 7;
+    raw.leap.purchases.startStage = 2;
+    raw.prestige.purchases.startPower = 3;
+    raw.prestige.totalEnergyEarned = 10;
+    raw.combat.stage = 57;
+    raw.player.upgrades = { attack: 250, aspd: 80, critChance: 220, critDamage: 40, gold: 205 };
+
+    const normalized = normalizeState(raw);
+    expect(normalized.combat.stage).toBe(201);
+    expect(normalized.player.upgrades).toEqual({
+      attack: 250,
+      aspd: 200,
+      critChance: 220,
+      critDamage: 200,
+      gold: 205,
+    });
+  });
+});
+
 describe("V17 contract: v6 存档修复", () => {
   it("旧档完成过跃迁时重置遗留的重构门槛并初始化跃迁门槛", () => {
     const raw = createNewState(1706) as unknown as Record<string, unknown>;

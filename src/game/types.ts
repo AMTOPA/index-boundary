@@ -12,6 +12,7 @@ export type SeasonTierId = "bronze" | "silver" | "gold";
 export type DailyQuestType = "kills" | "bossKills" | "skillCasts" | "gold" | "stageReach";
 export type TreeId = "destruction" | "automation" | "greed" | "singularity";
 export type ItemId = "overclock_chip" | "gold_protocol" | "singularity_battery";
+export type AnimationFps = 30 | 60 | 120;
 export type ToolId = "auto_upgrade" | "auto_boss" | "auto_breakdown" | "combat_recorder" | "auto_skill" | "auto_equip" | "auto_prestige";
 export type ThresholdComparator = "gte" | "lte" | "eq";
 export type AutoPrestigeMetric = "stage" | "energy" | "multRatio";
@@ -126,7 +127,7 @@ export interface DailyQuest {
   type: DailyQuestType;
   target: number; // kills/boss/skill 为次数；gold 为数量级 log10；stageReach 为关卡数
   progress: number;
-  claimed: boolean;
+  claimed: boolean; // 是否已领取
 }
 
 export interface DailyState {
@@ -137,8 +138,11 @@ export interface DailyState {
 }
 
 export interface ChallengeProgress {
-  best: number; // 挑战模式下最高到达关卡
-  claimed: boolean; // 通关奖励是否已领取
+  best: number; // 历史最高到达关卡
+  claimed: boolean; // 首次永久奖励是否已领取
+  cycleBest: number; // 当前挑战尝试的最高关卡
+  cycleTalentRewarded: number; // 本次重构周期内已获得的天赋点
+  runRewardClaimed: boolean; // 当前挑战尝试是否已结算奖励
 }
 
 export interface SeasonState {
@@ -226,7 +230,7 @@ export interface MetaState {
   discoveries: string[]; // Historical system discoveries retained across resets
   achievements: string[];
   milestonesSeen: number[]; // 已庆祝的数量级
-  settings: { sound: boolean; reduceMotion: boolean };
+  settings: { sound: boolean; reduceMotion: boolean; animationFps: AnimationFps };
   lastScoreSubmit: Record<ScoreSubmitKind, { runId: string; at: number } | undefined>;
   cloudSyncedAt: number;
   activeChallenge: ChallengeId | null; // 当前生效的单挑战修饰符

@@ -12,6 +12,7 @@ export function SettingsPanel({ className }: SettingsPanelProps) {
   const { updateSettings } = useGame();
   const sound = useGameSelector((state) => state.meta.settings.sound);
   const reduceMotion = useGameSelector((state) => state.meta.settings.reduceMotion);
+  const animationFps = useGameSelector((state) => state.meta.settings.animationFps ?? 60);
 
   const setSound = (next: boolean) => {
     updateSettings({ sound: next });
@@ -41,6 +42,28 @@ export function SettingsPanel({ className }: SettingsPanelProps) {
         />
         <span className={styles.switch} aria-hidden="true"><span /></span>
       </label>
+
+      <div className={`${styles.settingRow} ${styles.segmentedRow}`}>
+        <span className={styles.copy}>
+          <span className={styles.label}>视觉帧率</span>
+          <span className={styles.description}>仅调整画布与粒子动画流畅度，不改变逻辑 TPS、战斗速度或收益</span>
+        </span>
+        <div className={styles.fpsControl} role="radiogroup" aria-label="视觉帧率">
+          {([30, 60, 120] as const).map((fps) => (
+            <button
+              key={fps}
+              className={styles.fpsOption}
+              type="button"
+              role="radio"
+              aria-checked={animationFps === fps}
+              data-active={animationFps === fps}
+              onClick={() => updateSettings({ animationFps: fps })}
+            >
+              {fps}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <label className={styles.settingRow}>
         <span className={styles.copy}>

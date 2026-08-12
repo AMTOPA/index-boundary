@@ -31,6 +31,7 @@ const TABS: { id: PanelTab; label: string }[] = [
 
 const PRESTIGE_TABS = new Set<PanelTab>(["prestige", "leap", "law", "nexus", "echo"]);
 const CHALLENGE_TABS = new Set<PanelTab>(["challenge", "season"]);
+const LOCKED_TAB_LABEL = "? ???";
 
 export interface PrestigePanelProps {
   section?: "prestige" | "challenge";
@@ -103,7 +104,7 @@ export function PrestigePanel({ section }: PrestigePanelProps = {}) {
               aria-label={available ? item.label : "尚未解锁的高维系统"}
               onClick={() => setTab(item.id)}
             >
-              {available ? item.label : "? ???"}
+              {available ? item.label : LOCKED_TAB_LABEL}
             </button>
           );
         })}

@@ -241,3 +241,12 @@
     grid-template-columns: 1fr;
   }
 }
+
+.itemActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: auto;
+}
+.itemHint { color: var(--text-dim); font-size: 10px; line-height: 1.45; }
+@media (max-width: 420px) { .itemActions { grid-template-columns: 1fr; } }

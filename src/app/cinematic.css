@@ -169,19 +169,20 @@ body::after {
 .command-dock {
   --nav-rgb: 100 232 255;
   position: fixed;
-  right: auto;
+  right: 0;
   bottom: 0;
-  left: 50%;
+  left: 0;
   z-index: 80;
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(82px, 1fr)) 104px repeat(3, minmax(82px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 104px repeat(3, minmax(0, 1fr));
   align-items: end;
   width: min(980px, calc(100% - 24px));
   min-height: calc(88px + env(safe-area-inset-bottom));
   gap: 5px;
   padding: 22px 14px calc(9px + env(safe-area-inset-bottom));
   overflow: visible;
-  transform: translateX(-50%);
+  margin-inline: auto;
+  transform: none;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -249,7 +250,7 @@ body::after {
   background: transparent;
   color: rgb(var(--nav-rgb) / 0.68);
   box-shadow: none;
-  transition: transform 220ms var(--ease-standard), color 180ms ease, border-color 180ms ease, background-color 180ms ease;
+  transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
 
 .command-dock button::after {
@@ -270,7 +271,7 @@ body::after {
   color: rgb(var(--nav-rgb) / 0.96);
   border-color: rgb(var(--nav-rgb) / 0.26);
   background: rgb(var(--nav-rgb) / 0.075);
-  transform: translateY(-3px);
+  transform: none;
 }
 
 .command-dock button.active:not(.nav-combat-core) {
@@ -340,7 +341,7 @@ body::after {
   box-shadow: 0 0 12px rgba(69, 221, 255, 0.8);
 }
 
-.command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-19px) scale(1.035); }
+.command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-15px); }
 .command-dock .nav-combat-core.active { background: radial-gradient(circle at 36% 28%, #bff8ff 0 5%, #23b9e2 24%, #12628b 55%, #091b34 73%); }
 .command-dock .nav-combat-core.active::before { opacity: 0.62; animation: none; }
 .command-dock .nav-combat-core .nav-icon { width: 31px; height: 31px; font-size: 23px; }
@@ -553,6 +554,12 @@ body::after {
 }
 
 .systems-heading-copy strong { color: #f0fbff; font-size: 18px; }
+.systems-tabs .mini-btn,
+.systems-tabs .mini-btn:hover:not(:disabled),
+.systems-tabs .mini-btn:active:not(:disabled) {
+  transform: none;
+}
+
 .systems-tabs .mini-btn.active {
   border-color: rgba(69, 221, 255, 0.58);
   background: linear-gradient(145deg, rgba(69, 221, 255, 0.16), rgba(155, 123, 255, 0.08));
@@ -600,7 +607,7 @@ body::after {
   .topbar { grid-template-columns: auto minmax(0, 1fr); }
   .resources { justify-content: flex-start; }
   .command-dock {
-    grid-template-columns: repeat(3, minmax(68px, 1fr)) 88px repeat(3, minmax(68px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 88px repeat(3, minmax(0, 1fr));
     width: min(900px, calc(100% - 16px));
     gap: 3px;
     padding-inline: 9px;
@@ -615,7 +622,7 @@ body::after {
   .resources { grid-column: 1; width: 100%; flex-wrap: nowrap; overflow-x: auto; }
   .resource { min-width: 84px; padding: 6px 8px; }
   .command-dock {
-    grid-template-columns: repeat(3, minmax(42px, 1fr)) 68px repeat(3, minmax(42px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 68px repeat(3, minmax(0, 1fr));
     width: 100%;
     min-height: calc(78px + env(safe-area-inset-bottom));
     gap: 1px;
@@ -627,7 +634,7 @@ body::after {
   .command-dock .nav-icon svg { width: 20px; height: 20px; }
   .command-dock .nav-label { font-size: 10px; letter-spacing: 0; }
   .command-dock .nav-combat-core { width: 62px; height: 62px; min-height: 62px; transform: translateY(-11px); }
-  .command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-13px) scale(1.025); }
+  .command-dock .nav-combat-core:hover:not(:disabled) { transform: translateY(-11px); }
   .command-dock .nav-combat-core .nav-icon { width: 25px; height: 25px; }
   .command-dock .nav-combat-core .nav-label { font-size: 10px; }
   .battle-deck { gap: 9px; }
@@ -637,7 +644,7 @@ body::after {
 }
 
 @media (max-width: 430px) {
-  .command-dock { grid-template-columns: repeat(3, minmax(39px, 1fr)) 62px repeat(3, minmax(39px, 1fr)); }
+  .command-dock { grid-template-columns: repeat(3, minmax(0, 1fr)) 62px repeat(3, minmax(0, 1fr)); }
   .command-dock .nav-label { font-size: 10px; }
   .command-dock .nav-combat-core { width: 58px; height: 58px; min-height: 58px; }
   .command-dock .nav-combat-core .nav-label { display: block; font-size: 10px; }

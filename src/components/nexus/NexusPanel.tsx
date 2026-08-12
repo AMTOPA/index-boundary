@@ -69,7 +69,7 @@ export function NexusPanel() {
           >
             <p style={{ fontSize: 13, lineHeight: 1.7 }}>
               将消耗 <span className="mono" style={{ color: "var(--gold)" }}>{formatNumber(CONFIG.NEXUS.ENTRY_COST)}</span> 法则碎片，
-              并重置第三层以下的一切（保留：世界核心、法则补丁、碎片、成就、统计、工具）。
+              并重置第三层及以下的已购增益（世界核心升级、法则补丁等会清空）；保留未花费的世界核心/法则碎片、成就、统计、工具，以及新进入的彼岸层。
             </p>
           </ConfirmModal>
         )}

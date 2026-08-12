@@ -3,7 +3,7 @@
 // 纯 Canvas 绘制，无任何美术资产（遵守全局规则：运行时零第三方依赖）
 import { useEffect, useRef } from "react";
 import { useGame } from "@/components/game/GameProvider";
-import { useReducedMotion } from "@/components/common/hooks";
+import { useGameSelector, useReducedMotion } from "@/components/common/hooks";
 import type { BossAffix, EnemyKind, WorldId } from "@/game/types";
 
 interface Props {
@@ -21,6 +21,7 @@ const CY = SIZE / 2;
 export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Props) {
   const { engine } = useGame();
   const reducedMotion = useReducedMotion();
+  const animationFps = useGameSelector((state) => state.meta.settings.animationFps ?? 60);
   const ref = useRef<HTMLCanvasElement>(null);
   const flashUntil = useRef(0);
   const impact = useRef({ until: 0, strength: 0, duration: 190 });
@@ -31,6 +32,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const frameIntervalMs = 1_000 / animationFps;
     let visible = !document.hidden;
     let raf = 0;
     let settleTimer = 0;
@@ -86,7 +88,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       if (!visible || reducedMotion) return;
       elapsed += Math.min(0.05, Math.max(0, (now - lastTick) / 1_000));
       lastTick = now;
-      if (now - lastRender >= 1_000 / 30) {
+      if (now - lastRender >= frameIntervalMs) {
         render(now);
         lastRender = now;
       }
@@ -141,7 +143,7 @@ export function EnemyCanvas({ worldId, worldColor, isBoss, affixes, kind }: Prop
       window.clearTimeout(reducedRenderTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [engine, worldId, worldColor, isBoss, affixes, kind, reducedMotion]);
+  }, [engine, worldId, worldColor, isBoss, affixes, kind, reducedMotion, animationFps]);
 
   return <canvas className="enemy-canvas" width={SIZE} height={SIZE} ref={ref} aria-hidden="true" />;
 }

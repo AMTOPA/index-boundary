@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useGame } from "@/components/game/GameProvider";
-import { useReducedMotion } from "@/components/common/hooks";
+import { useGameSelector, useReducedMotion } from "@/components/common/hooks";
 import styles from "./CombatVisuals.module.css";
 
 interface Particle {
@@ -19,10 +19,12 @@ interface Particle {
 
 const MAX_PARTICLES = 80;
 const FRAME_INTERVAL_MS = 1_000 / 30;
+// Visual FPS only controls rendering cadence; game logic keeps its own TPS.
 
 export function CombatParticles() {
   const { engine } = useGame();
   const reducedMotion = useReducedMotion();
+  const animationFps = useGameSelector((state) => state.meta.settings.animationFps ?? 60);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function CombatParticles() {
     if (!context) return;
 
     const particles: Particle[] = [];
+    const frameIntervalMs = Math.max(1_000 / animationFps, FRAME_INTERVAL_MS);
     let visible = !document.hidden;
     let raf = 0;
     let lastFrame = performance.now();
@@ -93,7 +96,7 @@ export function CombatParticles() {
     const tick = (now: number) => {
       raf = 0;
       if (!visible) return;
-      if (now - lastFrame < FRAME_INTERVAL_MS) {
+      if (now - lastFrame < frameIntervalMs) {
         raf = requestAnimationFrame(tick);
         return;
       }
@@ -111,8 +114,9 @@ export function CombatParticles() {
         }
         particle.x += particle.vx * dt;
         particle.y += particle.vy * dt;
-        particle.vx *= reducedMotion ? 0.8 : 0.955;
-        particle.vy *= reducedMotion ? 0.8 : 0.955;
+        const damping = Math.pow(reducedMotion ? 0.8 : 0.955, dt * 30);
+        particle.vx *= damping;
+        particle.vy *= damping;
         drawParticle(particle);
       }
 
@@ -255,7 +259,7 @@ export function CombatParticles() {
       resizeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [engine, reducedMotion]);
+  }, [engine, reducedMotion, animationFps]);
 
   return <canvas className={`${styles.particleCanvas} combat-particles`} ref={canvasRef} aria-hidden="true" />;
 }

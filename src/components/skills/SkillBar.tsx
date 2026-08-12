@@ -174,7 +174,7 @@ export function QuickSkillBar({ onManage, embedded = false }: { onManage: () => 
       <section className={`${styles.quickPanel} ${embedded ? styles.embedded : ""}`.trim()} aria-label="未解锁技能快捷栏">
         <div className={styles.quickLocked}>
           <span aria-hidden="true">🔒</span>
-          <strong>???</strong>
+          <strong>技能冷却中</strong>
           <small>推进关卡后解锁新的指挥模块</small>
         </div>
       </section>

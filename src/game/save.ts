@@ -1,7 +1,7 @@
 // 存档系统：localStorage + 版本迁移 + checksum + 三槽备份 + 导入导出
 // 存储可注入（Node 测试用 mock），浏览器端自动使用 localStorage
 import { CONFIG } from "./config";
-import type { AutoPrestigeMetric, GameState, ThresholdComparator, ToolId } from "./types";
+import type { AnimationFps, AutoPrestigeMetric, ChallengeId, GameState, ItemId, ThresholdComparator, ToolId } from "./types";
 import { createNewState } from "./engine";
 import { leapStartStage } from "./systems/leap";
 
@@ -122,6 +122,8 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
   },
   // v6 -> v7: dynamic leap gate plus a one-time anti-wall repair for legacy higher-layer saves.
   6: (s) => repairLegacyLayerGates(s, 6),
+  // v7 -> v8: runtime reset semantics changed; normalizeState performs a non-destructive baseline repair.
+  7: (s) => s,
 
 };
 
@@ -145,6 +147,12 @@ export function normalizeState(raw: unknown): GameState {
   const r = repairLegacyLayerGates(input, sourceVersion);
   const state: GameState = { ...base, ...r };
   state.meta = { ...base.meta, ...(r.meta ?? {}) };
+  const animationFpsOptions: AnimationFps[] = [30, 60, 120];
+  state.meta.settings = {
+    ...base.meta.settings,
+    ...(r.meta?.settings ?? {}),
+    animationFps: animationFpsOptions.includes(r.meta?.settings?.animationFps) ? r.meta.settings.animationFps : base.meta.settings.animationFps,
+  };
   state.player = { ...base.player, ...(r.player ?? {}) };
   state.player.upgrades = { ...base.player.upgrades, ...(r.player?.upgrades ?? {}) };
   state.combat = { ...base.combat, ...(r.combat ?? {}) };
@@ -181,7 +189,14 @@ export function normalizeState(raw: unknown): GameState {
   state.echo = { ...base.echo, ...(r.echo ?? {}) };
   state.echo.purchases = { ...(r.echo?.purchases ?? {}) };
   state.items = { ...base.items, ...(r.items ?? {}) };
-  state.items.consumables = { ...(r.items?.consumables ?? {}) };
+  state.items.consumables = {};
+  for (const id of Object.keys(CONFIG.CONSUMABLE_SHOP) as ItemId[]) {
+    const rawCount = Number(r.items?.consumables?.[id] ?? 0);
+    const count = Number.isFinite(rawCount)
+      ? Math.min(CONFIG.CONSUMABLE_STACK_CAP, Math.max(0, Math.floor(rawCount)))
+      : 0;
+    if (count > 0) state.items.consumables[id] = count;
+  }
   state.items.tools = { ...(r.items?.tools ?? {}) };
   state.items.toolLevels = { ...(r.items?.toolLevels ?? {}) };
   for (const id of Object.keys(CONFIG.TOOLS) as ToolId[]) {
@@ -209,7 +224,25 @@ export function normalizeState(raw: unknown): GameState {
   state.daily = { ...base.daily, ...(r.daily ?? {}) };
   state.daily.quests = Array.isArray(r.daily?.quests) ? r.daily.quests : [];
   state.daily.goldEarned = Array.isArray(r.daily?.goldEarned) ? r.daily.goldEarned : [0, 0];
-  state.challenges = { ...base.challenges, ...(r.challenges ?? {}) };
+  state.challenges = { ...base.challenges };
+  let cycleChallengeTotal = 0;
+  for (const id of Object.keys(base.challenges) as ChallengeId[]) {
+    const source = r.challenges?.[id] ?? {};
+    const rawReward = Number(source.cycleTalentRewarded ?? 0);
+    const cycleTalentRewarded = Number.isFinite(rawReward)
+      ? Math.min(CONFIG.CHALLENGE_TALENT_CAP_PER_CYCLE, Math.max(0, Math.floor(rawReward)))
+      : 0;
+    const remaining = Math.max(0, CONFIG.CHALLENGE_TALENT_TOTAL_CAP_PER_CYCLE - cycleChallengeTotal);
+    const clampedReward = Math.min(cycleTalentRewarded, remaining);
+    cycleChallengeTotal += clampedReward;
+    state.challenges[id] = {
+      best: Number.isFinite(source.best) ? Math.max(0, Math.floor(source.best)) : 0,
+      claimed: Boolean(source.claimed),
+      cycleBest: Number.isFinite(source.cycleBest) ? Math.max(0, Math.floor(source.cycleBest)) : 0,
+      cycleTalentRewarded: clampedReward,
+      runRewardClaimed: Boolean(source.runRewardClaimed),
+    };
+  }
   state.season = { ...base.season, ...(r.season ?? {}) };
   state.season.claimedTiers = Array.isArray(state.season.claimedTiers) ? state.season.claimedTiers : [];
   state.season.lastModifiers = Array.isArray(state.season.lastModifiers) ? state.season.lastModifiers : [];
@@ -235,8 +268,26 @@ export function normalizeState(raw: unknown): GameState {
     prestige: state.meta.lastScoreSubmit?.prestige,
     season: state.meta.lastScoreSubmit?.season,
   };
-  // Repair saves created by the old leap bug: stage x + 1 with every base upgrade left at zero.
   const expectedLeapStartStage = leapStartStage(state);
+  const expectedLeapStartLevel = Math.max(0, expectedLeapStartStage - 1);
+  const prestigeAttackLevel = (state.prestige.purchases.startPower ?? 0) * CONFIG.PRESTIGE.SHOP.startPower.perLevel;
+  const shouldRepairLegacyPrestigeStart = sourceVersion < 8
+    && state.meta.activeChallenge === null
+    && state.meta.activeModifiers.length === 0
+    && expectedLeapStartStage > 1
+    && state.prestige.totalEnergyEarned > 0;
+  if (shouldRepairLegacyPrestigeStart) {
+    // 一次性补偿旧版重构遗漏的跃迁基线：只提高，不降低玩家当前关卡或已购等级。
+    state.combat.stage = Math.max(state.combat.stage, expectedLeapStartStage);
+    state.player.upgrades = {
+      attack: Math.max(state.player.upgrades.attack, expectedLeapStartLevel + prestigeAttackLevel),
+      aspd: Math.max(state.player.upgrades.aspd, expectedLeapStartLevel),
+      critChance: Math.max(state.player.upgrades.critChance, expectedLeapStartLevel),
+      critDamage: Math.max(state.player.upgrades.critDamage, expectedLeapStartLevel),
+      gold: Math.max(state.player.upgrades.gold, expectedLeapStartLevel),
+    };
+  }
+  // Repair saves created by the old leap bug: stage x + 1 with every base upgrade left at zero.
   const isBrokenLeapStart = state.leap.totalLeaps > 0
     && expectedLeapStartStage > 1
     && state.combat.stage === expectedLeapStartStage

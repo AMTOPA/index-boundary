@@ -4,6 +4,7 @@ import { useGameSelector } from "@/components/common/hooks";
 import { ITEM_DEFS, TOOL_DEFS } from "@/game/data/items";
 import { toBig } from "@/game/bignum";
 import { formatBig } from "@/game/format";
+import { CONFIG } from "@/game/config";
 import type { AutoPrestigeMetric, ItemId, ThresholdComparator, ToolId } from "@/game/types";
 import styles from "./ItemsPanel.module.css";
 
@@ -20,7 +21,7 @@ const COMPARATOR_LABELS: Record<ThresholdComparator, string> = {
 };
 
 export function ItemsPanel() {
-  const { engine } = useGame();
+  const { engine, pushToast } = useGame();
   const consumables = useGameSelector((s) => s.items.consumables);
   const tools = useGameSelector((s) => s.items.tools);
   const toolLevels = useGameSelector((s) => s.items.toolLevels);
@@ -58,24 +59,29 @@ export function ItemsPanel() {
           {(Object.keys(ITEM_DEFS) as ItemId[]).map((id) => {
             const definition = ITEM_DEFS[id];
             const count = consumables[id] ?? 0;
+            const cost = engine?.consumableCost(id) ?? [0, 0];
+            const purchaseReasons = engine?.consumablePurchaseReasons(id) ?? [];
+            const useReasons = engine?.consumableUseReasons(id) ?? [];
+            const canBuy = Boolean(engine?.canBuyConsumable(id));
+            const canUse = Boolean(engine?.canCastConsumable(id));
             return (
               <article className={`item-card consumable ${styles.card}`} key={id} aria-labelledby={`item-${id}-name`}>
                 <div className="item-card-head">
                   <span className="item-card-icon" aria-hidden="true">{definition.icon}</span>
-                  <span className={`item-card-count ${count > 0 ? "has" : ""}`} aria-label={`持有 ${count} 个`}>×{count}</span>
+                  <span className={`item-card-count ${count > 0 ? "has" : ""}`} aria-label={`${definition.name}库存 ${count} 个`}>{count} / {CONFIG.CONSUMABLE_STACK_CAP}</span>
                 </div>
                 <div id={`item-${id}-name`} className={`item-card-name ${styles.name}`}>{definition.name}</div>
                 <div className={`item-card-desc ${styles.description}`}>{definition.desc}</div>
-                <button
-                  type="button"
-                  className={`mini-btn item-card-btn ${styles.actionButton}`}
-                  disabled={count <= 0 || !engine}
-                  onClick={() => engine?.castConsumable(id)}
-                  title={count > 0 ? `使用 1 个${definition.name}` : `没有可用的${definition.name}`}
-                  aria-label={`使用${definition.name}，当前持有 ${count} 个`}
-                >
-                  {count > 0 ? "使用 1 个" : "库存为空"}
-                </button>
+                {id !== "singularity_battery" && <div className={styles.itemHint}>购买后可在本页直接使用，库存最多 99 个</div>}
+                {purchaseReasons.length > 0 && <ul className={styles.requirements}>{purchaseReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+                <div className={styles.itemActions}>
+                  <button type="button" className={`mini-btn item-card-btn buy ${styles.actionButton}`} disabled={!canBuy} onClick={() => { if (engine?.buyConsumable(id)) pushToast(`已购买：${definition.name}`, "info"); }} title={canBuy ? `购买 1 个${definition.name}` : purchaseReasons.join("；")}>
+                    <span>??</span><strong>{formatBig(toBig(cost))}</strong>
+                  </button>
+                  <button type="button" className={`mini-btn item-card-btn ${styles.actionButton}`} disabled={!canUse} onClick={() => engine?.castConsumable(id)} title={canUse ? `使用 1 个${definition.name}` : useReasons.join("；")}>
+                    {canUse ? "使用 1 个" : useReasons[0] ?? "不可使用"}
+                  </button>
+                </div>
               </article>
             );
           })}

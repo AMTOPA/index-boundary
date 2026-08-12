@@ -445,6 +445,7 @@ export function computeDerived(state: GameState, buffs: RuntimeBuffs, timeSec: n
   const goldToDmgMult = lawGoldToDmgMult(state);
   // ---- 攻速 ----
   let aspdMult = acc.aspdMult * aspdTalentMult * buffs.aspdMult * challengePermMult(state, "aspd");
+  if (buffs.chipActive) aspdMult *= 2;
   aspdMult *= 1 + (state.skills.passives?.rhythm ?? 0) * CONFIG.SKILL_PASSIVES.rhythm.effectPerLevel;
   if (overclockActive) {
     const def = SKILL_DEFS.overclock;

@@ -76,7 +76,7 @@ export function EchoPanel() {
           >
             <p style={{ fontSize: 13, lineHeight: 1.7 }}>
               将消耗 <span className="mono" style={{ color: "var(--accent)" }}>{formatNumber(CONFIG.ECHO.ENTRY_COST)}</span> 回响印记，
-              并重置第二层以下的一切（保留：世界核心、法则补丁、法则碎片、彼岸已购、回响印记、成就、统计、工具）。
+              并重置第四层及以下的已购增益（世界核心升级、法则补丁、彼岸升级会清空）；保留各层未花费货币、回响印记、成就、统计、工具，以及新进入的回响层。
             </p>
           </ConfirmModal>
         )}

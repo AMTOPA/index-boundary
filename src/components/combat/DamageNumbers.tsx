@@ -1,12 +1,13 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "@/components/game/GameProvider";
 import { Big, toBig } from "@/game/bignum";
 import { formatBig } from "@/game/format";
 import styles from "./CombatVisuals.module.css";
 
 type DamageVariant = "auto" | "manual" | "crit" | "super" | "crush" | "boss";
+type BucketKind = "auto" | "crit" | "manualCrit";
 
 interface DamageNumber {
   id: number;
@@ -18,141 +19,164 @@ interface DamageNumber {
   duration: number;
 }
 
-interface AutoBucket {
+interface DamageBucket {
   damage: Big;
   hits: number;
   timer: number;
 }
 
-const AUTO_WINDOW_MS = 180;
-const MAX_VISIBLE = 8;
+const AGGREGATION_WINDOW_MS = 240;
+const MAX_VISIBLE = 6;
+const BOSS_DURATION_MS = 1_150;
+const LANES: Record<DamageVariant, ReadonlyArray<Readonly<{ x: number; y: number }>>> = {
+  auto: [{ x: 18, y: 48 }, { x: 82, y: 50 }, { x: 22, y: 61 }, { x: 78, y: 63 }],
+  manual: [{ x: 42, y: 69 }, { x: 58, y: 70 }],
+  crit: [{ x: 31, y: 37 }, { x: 50, y: 33 }, { x: 69, y: 38 }],
+  super: [{ x: 41, y: 27 }, { x: 59, y: 27 }],
+  crush: [{ x: 50, y: 21 }],
+  boss: [{ x: 50, y: 8 }],
+};
+const VARIANT_PRIORITY: Record<DamageVariant, number> = {
+  auto: 0,
+  manual: 1,
+  crit: 2,
+  super: 3,
+  crush: 4,
+  boss: 5,
+};
 let nextId = 0;
 
 export function DamageNumbers() {
   const { engine } = useGame();
   const [numbers, setNumbers] = useState<DamageNumber[]>([]);
-  const laneRef = useRef(0);
 
   useEffect(() => {
-    if (!engine) return;
+    if (!engine) {
+      setNumbers([]);
+      return;
+    }
 
-    const removalTimers = new Set<number>();
-    let autoBucket: AutoBucket | null = null;
+    const removalTimers = new Map<number, number>();
+    const buckets = new Map<BucketKind, DamageBucket>();
+    const laneCounters: Record<DamageVariant, number> = { auto: 0, manual: 0, crit: 0, super: 0, crush: 0, boss: 0 };
+    let bossActiveUntil = 0;
+
+    const cancelRemoval = (id: number) => {
+      const timer = removalTimers.get(id);
+      if (timer === undefined) return;
+      window.clearTimeout(timer);
+      removalTimers.delete(id);
+    };
 
     const positionFor = (variant: DamageVariant) => {
-      if (variant === "auto") {
-        const lane = laneRef.current++ % 2;
-        return {
-          x: lane === 0 ? 18 + Math.random() * 8 : 74 + Math.random() * 8,
-          y: 42 + Math.random() * 15,
-        };
-      }
-      if (variant === "manual") return { x: 50 + (Math.random() - 0.5) * 12, y: 65 + Math.random() * 5 };
-      if (variant === "crit") return { x: 30 + Math.random() * 40, y: 34 + Math.random() * 7 };
-      if (variant === "super") return { x: 50 + (Math.random() - 0.5) * 18, y: 28 + Math.random() * 5 };
-      if (variant === "crush") return { x: 50 + (Math.random() - 0.5) * 10, y: 23 };
-      return { x: 50, y: 17 };
+      const lanes = LANES[variant];
+      const position = lanes[laneCounters[variant] % lanes.length];
+      laneCounters[variant] += 1;
+      return position;
     };
 
     const show = (item: Omit<DamageNumber, "id">) => {
       const number = { ...item, id: ++nextId };
-      setNumbers((current) => [...current.slice(-(MAX_VISIBLE - 1)), number]);
+      setNumbers((current) => {
+        const next = item.variant === "boss"
+          ? current.filter((entry) => entry.variant === "auto" && entry.y >= 45)
+          : current;
+        if (item.variant === "boss") {
+          current.forEach((entry) => {
+            if (!next.some((kept) => kept.id === entry.id)) cancelRemoval(entry.id);
+          });
+        }
+        const visible = next.length < MAX_VISIBLE ? next : [...next].sort((a, b) => VARIANT_PRIORITY[a.variant] - VARIANT_PRIORITY[b.variant]);
+        const evicted = next.length >= MAX_VISIBLE ? visible[0] : undefined;
+        if (evicted && VARIANT_PRIORITY[number.variant] < VARIANT_PRIORITY[evicted.variant]) return current;
+        if (evicted) cancelRemoval(evicted.id);
+        return evicted
+          ? [...next.filter((entry) => entry.id !== evicted.id), number]
+          : [...next, number];
+      });
+
       const timer = window.setTimeout(() => {
-        removalTimers.delete(timer);
+        removalTimers.delete(number.id);
         setNumbers((current) => current.filter((entry) => entry.id !== number.id));
       }, number.duration);
-      removalTimers.add(timer);
+      removalTimers.set(number.id, timer);
     };
 
-    const flushAuto = () => {
-      const bucket = autoBucket;
-      autoBucket = null;
+    const flushBucket = (kind: BucketKind) => {
+      const bucket = buckets.get(kind);
       if (!bucket) return;
+      buckets.delete(kind);
       window.clearTimeout(bucket.timer);
-      const position = positionFor("auto");
+      const variant: DamageVariant = kind === "auto" ? "auto" : "crit";
+      const baseLabel = kind === "auto" ? "\u81ea\u52a8" : kind === "manualCrit" ? "\u624b\u52a8\u66b4\u51fb" : "\u66b4\u51fb";
       show({
         text: formatBig(bucket.damage),
-        label: bucket.hits > 1 ? `自动 ×${bucket.hits}` : "自动",
-        variant: "auto",
-        ...position,
-        duration: 720,
+        label: bucket.hits > 1 ? `${baseLabel} ×${bucket.hits}` : baseLabel,
+        variant,
+        ...positionFor(variant),
+        duration: variant === "crit" ? 900 : 760,
       });
+    };
+
+    const addToBucket = (kind: BucketKind, damage: Big) => {
+      const bucket = buckets.get(kind);
+      if (bucket) {
+        bucket.damage = bucket.damage.add(damage);
+        bucket.hits += 1;
+        return;
+      }
+      buckets.set(kind, {
+        damage,
+        hits: 1,
+        timer: window.setTimeout(() => flushBucket(kind), AGGREGATION_WINDOW_MS),
+      });
+    };
+
+    const flushBuckets = () => {
+      (["auto", "crit", "manualCrit"] as const).forEach(flushBucket);
     };
 
     const unsubscribe = engine.onEvent((event) => {
       if (event.type === "bossKill") {
-        flushAuto();
-        show({
-          text: "核心终结",
-          label: "BOSS BREAK",
-          variant: "boss",
-          ...positionFor("boss"),
-          duration: 1_150,
-        });
+        flushBuckets();
+        bossActiveUntil = performance.now() + BOSS_DURATION_MS;
+        show({ text: "\u6838\u5fc3\u7ec8\u7ed3", label: "BOSS BREAK", variant: "boss", ...positionFor("boss"), duration: BOSS_DURATION_MS });
         return;
       }
       if (event.type !== "hit") return;
 
       const damage = toBig(event.damage);
-      const emphasized = event.isClick || event.superCrit || event.crush;
-      if (!emphasized) {
-        if (autoBucket) {
-          autoBucket.damage = autoBucket.damage.add(damage);
-          autoBucket.hits += 1;
-        } else {
-          autoBucket = {
-            damage,
-            hits: 1,
-            timer: window.setTimeout(flushAuto, AUTO_WINDOW_MS),
-          };
-        }
+      const now = performance.now();
+      if (now < bossActiveUntil && (event.crush || event.superCrit || event.crit || event.isClick)) return;
+      if (event.crush || event.superCrit) {
+        const variant: DamageVariant = event.crush ? "crush" : "super";
+        show({ text: formatBig(damage), label: event.crush ? "\u78be\u538b" : "\u8d85\u66b4\u51fb", variant, ...positionFor(variant), duration: event.crush ? 1_050 : 980 });
         return;
       }
-
-      flushAuto();
-      const variant: DamageVariant = event.crush
-        ? "crush"
-        : event.superCrit
-          ? "super"
-          : event.crit
-            ? "crit"
-            : "manual";
-      const label = event.crush
-        ? "碾压"
-        : event.superCrit
-          ? "超暴击"
-          : event.crit
-            ? event.isClick ? "手动暴击" : "暴击"
-            : "手动";
-      show({
-        text: formatBig(damage),
-        label,
-        variant,
-        ...positionFor(variant),
-        duration: variant === "crush" ? 1_050 : variant === "super" ? 980 : 850,
-      });
+      if (event.crit) {
+        addToBucket(event.isClick ? "manualCrit" : "crit", damage);
+        return;
+      }
+      if (!event.isClick) {
+        addToBucket("auto", damage);
+        return;
+      }
+      show({ text: formatBig(damage), label: "\u624b\u52a8", variant: "manual", ...positionFor("manual"), duration: 850 });
     });
 
     return () => {
       unsubscribe();
-      if (autoBucket) window.clearTimeout(autoBucket.timer);
+      buckets.forEach((bucket) => window.clearTimeout(bucket.timer));
       removalTimers.forEach((timer) => window.clearTimeout(timer));
+      removalTimers.clear();
+      setNumbers([]);
     };
   }, [engine]);
 
   return (
     <div className={styles.damageLayer} aria-hidden="true">
       {numbers.map((number) => (
-        <div
-          key={number.id}
-          className={`${styles.damageNumber} ${styles[number.variant]}`}
-          style={{
-            left: `${number.x}%`,
-            top: `${number.y}%`,
-            animationDuration: `${number.duration}ms`,
-          }}
-          data-impact={number.variant}
-        >
+        <div key={number.id} className={`${styles.damageNumber} ${styles[number.variant]}`} style={{ left: `${number.x}%`, top: `${number.y}%`, animationDuration: `${number.duration}ms` }} data-impact={number.variant}>
           <span className={styles.damageValue}>{number.text}</span>
           {number.label && <span className={styles.damageLabel}>{number.label}</span>}
         </div>

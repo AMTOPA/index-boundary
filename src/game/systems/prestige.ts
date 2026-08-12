@@ -5,6 +5,7 @@ import type { GameState, PrestigeUpgradeId, SkillId } from "../types";
 import { prestigeEnergy } from "../formulas";
 import { SKILL_DEFS } from "../data/skills";
 import { isHigherResetBlocked } from "./reset-guard";
+import { leapStartStage, leapStartUpgradeLevel } from "./leap";
 
 export interface PrestigeResult {
   energyGained: number;
@@ -41,9 +42,11 @@ export function applyPrestige(state: GameState, energyGained: number, goldKept: 
   );
   state.statistics.runDamage = [0, 0]; // 本局伤害清零（重构按本局结算）
 
-  // ---- 重置清单 ----
+  // ---- 重置清单：继承当前仍生效的跃迁层「起始世界」----
+  const startStage = leapStartStage(state);
+  const leapStartLv = leapStartUpgradeLevel(state);
   state.combat = {
-    stage: 1,
+    stage: startStage,
     enemyHp: [0, 0],
     enemyMaxHp: [0, 0],
     isBoss: false,
@@ -62,14 +65,14 @@ export function applyPrestige(state: GameState, energyGained: number, goldKept: 
   };
   // 金币保留
   state.player.gold = goldKept.toTuple();
-  // 升级重置（起始力量生效）
-  const startLv = (p.purchases.startPower ?? 0) * CONFIG.PRESTIGE.SHOP.startPower.perLevel;
+  // 五项升级继承跃迁层基线；重构层「起始力量」继续额外叠加到攻击。
+  const prestigeAttackLv = (p.purchases.startPower ?? 0) * CONFIG.PRESTIGE.SHOP.startPower.perLevel;
   state.player.upgrades = {
-    attack: startLv,
-    aspd: 0,
-    critChance: 0,
-    critDamage: 0,
-    gold: 0,
+    attack: leapStartLv + prestigeAttackLv,
+    aspd: leapStartLv,
+    critChance: leapStartLv,
+    critDamage: leapStartLv,
+    gold: leapStartLv,
   };
   // 解锁重置：只保留剧情性解锁（装备/技能/天赋/重构），清空关卡进度解锁
   const kept = ["equipment", "skills", "talents", "prestige", "achievements"];
